@@ -1,0 +1,49 @@
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+# Distribution / packaging
+.eggs/
+dist/
+build/
+sdist/
+*.egg-info/
+*.whl
+# Environments
+.venv/
+venv/
+env/
+ENV/
+# PyInstaller
+#  Often these are written to the same folder that contains the .py
+# source file
+# and so will end up being tracked if not ignored
+*.manifest
+*.spec
+# Spyder project settings
+.spyderproject
+.spyproject
+# Rope project settings
+.ropeproject
+# mkdocs documentation
+/site
+# mypy
+.mypy_cache/
+.dmypy.json
+dmypy.sock
+# Pytest cache
+.pytest_cache/
+# IPython stuff
+.ipy_history/
+*.ipynb_checkpoints
+# VS Code
+.vscode/
+# PyCharm
+.idea/
+# Other
+*.log
+*.bak
+*.tmp
+*.lock
+*.pyc

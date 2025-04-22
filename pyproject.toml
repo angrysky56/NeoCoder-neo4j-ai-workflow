@@ -1,0 +1,34 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mcp_neocoder"
+version = "0.1.0"
+description = "Neo4j-guided AI coding workflow for MCP"
+readme = "README.md"
+authors = [
+    {name = "NeoCoder Team", email = "placeholder@example.com"}
+]
+license = {text = "MIT"}
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Development Status :: 3 - Alpha",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "mcp>=1.6.0",
+    "neo4j>=5.0.0",
+    "pydantic>=2.0.0",
+]
+
+# This creates the mcp_neocoder executable
+[project.scripts]
+mcp_neocoder = "mcp_neocoder.__main__:main"
+
+# Define where the package is located
+[tool.setuptools]
+package-dir = {"" = "src"}
+packages = ["mcp_neocoder"]
