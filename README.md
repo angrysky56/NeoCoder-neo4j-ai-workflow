@@ -161,6 +161,8 @@ The MCP server includes a system for proposing and requesting new tools:
 
 This system allows AI assistants to suggest new tools and users to request new functionality, providing a structured way to manage and track feature requests.
 
+![alt text](image-2.png)
+
 ## Customizing Templates
 
 Templates are stored in the `templates` directory as `.cypher` files. You can edit existing templates or create new ones.
