@@ -21,6 +21,7 @@ NeoCoder implements a system where:
 - **Claude Desktop**: For using with Claude AI
 
 ![alt text](image.png)
+![alt text](image-1.png)
 
 ### Installation
 
