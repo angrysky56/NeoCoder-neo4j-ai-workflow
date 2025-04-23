@@ -20,9 +20,12 @@ NeoCoder implements a system where:
 - **uv**: The Python package manager for MCP servers
 - **Claude Desktop**: For using with Claude AI
 
+![alt text](image.png)
+
 ### Installation
 
 1. Install dependencies:
+
    ```bash
    uv venv
    source venv/bin/activate # On Windows use `venv\Scripts\activate`
