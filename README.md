@@ -173,7 +173,7 @@ To add a new template:
 2. Follow the format of existing templates
 3. Initialize the database to load the template into Neo4j
 
-## The 'Cypher Snippet Toolkit' tools operate on the graph structure defined below. Run these Cyphers to enable these tools if not auto-installed or done by your AI assistant
+## The 'Cypher Snippet Toolkit' tools operate on the graph structure defined below
 
 Below is a consolidated, **Neo4j 5-series–ready** toolkit you can paste straight into Neo4j Browser, Cypher shell, or any driver.  
 It creates a *mini-documentation graph* where every **`(:CypherSnippet)`** node stores a piece of Cypher syntax, an example, and metadata; text and (optionally) vector indexes make the snippets instantly searchable from plain keywords *or* embeddings.
@@ -187,13 +187,11 @@ It creates a *mini-documentation graph* where every **`(:CypherSnippet)`** node 
 CREATE CONSTRAINT cypher_snippet_id IF NOT EXISTS
 FOR   (c:CypherSnippet)
 REQUIRE c.id IS UNIQUE;            // Neo4j 5 syntax
-citeturn0search9
 
 // 1-B Optional tag helper (one Tag node per word/phrase)
 CREATE CONSTRAINT tag_name_unique IF NOT EXISTS
 FOR   (t:Tag)
 REQUIRE t.name IS UNIQUE;
-citeturn0search9
 ```
 
 ## 2 · Indexes that power search
@@ -202,17 +200,17 @@ REQUIRE t.name IS UNIQUE;
 // 2-A Quick label/property look-ups
 CREATE LOOKUP INDEX snippetLabelLookup IF NOT EXISTS
 FOR (n) ON EACH labels(n);
-citeturn0search6
 
 // 2-B Plain-text index (fast prefix / CONTAINS / = queries)
-CREATE TEXT INDEX snippet_text IF NOT EXISTS
-FOR (c:CypherSnippet) ON (c.syntax, c.description);
-citeturn0search5
+CREATE TEXT INDEX snippet_text_syntax IF NOT EXISTS
+FOR (c:CypherSnippet) ON (c.syntax);
+
+CREATE TEXT INDEX snippet_text_description IF NOT EXISTS
+FOR (c:CypherSnippet) ON (c.description);
 
 // 2-C Full-text scoring index (tokenised, ranked search)
 CREATE FULLTEXT INDEX snippet_fulltext IF NOT EXISTS
 FOR (c:CypherSnippet) ON EACH [c.syntax, c.example];
-citeturn0search0
 
 // 2-D (OPTIONAL) Vector index for embeddings ≥Neo4j 5.15
 CREATE VECTOR INDEX snippet_vec IF NOT EXISTS
@@ -221,10 +219,9 @@ OPTIONS {indexConfig: {
   `vector.dimensions`: 384,
   `vector.similarity_function`: 'cosine'
 }};
-citeturn1search5
 ```
 
-*If your build is ≤5.14, call `db.index.vector.createNodeIndex` instead.* citeturn1search0
+*If your build is ≤5.14, call `db.index.vector.createNodeIndex` instead.*
 
 ## 3 · Template to store a snippet
 
@@ -250,7 +247,7 @@ UNWIND tags AS tag
   MERGE (c)-[:TAGGED_AS]->(t);
 ```
 
-Parameter maps keep code reusable and prevent query-plan recompilation. citeturn0search3turn0search8
+Parameter maps keep code reusable and prevent query-plan recompilation.
 
 ## 4 · How to search
 
@@ -273,9 +270,10 @@ CALL db.index.fulltext.queryNodes(
 RETURN node.name, node.syntax, score
 ORDER BY score DESC
 LIMIT 10;
-``` citeturn0search0turn0search12
+```
 
 ### 4-C Embedding similarity (vector search)
+
 ```cypher
 WITH $queryEmbedding AS vec
 CALL db.index.vector.queryNodes(
@@ -283,7 +281,7 @@ CALL db.index.vector.queryNodes(
 ) YIELD node, similarity
 RETURN node.name, node.syntax, similarity
 ORDER BY similarity DESC;
-``` citeturn1search1
+```
 
 ## 5 · Updating or deleting snippets
 
@@ -299,7 +297,7 @@ MATCH (c:CypherSnippet {id:$id})
 DETACH DELETE c;
 ```
 
-Both operations automatically maintain index consistency – no extra work required. citeturn0search1
+Both operations automatically maintain index consistency – no extra work required.
 
 ## 6 · Bulk export / import (APOC)
 
@@ -310,7 +308,7 @@ CALL apoc.export.cypher.all(
 );
 ```
 
-This writes share-ready Cypher that can be replayed with `cypher-shell < cypher_snippets.cypher`. citeturn0search4turn0search14
+This writes share-ready Cypher that can be replayed with `cypher-shell < cypher_snippets.cypher`.
 
 ---
 
@@ -321,12 +319,14 @@ This writes share-ready Cypher that can be replayed with `cypher-shell < cypher_
 3. Query with **Section 4**, and optionally add vector search if you store embeddings.  
 4. Backup or publish with **Section 6**.
 
-With these building blocks you now have a *living*, searchable “Cypher cheat-sheet inside Cypher” that always stays local, versionable, and extensible. Enjoy friction-free recall as your query repertoire grows!
+With these building blocks you now have a *living*, searchable "Cypher cheat-sheet inside Cypher" that always stays local, versionable, and extensible. Enjoy friction-free recall as your query repertoire grows!
+
+*Note: A full reference version of this documentation that preserves all original formatting is available in the `/docs/cypher_snippets_reference.md` file.*
 
 Created by [angrysky56](https://github.com/angrysky56)
-Claude 4.7
-Gemini research preview
-ChatGPT
+Claude 3.7 Sonnet
+Gemini 2.5 Pro Preview 3-25
+ChatGPT o3
 
 ## License
 
