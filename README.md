@@ -24,6 +24,8 @@ NeoCoder implements a system where:
 
 1. Install dependencies:
    ```bash
+   uv venv
+   source venv/bin/activate # On Windows use `venv\Scripts\activate`
    pip install -r requirements.txt
    ```
 
