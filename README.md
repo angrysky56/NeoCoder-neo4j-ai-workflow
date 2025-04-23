@@ -21,6 +21,8 @@ NeoCoder implements a system where:
 - **Claude Desktop**: For using with Claude AI
 - [MCP-Desktop-Commander](https://github.com/wonderwhy-er/DesktopCommanderMCP):For cli and filesystem operations
 
+## The MCP server runs the Python code, bridging the gap between the Neo4j graph and the AI assistant ( e.g. Claude)
+
 ![alt text](image.png)
 ![alt text](image-1.png)
 
@@ -169,7 +171,7 @@ To add a new template:
 2. Follow the format of existing templates
 3. Initialize the database to load the template into Neo4j
 
-## Bonus material
+## The 'Cypher Snippet Toolkit' tools operate on the graph structure defined below. Run these Cyphers to enable these tools if not auto-installed or done by your AI assistant
 
 Below is a consolidated, **Neo4j 5-series–ready** toolkit you can paste straight into Neo4j Browser, Cypher shell, or any driver.  
 It creates a *mini-documentation graph* where every **`(:CypherSnippet)`** node stores a piece of Cypher syntax, an example, and metadata; text and (optionally) vector indexes make the snippets instantly searchable from plain keywords *or* embeddings.
