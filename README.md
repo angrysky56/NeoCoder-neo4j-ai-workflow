@@ -57,14 +57,14 @@ NeoCoder implements a system where:
          "command": "uv",
          "args": [
            "--directory",
-           "/home/ty/Repositories/ai_workspace/NeoCoder-neo4j-ai-workflow/src/mcp_neocoder",
+           "/path/to/your/NeoCoder-neo4j-ai-workflow/src/mcp_neocoder",
            "run",
            "mcp_neocoder"
          ],
          "env": {
            "NEO4J_URL": "bolt://localhost:7687",
            "NEO4J_USERNAME": "neo4j",
-           "NEO4J_PASSWORD": "YOUR_NEO4J_PASSWORD",
+           "NEO4J_PASSWORD": "<YOUR_NEO4J_PASSWORD>",
            "NEO4J_DATABASE": "neo4j"
          }    
        }    
