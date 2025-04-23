@@ -118,7 +118,11 @@ def create_guidance_hub(driver):
         2.  **List Workflows/Templates:** Query available actions: `MATCH (t:ActionTemplate {isCurrent: true}) RETURN t.keyword, t.description ORDER BY t.keyword`.
         3.  **View Core Practices:** Understand essential rules: `MATCH (hub:AiGuidanceHub)-[:LINKS_TO]->(bp:BestPracticesGuide) RETURN bp.content`. Review this before starting complex tasks.
         4.  **Learn Templating:** Create or modify templates: `MATCH (hub:AiGuidanceHub)-[:LINKS_TO]->(tg:TemplatingGuide) RETURN tg.content`.
-        5.  **Understand System:** Learn graph structure & queries: `MATCH (hub:AiGuidanceHub)-[:LINKS_TO]->(sg:SystemUsageGuide) RETURN sg.content`."
+        5.  **Understand System:** Learn graph structure & queries: `MATCH (hub:AiGuidanceHub)-[:LINKS_TO]->(sg:SystemUsageGuide) RETURN sg.content`.
+        6.  **Cypher Snippets:** Access our Cypher snippet toolkit to find and use common Neo4j query patterns:
+            - Search snippets: `search_cypher_snippets(query_text=\"your search\", search_type=\"text|fulltext|tag\")`
+            - List all snippets: `list_cypher_snippets()`
+            - Get snippet by ID: `get_cypher_snippet(id=\"snippet-id\")`"
         """)
         logger.info("Created AiGuidanceHub node")
 

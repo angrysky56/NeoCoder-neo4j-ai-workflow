@@ -17,13 +17,15 @@ from mcp.server.fastmcp import FastMCP
 from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncTransaction
 from pydantic import Field
 
+from .cypher_snippets import CypherSnippetMixin
+
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 logger = logging.getLogger("mcp_neocoder")
 
 
-class Neo4jWorkflowServer:
+class Neo4jWorkflowServer(CypherSnippetMixin):
     """Server for Neo4j-guided AI coding workflow."""
 
     def __init__(self, driver: AsyncDriver, database: str = "neo4j"):
@@ -56,6 +58,15 @@ class Neo4jWorkflowServer:
         self.mcp.add_tool(self.write_neo4j_cypher)
         self.mcp.add_tool(self.check_connection)
         
+        # Cypher snippet toolkit
+        self.mcp.add_tool(self.list_cypher_snippets)
+        self.mcp.add_tool(self.get_cypher_snippet)
+        self.mcp.add_tool(self.search_cypher_snippets)
+        self.mcp.add_tool(self.create_cypher_snippet)
+        self.mcp.add_tool(self.update_cypher_snippet)
+        self.mcp.add_tool(self.delete_cypher_snippet)
+        self.mcp.add_tool(self.get_cypher_tags)
+        
         # Tool guidance
         self.mcp.add_tool(self.suggest_tool)
         
@@ -73,7 +84,15 @@ class Neo4jWorkflowServer:
             "add_template_feedback": "Provide feedback about a template to improve it",
             "run_custom_query": "Execute a custom READ Cypher query (for retrieving data)",
             "write_neo4j_cypher": "Execute a WRITE Cypher query (for creating/updating data)",
-            "check_connection": "Check database connection status and permissions"
+            "check_connection": "Check database connection status and permissions",
+            # Cypher snippet toolkit
+            "list_cypher_snippets": "List all available Cypher snippets with optional filtering",
+            "get_cypher_snippet": "Get a specific Cypher snippet by ID",
+            "search_cypher_snippets": "Search for Cypher snippets by keyword, tag, or pattern",
+            "create_cypher_snippet": "Add a new Cypher snippet to the database",
+            "update_cypher_snippet": "Update an existing Cypher snippet",
+            "delete_cypher_snippet": "Delete a Cypher snippet from the database",
+            "get_cypher_tags": "Get all tags used for Cypher snippets"
         }
         return tools
     
@@ -97,7 +116,15 @@ class Neo4jWorkflowServer:
             "add_template_feedback": ["improve template", "feedback about", "suggestion for workflow", "template issue"],
             "run_custom_query": ["search for", "find", "query", "read data", "get data", "retrieve information"],
             "write_neo4j_cypher": ["create new", "update", "modify", "delete", "write data", "change data"],
-            "check_connection": ["database connection", "connection issues", "connectivity", "database error"]
+            "check_connection": ["database connection", "connection issues", "connectivity", "database error"],
+            # Cypher snippet toolkit patterns
+            "list_cypher_snippets": ["list cypher", "show snippets", "available cypher", "cypher commands"],
+            "get_cypher_snippet": ["get cypher", "show cypher snippet", "display cypher", "view snippet"],
+            "search_cypher_snippets": ["search cypher", "find cypher", "lookup cypher", "cypher syntax"],
+            "create_cypher_snippet": ["add cypher", "new cypher", "create snippet", "add snippet"],
+            "update_cypher_snippet": ["update cypher", "modify cypher", "change snippet", "edit cypher"],
+            "delete_cypher_snippet": ["delete cypher", "remove cypher", "drop snippet"],
+            "get_cypher_tags": ["cypher tags", "snippet categories", "snippet tags"]
         }
         
         # Normalize task description
@@ -112,7 +139,14 @@ class Neo4jWorkflowServer:
         
         # If no matches, suggest based on common actions
         if not matches:
-            if "create" in task or "new" in task:
+            if "cypher" in task.lower() or "snippet" in task.lower():
+                if "search" in task.lower() or "find" in task.lower():
+                    matches.append(("search_cypher_snippets", tools["search_cypher_snippets"]))
+                elif "list" in task.lower() or "show" in task.lower():
+                    matches.append(("list_cypher_snippets", tools["list_cypher_snippets"]))
+                else:
+                    matches.append(("get_cypher_snippet", tools["get_cypher_snippet"]))
+            elif "create" in task or "new" in task:
                 matches.append(("write_neo4j_cypher", tools["write_neo4j_cypher"]))
             elif "find" in task or "search" in task or "get" in task:
                 matches.append(("run_custom_query", tools["run_custom_query"]))

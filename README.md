@@ -128,6 +128,20 @@ The MCP server provides the following tools to AI assistants:
 - **run_custom_query**: Run direct Cypher queries
 - **write_neo4j_cypher**: Execute write operations on the graph
 
+#### Cypher Snippet Toolkit
+
+The MCP server includes a toolkit for managing and searching Cypher query snippets:
+
+- **list_cypher_snippets**: List all available Cypher snippets with optional filtering
+- **get_cypher_snippet**: Get a specific Cypher snippet by ID
+- **search_cypher_snippets**: Search for Cypher snippets by keyword, tag, or pattern
+- **create_cypher_snippet**: Add a new Cypher snippet to the database
+- **update_cypher_snippet**: Update an existing Cypher snippet
+- **delete_cypher_snippet**: Delete a Cypher snippet from the database
+- **get_cypher_tags**: Get all tags used for Cypher snippets
+
+This toolkit provides a searchable repository of Cypher query patterns and examples that can be used as a reference and learning tool.
+
 ## Customizing Templates
 
 Templates are stored in the `templates` directory as `.cypher` files. You can edit existing templates or create new ones.
