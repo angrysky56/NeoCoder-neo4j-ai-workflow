@@ -56,6 +56,91 @@ class Neo4jWorkflowServer:
         self.mcp.add_tool(self.write_neo4j_cypher)
         self.mcp.add_tool(self.check_connection)
         
+        # Tool guidance
+        self.mcp.add_tool(self.suggest_tool)
+        
+    def get_tool_descriptions(self) -> dict:
+        """Get descriptions of all available tools."""
+        tools = {
+            "get_guidance_hub": "Get the central entry point for navigation and guidance",
+            "get_action_template": "Retrieve detailed steps for a specific action template by keyword (FIX, REFACTOR, etc.)",
+            "list_action_templates": "List all available action templates",
+            "get_best_practices": "Get the best practices guide for coding workflows",
+            "get_project": "Get details about a specific project by ID",
+            "list_projects": "List all available projects",
+            "log_workflow_execution": "Record a successful workflow execution (ONLY after passing tests)",
+            "get_workflow_history": "View history of workflow executions, optionally filtered",
+            "add_template_feedback": "Provide feedback about a template to improve it",
+            "run_custom_query": "Execute a custom READ Cypher query (for retrieving data)",
+            "write_neo4j_cypher": "Execute a WRITE Cypher query (for creating/updating data)",
+            "check_connection": "Check database connection status and permissions"
+        }
+        return tools
+    
+    async def suggest_tool(
+        self,
+        task_description: str = Field(..., description="Description of the task you're trying to accomplish"),
+    ) -> list[types.TextContent]:
+        """Suggest the appropriate tool based on a task description."""
+        tools = self.get_tool_descriptions()
+        
+        # Define task patterns to match with tools
+        task_patterns = {
+            "get_guidance_hub": ["where to start", "what should i do", "guidance", "help me", "not sure", "initial instructions"],
+            "get_action_template": ["how to fix", "steps to refactor", "deploy process", "template for", "get instructions"],
+            "list_action_templates": ["what actions", "available workflows", "what can i do", "available templates", "list workflows"],
+            "get_best_practices": ["best practices", "coding standards", "guidelines", "recommended approach"],
+            "get_project": ["project details", "about project", "project readme", "project information"],
+            "list_projects": ["what projects", "available projects", "list projects", "all projects"],
+            "log_workflow_execution": ["completed work", "task completed", "record execution", "log completion", "finished task"],
+            "get_workflow_history": ["past workflows", "execution history", "previous work", "task history"],
+            "add_template_feedback": ["improve template", "feedback about", "suggestion for workflow", "template issue"],
+            "run_custom_query": ["search for", "find", "query", "read data", "get data", "retrieve information"],
+            "write_neo4j_cypher": ["create new", "update", "modify", "delete", "write data", "change data"],
+            "check_connection": ["database connection", "connection issues", "connectivity", "database error"]
+        }
+        
+        # Normalize task description
+        task = task_description.lower()
+        
+        # Find matching tools
+        matches = []
+        for tool, patterns in task_patterns.items():
+            for pattern in patterns:
+                if pattern in task:
+                    matches.append((tool, tools[tool]))
+        
+        # If no matches, suggest based on common actions
+        if not matches:
+            if "create" in task or "new" in task:
+                matches.append(("write_neo4j_cypher", tools["write_neo4j_cypher"]))
+            elif "find" in task or "search" in task or "get" in task:
+                matches.append(("run_custom_query", tools["run_custom_query"]))
+            else:
+                # Default to guidance hub if no clear match
+                matches.append(("get_guidance_hub", tools["get_guidance_hub"]))
+        
+        # Format response
+        response = "Based on your task description, here are the recommended tools:\n\n"
+        
+        for tool, description in matches:
+            response += f"- **{tool}**: {description}\n"
+            
+            # Add example usage for the top match
+            if tool == matches[0][0]:
+                if tool == "get_action_template":
+                    response += "\n  Example usage: `get_action_template(keyword=\"FIX\")`\n"
+                elif tool == "get_project":
+                    response += "\n  Example usage: `get_project(project_id=\"your_project_id\")`\n"
+                elif tool == "run_custom_query":
+                    response += "\n  Example usage: `run_custom_query(query=\"MATCH (n:Project) RETURN n.name\")`\n"
+                elif tool == "write_neo4j_cypher":
+                    response += "\n  Example usage: `write_neo4j_cypher(query=\"CREATE (n:TestNode {name: 'Test'}) RETURN n\")`\n"
+        
+        response += "\nFor full navigation help, try `get_guidance_hub()` to see all available options."
+        
+        return [types.TextContent(type="text", text=response)]
+        
     async def check_connection(self) -> List[types.TextContent]:
         """Check the Neo4j connection status and database access permissions."""
         try:
@@ -126,6 +211,50 @@ class Neo4jWorkflowServer:
         query = query.strip().upper()
         write_keywords = ["CREATE", "DELETE", "SET", "REMOVE", "MERGE", "DROP"]
         return any(keyword in query for keyword in write_keywords)
+        
+    def analyze_cypher_syntax(self, query: str) -> tuple[bool, str]:
+        """
+        Analyze Cypher query syntax and provide feedback on common errors.
+        
+        Args:
+            query: The Cypher query to analyze
+            
+        Returns:
+            tuple: (is_valid, message)
+        """
+        if not query or not query.strip():
+            return False, "Empty query. Please provide a valid Cypher query."
+            
+        query = query.strip()
+        
+        # Check for missing parentheses in node patterns
+        if '(' in query and ')' not in query:
+            return False, "Syntax error: Missing closing parenthesis ')' in node pattern. Remember nodes should be defined with (node:Label)."
+            
+        # Check for missing brackets in property access
+        if '[' in query and ']' not in query:
+            return False, "Syntax error: Missing closing bracket ']' in property access or collection."
+            
+        # Check for missing curly braces in property maps
+        if '{' in query and '}' not in query:
+            return False, "Syntax error: Missing closing curly brace '}' in property map. Properties should be defined with {key: value}."
+            
+        # Check for missing quotes in property strings
+        quote_chars = ['\'', '"', '`']
+        for char in quote_chars:
+            if query.count(char) % 2 != 0:
+                return False, f"Syntax error: Unbalanced quotes ({char}). Make sure all string literals are properly enclosed."
+                
+        # Check for common cypher keywords
+        cypher_keywords = ['MATCH', 'RETURN', 'WHERE', 'CREATE', 'MERGE', 'SET', 'REMOVE', 'DELETE', 'WITH', 'UNWIND', 'ORDER BY', 'LIMIT']
+        if not any(keyword in query.upper() for keyword in cypher_keywords):
+            return False, "Warning: Query doesn't contain common Cypher keywords (MATCH, RETURN, CREATE, etc.). Please check your syntax."
+            
+        # Check for RETURN in read queries or missing RETURN where needed
+        if 'MATCH' in query.upper() and 'RETURN' not in query.upper() and not self.is_write_query(query):
+            return False, "Syntax warning: MATCH queries typically need a RETURN clause to specify what to return from the matched patterns."
+            
+        return True, "Query syntax appears valid."
     
     async def write_neo4j_cypher(
         self,
@@ -136,8 +265,15 @@ class Neo4jWorkflowServer:
     ) -> list[types.TextContent]:
         """Execute a write Cypher query on the neo4j database."""
 
+        # Check if query is a write query
         if not self.is_write_query(query):
-            return [types.TextContent(type="text", text="Error: Only write queries are allowed for write_neo4j_cypher. Your query does not appear to be a write query.")]
+            suggested_tool = "run_custom_query"
+            return [types.TextContent(type="text", text=f"Error: Only write queries are allowed for write_neo4j_cypher. Your query appears to be a read query.\n\nSuggestion: For read queries, use the '{suggested_tool}' tool instead. Example:\n\n```\nrun_custom_query(query=\"{query}\"" + (", params=" + str(params) if params else "") + ")\n```")]
+        
+        # Check query syntax
+        is_valid, syntax_message = self.analyze_cypher_syntax(query)
+        if not is_valid:
+            return [types.TextContent(type="text", text=f"Error: {syntax_message}\n\nYour query: {query}")]
 
         try:
             async with self.driver.session(database=self.database) as session:
@@ -161,9 +297,25 @@ class Neo4jWorkflowServer:
                 
                 # Execute the actual query
                 raw_results = await session.execute_write(self._write, query, params or {})
-                counters_json_str = json.dumps(
-                    raw_results._summary.counters.__dict__, default=str
-                )
+                
+                # Create a counters dictionary with safer attribute access
+                try:
+                    # Try to access counters using more public APIs or properties
+                    counters_dict = {}
+                    
+                    # Add known counter attributes if they exist
+                    for attr in ["nodes_created", "nodes_deleted", "relationships_created", 
+                                "relationships_deleted", "properties_set", "labels_added",
+                                "labels_removed", "indexes_added", "indexes_removed",
+                                "constraints_added", "constraints_removed"]:
+                        if hasattr(raw_results.counters, attr):
+                            counters_dict[attr] = getattr(raw_results.counters, attr)
+                    
+                    counters_json_str = json.dumps(counters_dict, default=str)
+                except Exception as e:
+                    # Fallback if counters are not accessible
+                    logger.warning(f"Could not access counters: {e}")
+                    counters_json_str = json.dumps({"success": True}, default=str)
 
                 logger.debug(f"Write query affected {counters_json_str}")
                 return [types.TextContent(type="text", text=f"Query executed successfully. Results: {counters_json_str}")]
@@ -172,15 +324,52 @@ class Neo4jWorkflowServer:
             logger.error(f"Database error executing query: {e}\n{query}\n{params}")
             
             error_msg = str(e).lower()
+            
+            # Check for specific error types and provide helpful messages
             if "access mode" in error_msg or "permission" in error_msg or "read only" in error_msg:
                 return [types.TextContent(
                     type="text", 
                     text="Error: Database is in read-only mode. Write operations are not allowed. Check your Neo4j configuration or connection parameters."
                 )]
+            elif "connection" in error_msg or "unavailable" in error_msg or "refused" in error_msg:
+                return [types.TextContent(
+                    type="text", 
+                    text="Error: Could not connect to the Neo4j database. Please check:\n"
+                         "1. Is the Neo4j server running?\n"
+                         "2. Are the connection details correct?\n"
+                         "3. Is there a network issue preventing connection?\n\n"
+                         "You can use the check_connection() tool to verify database connectivity."
+                )]
+            elif "constraint" in error_msg or "unique" in error_msg:
+                return [types.TextContent(
+                    type="text", 
+                    text=f"Error: A constraint violation occurred. This typically happens when:\n"
+                         "1. Trying to create a node with a label and property combination that must be unique\n"
+                         "2. Violating a relationship constraint\n\n"
+                         "Details: {e}\n\n"
+                         "You might need to check if the entity already exists before creating it."
+                )]
+            elif "syntax" in error_msg:
+                return [types.TextContent(
+                    type="text", 
+                    text=f"Syntax Error in Cypher query:\n{e}\n\n"
+                         f"Your query: {query}\n\n"
+                         "Common syntax issues include:\n"
+                         "1. Missing or unbalanced parentheses/brackets/braces\n"
+                         "2. Incorrect property access (node.property instead of node['property'])\n"
+                         "3. Missing quotes around property values\n"
+                         "4. Incorrect relationship direction (-->, <--, --)"
+                )]
             else:
                 return [types.TextContent(
                     type="text", 
-                    text=f"Error executing query: {e}\n\nQuery: {query}\n\nParameters: {params}"
+                    text=f"Error executing query: {e}\n\n"
+                         f"Query: {query}\n\n"
+                         f"Parameters: {params}\n\n"
+                         "If this is unexpected, try:\n"
+                         "1. Breaking down the query into smaller parts\n"
+                         "2. Using run_custom_query for testing before write operations\n"
+                         "3. Checking Neo4j documentation for correct syntax"
                 )]
     
     async def get_guidance_hub(self) -> List[types.TextContent]:
@@ -289,16 +478,23 @@ Always follow template steps precisely, especially testing before logging.
 
     async def list_action_templates(
         self,
-        include_inactive: bool = Field(False, description="Include non-current template versions")
+        include_inactive: bool = Field(False, description="Include non-current template versions"),
+        domain: Optional[str] = Field(None, description="Filter templates by domain (e.g., 'web', 'ml', 'backend')")
     ) -> List[types.TextContent]:
-        """List all available action templates."""
+        """List all available action templates, optionally filtered by domain."""
         query = """
         MATCH (t:ActionTemplate)
         WHERE 1=1
         """
         
+        params = {}
+        
         if not include_inactive:
             query += " AND t.isCurrent = true"
+            
+        if domain:
+            query += " AND t.domain = $domain"
+            params["domain"] = domain
             
         query += """
         RETURN t.keyword AS keyword, 
@@ -306,13 +502,14 @@ Always follow template steps precisely, especially testing before logging.
                t.isCurrent AS current,
                t.description AS description,
                t.complexity AS complexity,
-               t.estimatedEffort AS estimatedEffort
+               t.estimatedEffort AS estimatedEffort,
+               t.domain AS domain
         ORDER BY t.keyword, t.version DESC
         """
         
         try:
             async with self.driver.session(database=self.database) as session:
-                results_json = await session.execute_read(self._read_query, query, {})
+                results_json = await session.execute_read(self._read_query, query, params)
                 results = json.loads(results_json)
                 
                 if results and len(results) > 0:
