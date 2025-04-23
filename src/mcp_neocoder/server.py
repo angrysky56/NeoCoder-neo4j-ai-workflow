@@ -8,6 +8,7 @@ as its primary, dynamic "instruction manual" and project memory.
 import json
 import logging
 import uuid
+import os
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Union
 
@@ -15,6 +16,9 @@ import mcp.types as types
 from mcp.server.fastmcp import FastMCP
 from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncTransaction
 from pydantic import Field
+
+# Configure logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
 logger = logging.getLogger("mcp_neocoder")
 
@@ -50,6 +54,52 @@ class Neo4jWorkflowServer:
         # Advanced query tools
         self.mcp.add_tool(self.run_custom_query)
         self.mcp.add_tool(self.write_neo4j_cypher)
+        self.mcp.add_tool(self.check_connection)
+        
+    async def check_connection(self) -> List[types.TextContent]:
+        """Check the Neo4j connection status and database access permissions."""
+        try:
+            # Check if we can connect and run a simple read query
+            async with self.driver.session(database=self.database) as session:
+                read_result = await session.execute_read(
+                    self._read_query, "RETURN 'Read access is working' as status", {}
+                )
+                
+                # Check if we have write access
+                try:
+                    # Try a harmless write operation
+                    write_result = await session.execute_write(
+                        self._write, 
+                        "CREATE (n:ConnectionTest {id: randomUUID()}) WITH n DELETE n RETURN 'Write access is working' as status", 
+                        {}
+                    )
+                    write_access = True
+                    write_message = "Write access is working"
+                except Exception as e:
+                    write_access = False
+                    write_message = f"Write access error: {str(e)}"
+                
+                # Get Neo4j version and database info
+                info_result = await session.execute_read(
+                    self._read_query, "CALL dbms.components() YIELD name, versions RETURN name, versions[0] as version", {}
+                )
+                
+                result = {
+                    "connection": "Connected to Neo4j database",
+                    "database": self.database,
+                    "read_access": True,
+                    "write_access": write_access,
+                    "write_message": write_message,
+                    "server_info": json.loads(info_result) if info_result else "N/A"
+                }
+                
+                return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
+        except Exception as e:
+            logger.error(f"Error checking connection: {e}")
+            return [types.TextContent(
+                type="text", 
+                text=f"Error connecting to Neo4j database: {e}\n\nCheck your connection settings in claude-app-config.json."
+            )]
 
 
     async def _read_query(self, tx: AsyncTransaction, query: str, params: dict) -> str:
@@ -57,6 +107,25 @@ class Neo4jWorkflowServer:
         raw_results = await tx.run(query, params)
         eager_results = await raw_results.to_eager_result()
         return json.dumps([r.data() for r in eager_results.records], default=str)
+    
+    async def _write(self, tx: AsyncTransaction, query: str, params: dict):
+        """Execute a write query and return results as JSON string."""
+        result = await tx.run(query, params or {})
+        summary = await result.consume()
+        return summary
+    
+    def is_write_query(self, query: str) -> bool:
+        """Check if a query is a write query.
+        
+        Neo4j write operations typically start with CREATE, DELETE, SET, REMOVE, MERGE, or DROP.
+        This method checks if the query contains any of these keywords.
+        """
+        if not query:
+            return False
+            
+        query = query.strip().upper()
+        write_keywords = ["CREATE", "DELETE", "SET", "REMOVE", "MERGE", "DROP"]
+        return any(keyword in query for keyword in write_keywords)
     
     async def write_neo4j_cypher(
         self,
@@ -68,24 +137,51 @@ class Neo4jWorkflowServer:
         """Execute a write Cypher query on the neo4j database."""
 
         if not self.is_write_query(query):
-            raise ValueError("Only write queries are allowed for write-query")
+            return [types.TextContent(type="text", text="Error: Only write queries are allowed for write_neo4j_cypher. Your query does not appear to be a write query.")]
 
         try:
             async with self.driver.session(database=self.database) as session:
-                raw_results = await session.execute_write(self._write, query, params)
+                # First check if we have write access
+                try:
+                    test_result = await session.execute_write(
+                        self._write, 
+                        "CREATE (n:WriteTest {id: randomUUID()}) WITH n DELETE n RETURN 'Success'", 
+                        {}
+                    )
+                except Exception as e:
+                    error_msg = str(e).lower()
+                    if "access mode" in error_msg or "permission" in error_msg or "read only" in error_msg:
+                        return [types.TextContent(
+                            type="text", 
+                            text="Error: Database is in read-only mode. Write operations are not allowed. Check your Neo4j configuration or connection parameters."
+                        )]
+                    else:
+                        # Let it proceed and fail with the actual query if it's not a permissions issue
+                        pass
+                
+                # Execute the actual query
+                raw_results = await session.execute_write(self._write, query, params or {})
                 counters_json_str = json.dumps(
                     raw_results._summary.counters.__dict__, default=str
                 )
 
-            logger.debug(f"Write query affected {counters_json_str}")
-
-            return [types.TextContent(type="text", text=counters_json_str)]
+                logger.debug(f"Write query affected {counters_json_str}")
+                return [types.TextContent(type="text", text=f"Query executed successfully. Results: {counters_json_str}")]
 
         except Exception as e:
             logger.error(f"Database error executing query: {e}\n{query}\n{params}")
-            return [
-                types.TextContent(type="text", text=f"Error: {e}\n{query}\n{params}")
-            ]    
+            
+            error_msg = str(e).lower()
+            if "access mode" in error_msg or "permission" in error_msg or "read only" in error_msg:
+                return [types.TextContent(
+                    type="text", 
+                    text="Error: Database is in read-only mode. Write operations are not allowed. Check your Neo4j configuration or connection parameters."
+                )]
+            else:
+                return [types.TextContent(
+                    type="text", 
+                    text=f"Error executing query: {e}\n\nQuery: {query}\n\nParameters: {params}"
+                )]
     
     async def get_guidance_hub(self) -> List[types.TextContent]:
         """Get the AI Guidance Hub content, which serves as the central entry point for navigation."""

@@ -5,10 +5,10 @@ ON MATCH SET t.isCurrent = true
 SET t.description = 'Guidance on deploying code to production environments with safety checks.'
 SET t.complexity = 'HIGH'
 SET t.estimatedEffort = 120
-SET t.steps = """
+SET t.steps = '
 1.  **Identify Context:**
-    -   Input: Project ID: $projectId. Environment: $environment (e.g., staging, production). Release version: $releaseVersion.
-    -   Query Project README: `MATCH (p:Project {projectId: $projectId}) RETURN p.readmeContent, p.readmeUrl`
+    -   Input: Project ID. Environment (e.g., staging, production). Release version.
+    -   Query Project README: Use get_project tool with project_id parameter.
     -   Review README for project context, architecture, and deployment-specific instructions.
     -   Identify existing deployment workflows and CI/CD configurations.
 
@@ -57,48 +57,17 @@ SET t.steps = """
         - Non-critical: Document for hotfix deployment.
 
 7.  **Log Successful Deployment (ONLY if all validation and testing passed):**
-    -   Prepare parameters: 
-        - `$projectId` - The project identifier
-        - `$workflowId` - Generate a new UUID
-        - `$keyword` - 'DEPLOY'
-        - `$description` - Description of deployment (include version and environment)
-        - `$environment` - The environment deployed to
-        - `$deployedVersion` - The version deployed
-    -   Execute Logging Cypher:
-    ```
-    CREATE (exec:WorkflowExecution {
-      id: $workflowId,
-      timestamp: datetime(),
-      keywordUsed: $keyword,
-      description: $description,
-      status: "Completed",
-      environment: $environment,
-      deployedVersion: $deployedVersion,
-      executionTime: $executionTimeSeconds
-    })
-    WITH exec
-    MATCH (p:Project {projectId: $projectId})
-    MERGE (exec)-[:APPLIED_TO_PROJECT]->(p)
-    WITH exec
-    MATCH (t:ActionTemplate {keyword: $keyword, isCurrent: true})
-    MERGE (exec)-[:USED_TEMPLATE]->(t)
-    ```
-    -   Confirm successful creation of `:WorkflowExecution` node.
+    -   Use log_workflow_execution tool with parameters:
+      - project_id: The project identifier
+      - keyword: DEPLOY
+      - description: Description of deployment (include version and environment)
+      - environment: The environment deployed to
+      - deployed_version: The version deployed
+      - execution_time_seconds: (Optional) Time taken to complete the workflow
+    -   Confirm successful creation of workflow execution node.
 
 8.  **Update Project Metadata (ONLY if deployment succeeded):**
-    -   Update project environment status:
-    ```
-    MATCH (p:Project {projectId: $projectId})
-    SET p.lastDeployment = datetime(),
-        p.currentVersion = $deployedVersion
-    ```
-    -   Update deployment history:
-    ```
-    MATCH (p:Project {projectId: $projectId})
-    MERGE (e:Environment {name: $environment, projectId: $projectId})
-    MERGE (e)-[:HAS_VERSION]->(v:Version {number: $deployedVersion, projectId: $projectId})
-    SET v.deploymentDate = datetime()
-    ```
+    -   Update project metadata with new version and deployment information.
 
 9.  **Post-Deployment Monitoring:**
     -   Monitor application logs for unexpected errors.
@@ -111,23 +80,10 @@ SET t.steps = """
     -   Schedule post-deployment review meeting.
     -   Document lessons learned and improvement opportunities.
     -   Update deployment procedure based on experience.
-    -   Create a `:Feedback` node with deployment insights:
-    ```
-    CREATE (f:Feedback {
-      id: $feedbackId,
-      content: $feedbackContent,
-      timestamp: datetime(),
-      source: $source,
-      severity: $severity,
-      tags: ['deployment_feedback']
-    })
-    WITH f
-    MATCH (t:ActionTemplate {keyword: 'DEPLOY', isCurrent: true})
-    MERGE (f)-[:REGARDING]->(t)
-    ```
-"""
+    -   Create a feedback entry with deployment insights.
+'
 
 // Make sure this is the only current version for this keyword
 MATCH (old:ActionTemplate {keyword: 'DEPLOY', isCurrent: true})
-WHERE old.version <> '1.0'
+WITH old.version <> '1.0'
 SET old.isCurrent = false

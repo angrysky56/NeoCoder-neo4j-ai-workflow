@@ -34,6 +34,12 @@ def main():
     
     args = parser.parse_args()
     
+    # Log the environment variables for debugging
+    logger.info(f"NEO4J_URL from environment: {os.environ.get('NEO4J_URL', 'Not set')}")
+    logger.info(f"NEO4J_USERNAME from environment: {os.environ.get('NEO4J_USERNAME', 'Not set')}")
+    logger.info(f"NEO4J_PASSWORD from environment: {'Set' if os.environ.get('NEO4J_PASSWORD') else 'Not set'}")
+    logger.info(f"NEO4J_DATABASE from environment: {os.environ.get('NEO4J_DATABASE', 'Not set')}")
+    
     # Set environment variables for database connection
     if args.command == "server" and args.db_url:
         os.environ["NEO4J_URL"] = args.db_url

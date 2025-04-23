@@ -21,6 +21,7 @@ logger = logging.getLogger("init_workflow_db")
 
 def wait_for_neo4j(uri, username, password, max_attempts=5):
     """Wait for Neo4j to become available."""
+    logger.info(f"Attempting to connect to Neo4j at {uri} with username {username}")
     driver = GraphDatabase.driver(uri, auth=(username, password))
     attempts = 0
     success = False
@@ -33,6 +34,23 @@ def wait_for_neo4j(uri, username, password, max_attempts=5):
                 session.run("RETURN 1")
             success = True
             logger.info("Connected to Neo4j successfully")
+            
+            # Test write access
+            try:
+                with driver.session() as session:
+                    session.run("""
+                    CREATE (n:WriteAccessTest {id: "test"})
+                    WITH n
+                    DELETE n
+                    RETURN "Write access confirmed" as status
+                    """)
+                logger.info("Write access to database confirmed")
+            except Exception as e:
+                logger.error(f"No write access to database: {e}")
+                logger.error("Database initialization requires write access. Please check your Neo4j settings.")
+                driver.close()
+                sys.exit(1)
+                
         except Exception as e:
             attempts += 1
             wait_time = (1 + attempts) * 2
@@ -43,6 +61,11 @@ def wait_for_neo4j(uri, username, password, max_attempts=5):
     if not success:
         driver.close()
         logger.error("Failed to connect to Neo4j after multiple attempts. Exiting.")
+        logger.error("Please check your Neo4j connection settings:")
+        logger.error(f"  URI: {uri}")
+        logger.error(f"  Username: {username}")
+        logger.error(f"  Password: {'Set (not shown)' if password else 'Not set'}")
+        logger.error("Make sure Neo4j is running and accessible, and the credentials are correct.")
         sys.exit(1)
     
     return driver
@@ -232,7 +255,12 @@ def main():
     # Get Neo4j connection details from environment
     neo4j_uri = os.environ.get("NEO4J_URL", "bolt://localhost:7687")
     neo4j_user = os.environ.get("NEO4J_USERNAME", "neo4j")
-    neo4j_pass = os.environ.get("NEO4J_PASSWORD", "password")
+    neo4j_pass = os.environ.get("NEO4J_PASSWORD", "00000000")
+    
+    # Debug output
+    logger.info(f"Using Neo4j connection: {neo4j_uri}")
+    logger.info(f"Using Neo4j username: {neo4j_user}")
+    logger.info(f"Using Neo4j password: {'Set (not shown)' if neo4j_pass else 'Not set'}")
     
     # Get templates directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
