@@ -19,6 +19,7 @@ NeoCoder implements a system where:
 - **Python 3.10+**: For running the MCP server
 - **uv**: The Python package manager for MCP servers
 - **Claude Desktop**: For using with Claude AI
+- [MCP-Desktop-Commander](https://github.com/wonderwhy-er/DesktopCommanderMCP):For cli and filesystem operations
 
 ![alt text](image.png)
 ![alt text](image-1.png)
@@ -317,6 +318,11 @@ This writes share-ready Cypher that can be replayed with `cypher-shell < cypher_
 4. Backup or publish with **Section 6**.
 
 With these building blocks you now have a *living*, searchable “Cypher cheat-sheet inside Cypher” that always stays local, versionable, and extensible. Enjoy friction-free recall as your query repertoire grows!
+
+Created by [angrysky56](https://github.com/angrysky56)
+Claude 4.7
+Gemini research preview
+ChatGPT
 
 ## License
 
