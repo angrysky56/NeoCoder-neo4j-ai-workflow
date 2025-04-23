@@ -114,15 +114,18 @@ def create_guidance_hub(driver):
         MERGE (hub:AiGuidanceHub {id: 'main_hub'})
         ON CREATE SET hub.description = 
         "Welcome AI Assistant. This is your central hub for coding assistance using our Neo4j knowledge graph. Choose your path:
-        1.  **Execute Task:** If you know the action keyword (e.g., FIX, REFACTOR), directly query for the ActionTemplate: `MATCH (t:ActionTemplate {keyword: $keyword, isCurrent: true}) RETURN t.steps`. Always follow the template steps precisely, especially testing before logging.
-        2.  **List Workflows/Templates:** Query available actions: `MATCH (t:ActionTemplate {isCurrent: true}) RETURN t.keyword, t.description ORDER BY t.keyword`.
-        3.  **View Core Practices:** Understand essential rules: `MATCH (hub:AiGuidanceHub)-[:LINKS_TO]->(bp:BestPracticesGuide) RETURN bp.content`. Review this before starting complex tasks.
-        4.  **Learn Templating:** Create or modify templates: `MATCH (hub:AiGuidanceHub)-[:LINKS_TO]->(tg:TemplatingGuide) RETURN tg.content`.
-        5.  **Understand System:** Learn graph structure & queries: `MATCH (hub:AiGuidanceHub)-[:LINKS_TO]->(sg:SystemUsageGuide) RETURN sg.content`.
-        6.  **Cypher Snippets:** Access our Cypher snippet toolkit to find and use common Neo4j query patterns:
+        1.  **Execute Task:** If you know the action keyword (e.g., FIX, REFACTOR, FEATURE, TOOL_ADD), use get_action_template with the keyword parameter. Always follow the template steps precisely, especially testing before logging.
+        2.  **List Workflows/Templates:** Use list_action_templates to see available actions and their descriptions.
+        3.  **View Core Practices:** Use get_best_practices to understand essential rules. Review this before starting complex tasks.
+        4.  **Cypher Snippets:** Access our Cypher snippet toolkit to find and use common Neo4j query patterns:
             - Search snippets: `search_cypher_snippets(query_text=\"your search\", search_type=\"text|fulltext|tag\")`
             - List all snippets: `list_cypher_snippets()`
-            - Get snippet by ID: `get_cypher_snippet(id=\"snippet-id\")`"
+            - Get snippet by ID: `get_cypher_snippet(id=\"snippet-id\")`
+        5.  **Tool Proposals:** Propose new tools or request tool features:
+            - Propose a tool: `propose_tool(name=\"Tool Name\", description=\"...\", parameters=[...], rationale=\"...\")`
+            - Request a tool: `request_tool(description=\"...\", use_case=\"...\", priority=\"MEDIUM\")`
+            - List proposals: `list_tool_proposals()`
+            - List requests: `list_tool_requests()`"
         """)
         logger.info("Created AiGuidanceHub node")
 

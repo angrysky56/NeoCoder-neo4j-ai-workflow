@@ -92,11 +92,14 @@ NeoCoder implements a system where:
 
 ## Available Templates
 
-NeoCoder comes with three standard templates:
+NeoCoder comes with these standard templates:
 
 1. **FIX** - Guidance on fixing a reported bug, including mandatory testing and logging
 2. **REFACTOR** - Structured approach to refactoring code while maintaining functionality
 3. **DEPLOY** - Guidance on deploying code to production environments with safety checks
+4. **FEATURE** - Structured approach to implementing new features with proper testing and documentation
+5. **TOOL_ADD** - Process for adding new tool functionality to the NeoCoder MCP server
+6. **CYPHER_SNIPPETS** - Manage and use Cypher snippets for Neo4j queries
 
 ## Architecture
 
@@ -141,6 +144,19 @@ The MCP server includes a toolkit for managing and searching Cypher query snippe
 - **get_cypher_tags**: Get all tags used for Cypher snippets
 
 This toolkit provides a searchable repository of Cypher query patterns and examples that can be used as a reference and learning tool.
+
+#### Tool Proposal System
+
+The MCP server includes a system for proposing and requesting new tools:
+
+- **propose_tool**: Propose a new tool for the NeoCoder system
+- **request_tool**: Request a new tool feature as a user
+- **get_tool_proposal**: Get details of a specific tool proposal
+- **get_tool_request**: Get details of a specific tool request
+- **list_tool_proposals**: List all tool proposals with optional filtering
+- **list_tool_requests**: List all tool requests with optional filtering
+
+This system allows AI assistants to suggest new tools and users to request new functionality, providing a structured way to manage and track feature requests.
 
 ## Customizing Templates
 

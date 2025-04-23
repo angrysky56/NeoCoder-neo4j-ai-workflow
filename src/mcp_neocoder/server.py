@@ -18,6 +18,7 @@ from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncTransaction
 from pydantic import Field
 
 from .cypher_snippets import CypherSnippetMixin
+from .tool_proposals import ToolProposalMixin
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -25,7 +26,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger("mcp_neocoder")
 
 
-class Neo4jWorkflowServer(CypherSnippetMixin):
+class Neo4jWorkflowServer(CypherSnippetMixin, ToolProposalMixin):
     """Server for Neo4j-guided AI coding workflow."""
 
     def __init__(self, driver: AsyncDriver, database: str = "neo4j"):
@@ -67,6 +68,14 @@ class Neo4jWorkflowServer(CypherSnippetMixin):
         self.mcp.add_tool(self.delete_cypher_snippet)
         self.mcp.add_tool(self.get_cypher_tags)
         
+        # Tool proposal system
+        self.mcp.add_tool(self.propose_tool)
+        self.mcp.add_tool(self.request_tool)
+        self.mcp.add_tool(self.get_tool_proposal)
+        self.mcp.add_tool(self.get_tool_request)
+        self.mcp.add_tool(self.list_tool_proposals)
+        self.mcp.add_tool(self.list_tool_requests)
+        
         # Tool guidance
         self.mcp.add_tool(self.suggest_tool)
         
@@ -92,7 +101,14 @@ class Neo4jWorkflowServer(CypherSnippetMixin):
             "create_cypher_snippet": "Add a new Cypher snippet to the database",
             "update_cypher_snippet": "Update an existing Cypher snippet",
             "delete_cypher_snippet": "Delete a Cypher snippet from the database",
-            "get_cypher_tags": "Get all tags used for Cypher snippets"
+            "get_cypher_tags": "Get all tags used for Cypher snippets",
+            # Tool proposal system
+            "propose_tool": "Propose a new tool for the NeoCoder system",
+            "request_tool": "Request a new tool feature as a user",
+            "get_tool_proposal": "Get details of a specific tool proposal",
+            "get_tool_request": "Get details of a specific tool request",
+            "list_tool_proposals": "List all tool proposals with optional filtering",
+            "list_tool_requests": "List all tool requests with optional filtering"
         }
         return tools
     
@@ -124,7 +140,14 @@ class Neo4jWorkflowServer(CypherSnippetMixin):
             "create_cypher_snippet": ["add cypher", "new cypher", "create snippet", "add snippet"],
             "update_cypher_snippet": ["update cypher", "modify cypher", "change snippet", "edit cypher"],
             "delete_cypher_snippet": ["delete cypher", "remove cypher", "drop snippet"],
-            "get_cypher_tags": ["cypher tags", "snippet categories", "snippet tags"]
+            "get_cypher_tags": ["cypher tags", "snippet categories", "snippet tags"],
+            # Tool proposal patterns
+            "propose_tool": ["suggest tool", "propose tool", "new tool idea", "tool proposal", "implement tool"],
+            "request_tool": ["request tool", "need tool", "want tool", "tool feature request", "add functionality"],
+            "get_tool_proposal": ["view proposal", "see tool proposal", "proposal details", "proposed tool info"],
+            "get_tool_request": ["view request", "see tool request", "request details", "requested tool info"],
+            "list_tool_proposals": ["all proposals", "tool ideas", "proposed tools", "tool suggestions"],
+            "list_tool_requests": ["all requests", "requested tools", "tool requests", "feature requests"]
         }
         
         # Normalize task description
@@ -139,7 +162,11 @@ class Neo4jWorkflowServer(CypherSnippetMixin):
         
         # If no matches, suggest based on common actions
         if not matches:
-            if "cypher" in task.lower() or "snippet" in task.lower():
+            if "tool" in task.lower() and ("propose" in task.lower() or "suggest" in task.lower() or "new" in task.lower()):
+                matches.append(("propose_tool", tools["propose_tool"]))
+            elif "tool" in task.lower() and ("request" in task.lower() or "need" in task.lower() or "want" in task.lower()):
+                matches.append(("request_tool", tools["request_tool"]))
+            elif "cypher" in task.lower() or "snippet" in task.lower():
                 if "search" in task.lower() or "find" in task.lower():
                     matches.append(("search_cypher_snippets", tools["search_cypher_snippets"]))
                 elif "list" in task.lower() or "show" in task.lower():
