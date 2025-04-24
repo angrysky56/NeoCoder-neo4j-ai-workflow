@@ -19,22 +19,23 @@ from neo4j import GraphDatabase
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("init_workflow_db")
 
+
 def wait_for_neo4j(uri, username, password, max_attempts=5):
     """Wait for Neo4j to become available."""
     logger.info(f"Attempting to connect to Neo4j at {uri} with username {username}")
     driver = GraphDatabase.driver(uri, auth=(username, password))
     attempts = 0
     success = False
-    
+
     logger.info("Waiting for Neo4j to start...")
-    
+
     while not success and attempts < max_attempts:
         try:
             with driver.session() as session:
                 session.run("RETURN 1")
             success = True
             logger.info("Connected to Neo4j successfully")
-            
+
             # Test write access
             try:
                 with driver.session() as session:
@@ -50,14 +51,14 @@ def wait_for_neo4j(uri, username, password, max_attempts=5):
                 logger.error("Database initialization requires write access. Please check your Neo4j settings.")
                 driver.close()
                 sys.exit(1)
-                
+
         except Exception as e:
             attempts += 1
             wait_time = (1 + attempts) * 2
             logger.warning(f"Failed to connect (attempt {attempts}/{max_attempts}). Waiting {wait_time} seconds...")
             logger.debug(f"Error: {e}")
             time.sleep(wait_time)
-    
+
     if not success:
         driver.close()
         logger.error("Failed to connect to Neo4j after multiple attempts. Exiting.")
@@ -67,8 +68,9 @@ def wait_for_neo4j(uri, username, password, max_attempts=5):
         logger.error(f"  Password: {'Set (not shown)' if password else 'Not set'}")
         logger.error("Make sure Neo4j is running and accessible, and the credentials are correct.")
         sys.exit(1)
-    
+
     return driver
+
 
 def create_constraints_and_indexes(driver):
     """Create necessary constraints and indexes for the graph."""
@@ -79,40 +81,41 @@ def create_constraints_and_indexes(driver):
         FOR (t:ActionTemplate)
         REQUIRE (t.keyword, t.isCurrent) IS UNIQUE
         """)
-        
+
         session.run("""
         CREATE CONSTRAINT unique_project_id IF NOT EXISTS
         FOR (p:Project)
         REQUIRE p.projectId IS UNIQUE
         """)
-        
+
         session.run("""
         CREATE CONSTRAINT unique_workflow_execution_id IF NOT EXISTS
         FOR (w:WorkflowExecution)
         REQUIRE w.id IS UNIQUE
         """)
-        
+
         # Indexes
         session.run("""
         CREATE INDEX action_template_keyword IF NOT EXISTS
         FOR (t:ActionTemplate)
         ON (t.keyword)
         """)
-        
+
         session.run("""
         CREATE INDEX file_path IF NOT EXISTS
         FOR (f:File)
         ON (f.path)
         """)
-        
+
         logger.info("Created constraints and indexes")
+
 
 def create_guidance_hub(driver):
     """Create the AI Guidance Hub node."""
     with driver.session() as session:
         session.run("""
         MERGE (hub:AiGuidanceHub {id: 'main_hub'})
-        ON CREATE SET hub.description = 
+        ON CREATE SET hub.description =
         "Welcome AI Assistant. This is your central hub for coding assistance using our Neo4j knowledge graph. Choose your path:
         1.  **Execute Task:** If you know the action keyword (e.g., FIX, REFACTOR, FEATURE, TOOL_ADD), use get_action_template with the keyword parameter. Always follow the template steps precisely, especially testing before logging.
         2.  **List Workflows/Templates:** Use list_action_templates to see available actions and their descriptions.
@@ -129,6 +132,7 @@ def create_guidance_hub(driver):
         """)
         logger.info("Created AiGuidanceHub node")
 
+
 def create_guide_nodes(driver):
     """Create the guide nodes and link them to the hub."""
     with driver.session() as session:
@@ -136,7 +140,7 @@ def create_guide_nodes(driver):
         session.run("""
         MERGE (hub:AiGuidanceHub {id: 'main_hub'})
         MERGE (bp:BestPracticesGuide {id: 'core_practices'})
-        ON CREATE SET bp.content = 
+        ON CREATE SET bp.content =
         "Core Coding & System Practices:
         - **Efficiency First:** Prefer editing existing code over complete rewrites where feasible. Avoid temporary patch files.
         - **Meaningful Naming:** Do not name functions, variables, or files 'temp', 'fixed', 'patch'. Use descriptive names reflecting purpose.
@@ -147,12 +151,12 @@ def create_guide_nodes(driver):
         - **Metrics Collection:** Track completion time and success rates to improve future estimation accuracy."
         MERGE (hub)-[:LINKS_TO]->(bp)
         """)
-        
+
         # Create Templating Guide
         session.run("""
         MERGE (hub:AiGuidanceHub {id: 'main_hub'})
         MERGE (tg:TemplatingGuide {id: 'template_guide'})
-        ON CREATE SET tg.content = 
+        ON CREATE SET tg.content =
         "How to Create/Edit ActionTemplates:
         -   Nodes are `:ActionTemplate {keyword: STRING, version: STRING, isCurrent: BOOLEAN, description: STRING, steps: STRING}`.
         -   `keyword`: Short, unique verb (e.g., 'DEPLOY', 'TEST_COMPONENT'). Used for lookup.
@@ -162,7 +166,7 @@ def create_guide_nodes(driver):
         -   `complexity`: Estimation of task complexity (e.g., 'LOW', 'MEDIUM', 'HIGH').
         -   `estimatedEffort`: Estimated time in minutes to complete the task.
         -   `steps`: Detailed, multi-line string with numbered steps. Use Markdown for formatting. MUST include critical checkpoints like 'Test Verification' and 'Log Successful Execution'.
-        
+
         When updating a template:
         1. Create new version with incremented version number
         2. Set isCurrent = true on new version
@@ -170,12 +174,12 @@ def create_guide_nodes(driver):
         4. Document changes in a :Feedback node"
         MERGE (hub)-[:LINKS_TO]->(tg)
         """)
-        
+
         # Create System Usage Guide
         session.run("""
         MERGE (hub:AiGuidanceHub {id: 'main_hub'})
         MERGE (sg:SystemUsageGuide {id: 'system_guide'})
-        ON CREATE SET sg.content = 
+        ON CREATE SET sg.content =
         "Neo4j System Overview:
         -   `:AiGuidanceHub`: Your starting point.
         -   `:Project`: Represents a codebase. Has `projectId`, `name`, `readmeContent`/`readmeUrl`.
@@ -185,7 +189,7 @@ def create_guide_nodes(driver):
         -   `:Feedback`: Stores feedback on template effectiveness. Links to templates via `REGARDING`.
         -   `:BestPracticesGuide`, `:TemplatingGuide`, `:SystemUsageGuide`: Linked from `:AiGuidanceHub` for help.
         -   Always use parameters ($projectId, $keyword) in queries for safety and efficiency.
-        
+
         Common Metrics to Track:
         -   Success rate per template
         -   Average execution time per template
@@ -194,8 +198,9 @@ def create_guide_nodes(driver):
         -   Most commonly modified files"
         MERGE (hub)-[:LINKS_TO]->(sg)
         """)
-        
+
         logger.info("Created guide nodes and linked to hub")
+
 
 def load_templates_from_directory(driver, templates_dir):
     """Load template files from directory and execute them."""
@@ -203,14 +208,14 @@ def load_templates_from_directory(driver, templates_dir):
     if not template_path.exists() or not template_path.is_dir():
         logger.error(f"Template directory not found: {templates_dir}")
         return False
-        
+
     template_files = list(template_path.glob("*.cypher"))
     if not template_files:
         logger.warning(f"No template files found in {templates_dir}")
         return False
-        
+
     logger.info(f"Found {len(template_files)} template files")
-    
+
     with driver.session() as session:
         for template_file in template_files:
             try:
@@ -220,8 +225,9 @@ def load_templates_from_directory(driver, templates_dir):
                 logger.info(f"Executed template file: {template_file.name}")
             except Exception as e:
                 logger.error(f"Error executing template file {template_file.name}: {e}")
-                
+
     return True
+
 
 def create_sample_project(driver):
     """Create a sample project in the database."""
@@ -233,29 +239,30 @@ def create_sample_project(driver):
           readmeContent: '# Sample Project\n\nThis is a sample project for demonstrating the Neo4j-guided AI coding workflow system.\n\n## Features\n\n- Feature 1\n- Feature 2\n- Feature 3\n\n## Structure\n\n- `/src`: Source code\n- `/tests`: Test cases\n- `/docs`: Documentation\n',
           currentVersion: '1.0.0'
         })
-        
+
         // Create basic directory structure
         MERGE (src:Directory {path: 'src', project_id: 'sample-project'})
         MERGE (tests:Directory {path: 'tests', project_id: 'sample-project'})
         MERGE (docs:Directory {path: 'docs', project_id: 'sample-project'})
-        
+
         MERGE (p)-[:CONTAINS]->(src)
         MERGE (p)-[:CONTAINS]->(tests)
         MERGE (p)-[:CONTAINS]->(docs)
-        
+
         // Add some files
         MERGE (main:File {path: 'src/main.py', project_id: 'sample-project'})
         MERGE (utils:File {path: 'src/utils.py', project_id: 'sample-project'})
         MERGE (test_main:File {path: 'tests/test_main.py', project_id: 'sample-project'})
         MERGE (readme:File {path: 'README.md', project_id: 'sample-project'})
-        
+
         MERGE (src)-[:CONTAINS]->(main)
         MERGE (src)-[:CONTAINS]->(utils)
         MERGE (tests)-[:CONTAINS]->(test_main)
         MERGE (p)-[:CONTAINS]->(readme)
         """)
-        
+
         logger.info("Created sample project")
+
 
 def main():
     """Main function to initialize the database."""
@@ -263,34 +270,35 @@ def main():
     neo4j_uri = os.environ.get("NEO4J_URL", "bolt://localhost:7687")
     neo4j_user = os.environ.get("NEO4J_USERNAME", "neo4j")
     neo4j_pass = os.environ.get("NEO4J_PASSWORD", "00000000")
-    
+
     # Debug output
     logger.info(f"Using Neo4j connection: {neo4j_uri}")
     logger.info(f"Using Neo4j username: {neo4j_user}")
     logger.info(f"Using Neo4j password: {'Set (not shown)' if neo4j_pass else 'Not set'}")
-    
+
     # Get templates directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
     templates_dir = os.path.abspath(os.path.join(script_dir, "..", "..", "templates"))
-    
+
     # Wait for Neo4j to be available
     driver = wait_for_neo4j(neo4j_uri, neo4j_user, neo4j_pass)
-    
+
     try:
         # Initialize the graph structure
         create_constraints_and_indexes(driver)
         create_guidance_hub(driver)
         create_guide_nodes(driver)
-        
+
         # Load templates
         load_templates_from_directory(driver, templates_dir)
-        
+
         # Create sample project
         create_sample_project(driver)
-        
+
         logger.info("Database initialization complete")
     finally:
         driver.close()
+
 
 if __name__ == "__main__":
     main()

@@ -46,32 +46,32 @@ class Neo4jGraphInitializer:
             FOR (t:ActionTemplate)
             REQUIRE (t.keyword, t.isCurrent) IS UNIQUE
             """)
-            
+
             session.run("""
             CREATE CONSTRAINT unique_project_id IF NOT EXISTS
             FOR (p:Project)
             REQUIRE p.projectId IS UNIQUE
             """)
-            
+
             session.run("""
             CREATE CONSTRAINT unique_workflow_execution_id IF NOT EXISTS
             FOR (w:WorkflowExecution)
             REQUIRE w.id IS UNIQUE
             """)
-            
+
             # Indexes
             session.run("""
             CREATE INDEX action_template_keyword IF NOT EXISTS
             FOR (t:ActionTemplate)
             ON (t.keyword)
             """)
-            
+
             session.run("""
             CREATE INDEX file_path IF NOT EXISTS
             FOR (f:File)
             ON (f.path)
             """)
-            
+
             logger.info("Created constraints and indexes")
 
     def create_guidance_hub(self):
@@ -79,7 +79,7 @@ class Neo4jGraphInitializer:
         with self.driver.session() as session:
             session.run("""
             MERGE (hub:AiGuidanceHub {id: "main_hub"})
-            ON CREATE SET hub.description = 
+            ON CREATE SET hub.description =
             "Welcome AI Assistant. This is your central hub for coding assistance using our Neo4j knowledge graph. Choose your path:
             1.  **Execute Task:** If you know the action keyword (e.g., FIX, REFACTOR), directly query for the ActionTemplate: `MATCH (t:ActionTemplate {keyword: $keyword, isCurrent: true}) RETURN t.steps`. Always follow the template steps precisely, especially testing before logging.
             2.  **List Workflows/Templates:** Query available actions: `MATCH (t:ActionTemplate {isCurrent: true}) RETURN t.keyword, t.description ORDER BY t.keyword`.
@@ -96,7 +96,7 @@ class Neo4jGraphInitializer:
             session.run("""
             MERGE (hub:AiGuidanceHub {id: "main_hub"})
             MERGE (bp:BestPracticesGuide {id: "core_practices"})
-            ON CREATE SET bp.content = 
+            ON CREATE SET bp.content =
             "Core Coding & System Practices:
             - **Efficiency First:** Prefer editing existing code over complete rewrites where feasible. Avoid temporary patch files.
             - **Meaningful Naming:** Do not name functions, variables, or files 'temp', 'fixed', 'patch'. Use descriptive names reflecting purpose.
@@ -107,12 +107,12 @@ class Neo4jGraphInitializer:
             - **Metrics Collection:** Track completion time and success rates to improve future estimation accuracy."
             MERGE (hub)-[:LINKS_TO]->(bp)
             """)
-            
+
             # Create Templating Guide
             session.run("""
             MERGE (hub:AiGuidanceHub {id: "main_hub"})
             MERGE (tg:TemplatingGuide {id: "template_guide"})
-            ON CREATE SET tg.content = 
+            ON CREATE SET tg.content =
             "How to Create/Edit ActionTemplates:
             -   Nodes are `:ActionTemplate {keyword: STRING, version: STRING, isCurrent: BOOLEAN, description: STRING, steps: STRING}`.
             -   `keyword`: Short, unique verb (e.g., 'DEPLOY', 'TEST_COMPONENT'). Used for lookup.
@@ -122,7 +122,7 @@ class Neo4jGraphInitializer:
             -   `complexity`: Estimation of task complexity (e.g., 'LOW', 'MEDIUM', 'HIGH').
             -   `estimatedEffort`: Estimated time in minutes to complete the task.
             -   `steps`: Detailed, multi-line string with numbered steps. Use Markdown for formatting. MUST include critical checkpoints like 'Test Verification' and 'Log Successful Execution'.
-            
+
             When updating a template:
             1. Create new version with incremented version number
             2. Set isCurrent = true on new version
@@ -130,12 +130,12 @@ class Neo4jGraphInitializer:
             4. Document changes in a :Feedback node"
             MERGE (hub)-[:LINKS_TO]->(tg)
             """)
-            
+
             # Create System Usage Guide
             session.run("""
             MERGE (hub:AiGuidanceHub {id: "main_hub"})
             MERGE (sg:SystemUsageGuide {id: "system_guide"})
-            ON CREATE SET sg.content = 
+            ON CREATE SET sg.content =
             "Neo4j System Overview:
             -   `:AiGuidanceHub`: Your starting point.
             -   `:Project`: Represents a codebase. Has `projectId`, `name`, `readmeContent`/`readmeUrl`.
@@ -145,7 +145,7 @@ class Neo4jGraphInitializer:
             -   `:Feedback`: Stores feedback on template effectiveness. Links to templates via `REGARDING`.
             -   `:BestPracticesGuide`, `:TemplatingGuide`, `:SystemUsageGuide`: Linked from `:AiGuidanceHub` for help.
             -   Always use parameters ($projectId, $keyword) in queries for safety and efficiency.
-            
+
             Common Metrics to Track:
             -   Success rate per template
             -   Average execution time per template
@@ -154,7 +154,7 @@ class Neo4jGraphInitializer:
             -   Most commonly modified files"
             MERGE (hub)-[:LINKS_TO]->(sg)
             """)
-            
+
             logger.info("Created guide nodes and linked to hub")
 
     def load_templates_from_directory(self, template_dir):
@@ -163,14 +163,14 @@ class Neo4jGraphInitializer:
         if not template_path.exists() or not template_path.is_dir():
             logger.error(f"Template directory not found: {template_dir}")
             return False
-            
+
         template_files = list(template_path.glob("*.cypher"))
         if not template_files:
             logger.warning(f"No template files found in {template_dir}")
             return False
-            
+
         logger.info(f"Found {len(template_files)} template files")
-        
+
         with self.driver.session() as session:
             for template_file in template_files:
                 try:
@@ -180,7 +180,7 @@ class Neo4jGraphInitializer:
                     logger.info(f"Executed template file: {template_file.name}")
                 except Exception as e:
                     logger.error(f"Error executing template file {template_file.name}: {e}")
-                    
+
         return True
 
 def main():
@@ -189,29 +189,29 @@ def main():
     parser.add_argument('--username', default='neo4j', help='Neo4j username')
     parser.add_argument('--password', required=True, help='Neo4j password')
     parser.add_argument('--template-dir', default='../templates', help='Directory containing template files')
-    
+
     args = parser.parse_args()
-    
+
     # Resolve template directory path relative to script location
     script_dir = os.path.dirname(os.path.abspath(__file__))
     template_dir = os.path.abspath(os.path.join(script_dir, args.template_dir))
-    
+
     # Initialize graph
     initializer = Neo4jGraphInitializer(args.uri, args.username, args.password)
-    
+
     try:
         # Create structure
         initializer.create_constraints_and_indexes()
         initializer.create_guidance_hub()
         initializer.create_guide_nodes()
-        
+
         # Load templates
         success = initializer.load_templates_from_directory(template_dir)
         if success:
             logger.info("Templates loaded successfully")
         else:
             logger.warning("Failed to load templates or no templates found")
-            
+
         logger.info("Graph initialization complete")
     finally:
         initializer.close()
