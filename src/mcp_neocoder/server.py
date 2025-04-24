@@ -1,8 +1,9 @@
 """
-MCP Server for NeoCoder Neo4j-Guided AI Coding Workflow
+Modified MCP Server for NeoCoder Neo4j-Guided AI Workflow with Polymorphic Support
 
-This server implements a system where an AI coding assistant uses a Neo4j graph database
-as its primary, dynamic "instruction manual" and project memory.
+This version adds support for multiple incarnations of the NeoCoder framework,
+allowing it to function as a research orchestration platform, decision support system,
+continuous learning environment, or complex system simulator.
 """
 
 import json
@@ -19,6 +20,11 @@ from pydantic import Field
 
 from .cypher_snippets import CypherSnippetMixin
 from .tool_proposals import ToolProposalMixin
+from .polymorphic_adapter import PolymorphicAdapterMixin, IncarnationType
+from .action_templates import ActionTemplateMixin
+from .research_incarnation import ResearchOrchestration
+from .init_db import init_db, INCARNATION_TYPES
+import asyncio
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -26,21 +32,93 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(
 logger = logging.getLogger("mcp_neocoder")
 
 
-class Neo4jWorkflowServer(CypherSnippetMixin, ToolProposalMixin):
-    """Server for Neo4j-guided AI coding workflow."""
+class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolProposalMixin, ActionTemplateMixin):
+    """Server for Neo4j-guided AI workflow with polymorphic support."""
 
     def __init__(self, driver: AsyncDriver, database: str = "neo4j"):
+        """Initialize the workflow server with Neo4j connection."""
         self.driver = driver
         self.database = database
         self.mcp = FastMCP("mcp-neocoder", dependencies=["neo4j", "pydantic"])
+        
+        # Auto-initialize the database if needed
+        asyncio.get_event_loop().run_until_complete(self._ensure_db_initialized())
+        
+        # Initialize the polymorphic adapter
+        PolymorphicAdapterMixin.__init__(self)
+        
+        # Register incarnations
+        self.register_incarnation(ResearchOrchestration, IncarnationType.RESEARCH)
+        
+        # Register core tools
         self._register_tools()
+        
+    async def _ensure_db_initialized(self):
+        """Check if the database is initialized and run initialization if needed."""
+        logger.info("Checking if database needs initialization...")
+        try:
+            # Check if the main hub exists
+            init_needed = False
+            hub_exists = False
+            
+            async with self.driver.session(database=self.database) as session:
+                # Check if main hub exists
+                hub_query = "MATCH (hub:AiGuidanceHub {id: 'main_hub'}) RETURN count(hub) as count"
+                hub_result = await session.execute_read(self._read_query, hub_query, {})
+                hub_data = json.loads(hub_result)
+                
+                if not hub_data or hub_data[0].get("count", 0) == 0:
+                    logger.info("Main hub not found, database needs initialization")
+                    init_needed = True
+                else:
+                    hub_exists = True
+                    
+                # If hub exists, check if incarnation hubs exist
+                if hub_exists:
+                    incarnation_query = """
+                    MATCH (hub:AiGuidanceHub {id: 'main_hub'})
+                    OPTIONAL MATCH (hub)-[:HAS_INCARNATION]->(inc:AiGuidanceHub)
+                    RETURN count(inc) as count
+                    """
+                    inc_result = await session.execute_read(self._read_query, incarnation_query, {})
+                    inc_data = json.loads(inc_result)
+                    
+                    if not inc_data or inc_data[0].get("count", 0) < 3:  # At least research, decision, and coding
+                        logger.info("Incarnation hubs not fully set up, database needs initialization")
+                        init_needed = True
+                
+                # Check if action templates exist
+                if not init_needed:
+                    template_query = "MATCH (t:ActionTemplate) RETURN count(t) as count"
+                    template_result = await session.execute_read(self._read_query, template_query, {})
+                    template_data = json.loads(template_result)
+                    
+                    if not template_data or template_data[0].get("count", 0) == 0:
+                        logger.info("No action templates found, database needs initialization")
+                        init_needed = True
+            
+            if init_needed:
+                logger.info("Initializing database...")
+                await init_db(INCARNATION_TYPES)
+                logger.info("Database initialization completed")
+            else:
+                logger.info("Database already initialized, skipping initialization")
+                
+        except Exception as e:
+            logger.error(f"Error during database initialization check: {e}")
+            logger.info("Will attempt database initialization due to error")
+            try:
+                await init_db(INCARNATION_TYPES)
+                logger.info("Database initialization completed after error recovery")
+            except Exception as init_err:
+                logger.error(f"Database initialization failed: {init_err}")
 
     def _register_tools(self):
         """Register all tools with the MCP server."""
         # Core navigation and retrieval tools
         self.mcp.add_tool(self.get_guidance_hub)
-        self.mcp.add_tool(self.get_action_template)
         self.mcp.add_tool(self.list_action_templates)
+        self.mcp.add_tool(self.get_action_template)
         self.mcp.add_tool(self.get_best_practices)
 
         # Project tools
@@ -78,6 +156,89 @@ class Neo4jWorkflowServer(CypherSnippetMixin, ToolProposalMixin):
 
         # Tool guidance
         self.mcp.add_tool(self.suggest_tool)
+        
+        # Incarnation tools
+        self.mcp.add_tool(self.get_current_incarnation)
+        self.mcp.add_tool(self.list_incarnations)
+        self.mcp.add_tool(self.switch_incarnation)
+
+    async def get_current_incarnation(self) -> List[types.TextContent]:
+        """Get the currently active incarnation type."""
+        try:
+            current = await self.get_current_incarnation_type()
+            if current:
+                return [types.TextContent(
+                    type="text",
+                    text=f"Currently using '{current.value}' incarnation"
+                )]
+            else:
+                return [types.TextContent(
+                    type="text",
+                    text="No incarnation is currently active. Use `switch_incarnation()` to set one."
+                )]
+        except Exception as e:
+            logger.error(f"Error getting current incarnation: {e}")
+            return [types.TextContent(type="text", text=f"Error: {e}")]
+
+    async def list_incarnations(self) -> List[types.TextContent]:
+        """List all available incarnations."""
+        try:
+            incarnations = []
+            for inc_type, inc_class in self.incarnation_registry.items():
+                incarnations.append({
+                    "type": inc_type.value,
+                    "description": inc_class.description if hasattr(inc_class, 'description') else "No description available",
+                })
+            
+            if incarnations:
+                text = "# Available Incarnations\n\n"
+                text += "| Type | Description |\n"
+                text += "| ---- | ----------- |\n"
+                
+                for inc in incarnations:
+                    text += f"| {inc['type']} | {inc['description']} |\n"
+                
+                current = await self.get_current_incarnation_type()
+                if current:
+                    text += f"\nCurrently using: **{current.value}**"
+                else:
+                    text += "\nNo incarnation is currently active. Use `switch_incarnation()` to activate one."
+                
+                return [types.TextContent(type="text", text=text)]
+            else:
+                return [types.TextContent(type="text", text="No incarnations are registered")]
+        except Exception as e:
+            logger.error(f"Error listing incarnations: {e}")
+            return [types.TextContent(type="text", text=f"Error: {e}")]
+
+    async def switch_incarnation(
+        self,
+        incarnation_type: str = Field(..., description="Type of incarnation to switch to (coding, research_orchestration, decision_support, continuous_learning, complex_system)"),
+    ) -> List[types.TextContent]:
+        """Switch the server to a different incarnation."""
+        try:
+            # Convert string to enum
+            inc_type = None
+            for t in IncarnationType:
+                if t.value == incarnation_type:
+                    inc_type = t
+                    break
+            
+            if not inc_type:
+                available_types = ", ".join([t.value for t in IncarnationType])
+                return [types.TextContent(
+                    type="text",
+                    text=f"Unknown incarnation type: '{incarnation_type}'. Available types: {available_types}"
+                )]
+            
+            await self.set_incarnation(inc_type)
+            return [types.TextContent(
+                type="text",
+                text=f"Successfully switched to '{inc_type.value}' incarnation"
+            )]
+        except Exception as e:
+            logger.error(f"Error switching incarnation: {e}")
+            return [types.TextContent(type="text", text=f"Error: {e}")]
 
     def get_tool_descriptions(self) -> dict:
         """Get descriptions of all available tools."""
@@ -108,7 +269,11 @@ class Neo4jWorkflowServer(CypherSnippetMixin, ToolProposalMixin):
             "get_tool_proposal": "Get details of a specific tool proposal",
             "get_tool_request": "Get details of a specific tool request",
             "list_tool_proposals": "List all tool proposals with optional filtering",
-            "list_tool_requests": "List all tool requests with optional filtering"
+            "list_tool_requests": "List all tool requests with optional filtering",
+            # Incarnation tools
+            "get_current_incarnation": "Get the currently active incarnation type",
+            "list_incarnations": "List all available incarnations",
+            "switch_incarnation": "Switch the server to a different incarnation type"
         }
         return tools
 
@@ -119,6 +284,9 @@ class Neo4jWorkflowServer(CypherSnippetMixin, ToolProposalMixin):
         """Suggest the appropriate tool based on a task description."""
         tools = self.get_tool_descriptions()
 
+        # Get the current incarnation type
+        current_incarnation = await self.get_current_incarnation_type()
+        
         # Define task patterns to match with tools
         task_patterns = {
             "get_guidance_hub": ["where to start", "what should i do", "guidance", "help me", "not sure", "initial instructions"],
@@ -147,8 +315,31 @@ class Neo4jWorkflowServer(CypherSnippetMixin, ToolProposalMixin):
             "get_tool_proposal": ["view proposal", "see tool proposal", "proposal details", "proposed tool info"],
             "get_tool_request": ["view request", "see tool request", "request details", "requested tool info"],
             "list_tool_proposals": ["all proposals", "tool ideas", "proposed tools", "tool suggestions"],
-            "list_tool_requests": ["all requests", "requested tools", "tool requests", "feature requests"]
+            "list_tool_requests": ["all requests", "requested tools", "tool requests", "feature requests"],
+            # Incarnation tools
+            "get_current_incarnation": ["what mode", "current incarnation", "what functionality", "active mode"],
+            "list_incarnations": ["available modes", "list incarnations", "system modes", "what can it do"],
+            "switch_incarnation": ["change mode", "switch to", "research mode", "coding mode", "decision mode"]
         }
+        
+        # Add research-specific patterns if in research mode
+        if current_incarnation == IncarnationType.RESEARCH:
+            research_patterns = {
+                "register_hypothesis": ["new hypothesis", "create hypothesis", "register hypothesis", "add hypothesis"],
+                "list_hypotheses": ["show hypotheses", "all hypotheses", "view hypotheses", "list hypotheses"],
+                "get_hypothesis": ["hypothesis details", "view hypothesis", "show hypothesis"],
+                "update_hypothesis": ["change hypothesis", "modify hypothesis", "update hypothesis"],
+                "create_protocol": ["new protocol", "create protocol", "design experiment", "experiment protocol"],
+                "list_protocols": ["show protocols", "all protocols", "view protocols", "list protocols"],
+                "get_protocol": ["protocol details", "view protocol", "show protocol"],
+                "create_experiment": ["new experiment", "create experiment", "set up experiment"],
+                "list_experiments": ["show experiments", "all experiments", "view experiments", "list experiments"],
+                "record_observation": ["add observation", "record data", "log result", "add result", "record observation"],
+                "list_observations": ["show observations", "view data", "experiment data", "list observations"],
+                "compute_statistics": ["analyze results", "compute statistics", "statistical analysis", "data analysis"],
+                "create_publication_draft": ["draft paper", "publication draft", "create paper", "write up"]
+            }
+            task_patterns.update(research_patterns)
 
         # Normalize task description
         task = task_description.lower()
@@ -158,28 +349,31 @@ class Neo4jWorkflowServer(CypherSnippetMixin, ToolProposalMixin):
         for tool, patterns in task_patterns.items():
             for pattern in patterns:
                 if pattern in task:
-                    matches.append((tool, tools[tool]))
+                    matches.append((tool, tools.get(tool, "No description available")))
 
         # If no matches, suggest based on common actions
         if not matches:
-            if "tool" in task.lower() and ("propose" in task.lower() or "suggest" in task.lower() or "new" in task.lower()):
-                matches.append(("propose_tool", tools["propose_tool"]))
-            elif "tool" in task.lower() and ("request" in task.lower() or "need" in task.lower() or "want" in task.lower()):
-                matches.append(("request_tool", tools["request_tool"]))
-            elif "cypher" in task.lower() or "snippet" in task.lower():
-                if "search" in task.lower() or "find" in task.lower():
-                    matches.append(("search_cypher_snippets", tools["search_cypher_snippets"]))
-                elif "list" in task.lower() or "show" in task.lower():
-                    matches.append(("list_cypher_snippets", tools["list_cypher_snippets"]))
-                else:
-                    matches.append(("get_cypher_snippet", tools["get_cypher_snippet"]))
-            elif "create" in task or "new" in task:
-                matches.append(("write_neo4j_cypher", tools["write_neo4j_cypher"]))
-            elif "find" in task or "search" in task or "get" in task:
-                matches.append(("run_custom_query", tools["run_custom_query"]))
+            # Check if task involves switching incarnations
+            if "switch" in task.lower() or "change" in task.lower() or "mode" in task.lower():
+                matches.append(("switch_incarnation", tools.get("switch_incarnation", "No description available")))
+                matches.append(("list_incarnations", tools.get("list_incarnations", "No description available")))
+            
+            # Check if in research mode and task is research-related
+            elif current_incarnation == IncarnationType.RESEARCH and ("hypothesis" in task.lower() or "experiment" in task.lower() or "research" in task.lower()):
+                if "create" in task.lower() or "new" in task.lower():
+                    if "hypothesis" in task.lower():
+                        matches.append(("register_hypothesis", "Register a new scientific hypothesis"))
+                    elif "experiment" in task.lower():
+                        matches.append(("create_experiment", "Create a new experiment to test a hypothesis"))
+                    elif "protocol" in task.lower():
+                        matches.append(("create_protocol", "Create an experimental protocol"))
+                elif "list" in task.lower() or "show" in task.lower() or "view" in task.lower():
+                    matches.append(("list_hypotheses", "List scientific hypotheses"))
+                    matches.append(("list_experiments", "List experiments"))
             else:
                 # Default to guidance hub if no clear match
-                matches.append(("get_guidance_hub", tools["get_guidance_hub"]))
+                matches.append(("get_guidance_hub", tools.get("get_guidance_hub", "No description available")))
+                matches.append(("get_current_incarnation", tools.get("get_current_incarnation", "No description available")))
 
         # Format response
         response = "Based on your task description, here are the recommended tools:\n\n"
@@ -195,12 +389,65 @@ class Neo4jWorkflowServer(CypherSnippetMixin, ToolProposalMixin):
                     response += "\n  Example usage: `get_project(project_id=\"your_project_id\")`\n"
                 elif tool == "run_custom_query":
                     response += "\n  Example usage: `run_custom_query(query=\"MATCH (n:Project) RETURN n.name\")`\n"
-                elif tool == "write_neo4j_cypher":
-                    response += "\n  Example usage: `write_neo4j_cypher(query=\"CREATE (n:TestNode {name: 'Test'}) RETURN n\")`\n"
+                elif tool == "register_hypothesis":
+                    response += "\n  Example usage: `register_hypothesis(text=\"Higher caffeine intake leads to improved cognitive performance\", prior_probability=0.6)`\n"
+                elif tool == "switch_incarnation":
+                    response += "\n  Example usage: `switch_incarnation(incarnation_type=\"research_orchestration\")`\n"
 
         response += "\nFor full navigation help, try `get_guidance_hub()` to see all available options."
 
+        # Add incarnation-specific hint if active
+        if current_incarnation:
+            if current_incarnation == IncarnationType.RESEARCH:
+                response += f"\n\nYou are currently in the **{current_incarnation.value}** incarnation, which provides tools for scientific workflow management."
+            else:
+                response += f"\n\nYou are currently in the **{current_incarnation.value}** incarnation."
+        else:
+            response += "\n\nNo incarnation is currently active. Use `switch_incarnation()` to activate one."
+
         return [types.TextContent(type="text", text=response)]
+
+    async def get_guidance_hub(self) -> List[types.TextContent]:
+        """Get the AI Guidance Hub content, which serves as the central entry point for navigation."""
+        # Get the current incarnation
+        current_incarnation = self.current_incarnation
+        
+        # If an incarnation is active, use its guidance hub
+        if current_incarnation:
+            return await current_incarnation.get_guidance_hub()
+        
+        # Otherwise, use the default guidance hub
+        query = """
+        MATCH (hub:AiGuidanceHub {id: 'main_hub'})
+        RETURN hub.description AS description
+        """
+
+        try:
+            async with self.driver.session(database=self.database) as session:
+                results_json = await session.execute_read(self._read_query, query, {})
+                results = json.loads(results_json)
+
+                if results and len(results) > 0:
+                    # Add incarnation information to the hub content
+                    hub_content = results[0]["description"]
+                    
+                    # Add information about available incarnations
+                    incarnation_info = "\n\n## Available Incarnations\n\n"
+                    incarnation_info += "This system supports multiple incarnations with different functionalities:\n\n"
+                    
+                    incarnation_info += "1. **coding** - Original code workflow management\n"
+                    incarnation_info += "2. **research_orchestration** - Scientific research management platform\n"
+                    incarnation_info += "3. **decision_support** - Decision analysis and evidence tracking\n"
+                    
+                    incarnation_info += "\nUse `switch_incarnation(incarnation_type=\"...\")` to switch to a different incarnation."
+                    
+                    return [types.TextContent(type="text", text=hub_content + incarnation_info)]
+                else:
+                    # If hub doesn't exist, create it with default content
+                    return await self._create_default_hub()
+        except Exception as e:
+            logger.error(f"Error retrieving guidance hub: {e}")
+            return [types.TextContent(type="text", text=f"Error: {e}")]
 
     async def check_connection(self) -> List[types.TextContent]:
         """Check the Neo4j connection status and database access permissions."""
@@ -230,13 +477,18 @@ class Neo4jWorkflowServer(CypherSnippetMixin, ToolProposalMixin):
                     self._read_query, "CALL dbms.components() YIELD name, versions RETURN name, versions[0] as version", {}
                 )
 
+                # Add current incarnation information
+                current_incarnation = await self.get_current_incarnation_type()
+                incarnation_info = "None" if current_incarnation is None else current_incarnation.value
+
                 result = {
                     "connection": "Connected to Neo4j database",
                     "database": self.database,
                     "read_access": True,
                     "write_access": write_access,
                     "write_message": write_message,
-                    "server_info": json.loads(info_result) if info_result else "N/A"
+                    "server_info": json.loads(info_result) if info_result else "N/A",
+                    "current_incarnation": incarnation_info
                 }
 
                 return [types.TextContent(type="text", text=json.dumps(result, indent=2))]
@@ -317,154 +569,91 @@ class Neo4jWorkflowServer(CypherSnippetMixin, ToolProposalMixin):
 
         return True, "Query syntax appears valid."
 
+    async def run_custom_query(
+        self,
+        query: str = Field(..., description="Custom Cypher query to execute"),
+        params: Optional[Dict[str, Any]] = Field(None, description="Query parameters")
+    ) -> List[types.TextContent]:
+        """Run a custom Cypher query for advanced operations."""
+        params = params or {}
+
+        try:
+            async with self.driver.session(database=self.database) as session:
+                results_json = await session.execute_read(self._read_query, query, params)
+                return [types.TextContent(type="text", text=results_json)]
+        except Exception as e:
+            logger.error(f"Error executing custom query: {e}")
+            return [types.TextContent(type="text", text=f"Error: {e}")]
+            
     async def write_neo4j_cypher(
         self,
-        query: str = Field(..., description="The Cypher query to execute."),
-        params: Optional[dict[str, Any]] = Field(
-            None, description="The parameters to pass to the Cypher query."
-        ),
-    ) -> list[types.TextContent]:
-        """Execute a write Cypher query on the neo4j database."""
-
-        # Check if query is a write query
+        query: str = Field(..., description="Cypher query to execute (CREATE, DELETE, MERGE, etc.)"),
+        params: Optional[Dict[str, Any]] = Field(None, description="Query parameters")
+    ) -> List[types.TextContent]:
+        """Execute a WRITE Cypher query (for creating/updating data)."""
+        params = params or {}
+        
+        # Check if this is actually a write query
         if not self.is_write_query(query):
-            suggested_tool = "run_custom_query"
-            return [types.TextContent(type="text", text=f"Error: Only write queries are allowed for write_neo4j_cypher. Your query appears to be a read query.\n\nSuggestion: For read queries, use the '{suggested_tool}' tool instead. Example:\n\n```\nrun_custom_query(query=\"{query}\"" + (", params=" + str(params) if params else "") + ")\n```")]
-
-        # Check query syntax
-        is_valid, syntax_message = self.analyze_cypher_syntax(query)
+            return [types.TextContent(
+                type="text",
+                text="This does not appear to be a write query. Use run_custom_query() for read operations."
+            )]
+            
+        # Analyze query syntax for common errors
+        is_valid, message = self.analyze_cypher_syntax(query)
         if not is_valid:
-            return [types.TextContent(type="text", text=f"Error: {syntax_message}\n\nYour query: {query}")]
-
+            return [types.TextContent(type="text", text=message)]
+            
         try:
             async with self.driver.session(database=self.database) as session:
-                # First check if we have write access
-                try:
-                    test_result = await session.execute_write(
-                        self._write,
-                        "CREATE (n:WriteTest {id: randomUUID()}) WITH n DELETE n RETURN 'Success'",
-                        {}
-                    )
-                except Exception as e:
-                    error_msg = str(e).lower()
-                    if "access mode" in error_msg or "permission" in error_msg or "read only" in error_msg:
-                        return [types.TextContent(
-                            type="text",
-                            text="Error: Database is in read-only mode. Write operations are not allowed. Check your Neo4j configuration or connection parameters."
-                        )]
-                    else:
-                        # Let it proceed and fail with the actual query if it's not a permissions issue
-                        pass
-
-                # Execute the actual query
-                raw_results = await session.execute_write(self._write, query, params or {})
-
-                # Create a counters dictionary with safer attribute access
-                try:
-                    # Try to access counters using more public APIs or properties
-                    counters_dict = {}
-
-                    # Add known counter attributes if they exist
-                    for attr in ["nodes_created", "nodes_deleted", "relationships_created",
-                                "relationships_deleted", "properties_set", "labels_added",
-                                "labels_removed", "indexes_added", "indexes_removed",
-                                "constraints_added", "constraints_removed"]:
-                        if hasattr(raw_results.counters, attr):
-                            counters_dict[attr] = getattr(raw_results.counters, attr)
-
-                    counters_json_str = json.dumps(counters_dict, default=str)
-                except Exception as e:
-                    # Fallback if counters are not accessible
-                    logger.warning(f"Could not access counters: {e}")
-                    counters_json_str = json.dumps({"success": True}, default=str)
-
-                logger.debug(f"Write query affected {counters_json_str}")
-                return [types.TextContent(type="text", text=f"Query executed successfully. Results: {counters_json_str}")]
-
+                result = await session.execute_write(self._write, query, params)
+                
+                # Format a summary of what happened
+                response = f"Query executed successfully.\n\n"
+                response += f"Nodes created: {result.counters.nodes_created}\n"
+                response += f"Relationships created: {result.counters.relationships_created}\n"
+                response += f"Properties set: {result.counters.properties_set}\n"
+                response += f"Nodes deleted: {result.counters.nodes_deleted}\n"
+                response += f"Relationships deleted: {result.counters.relationships_deleted}\n"
+                
+                return [types.TextContent(type="text", text=response)]
         except Exception as e:
-            logger.error(f"Database error executing query: {e}\n{query}\n{params}")
-
-            error_msg = str(e).lower()
-
-            # Check for specific error types and provide helpful messages
-            if "access mode" in error_msg or "permission" in error_msg or "read only" in error_msg:
-                return [types.TextContent(
-                    type="text",
-                    text="Error: Database is in read-only mode. Write operations are not allowed. Check your Neo4j configuration or connection parameters."
-                )]
-            elif "connection" in error_msg or "unavailable" in error_msg or "refused" in error_msg:
-                return [types.TextContent(
-                    type="text",
-                    text="Error: Could not connect to the Neo4j database. Please check:\n"
-                         "1. Is the Neo4j server running?\n"
-                         "2. Are the connection details correct?\n"
-                         "3. Is there a network issue preventing connection?\n\n"
-                         "You can use the check_connection() tool to verify database connectivity."
-                )]
-            elif "constraint" in error_msg or "unique" in error_msg:
-                return [types.TextContent(
-                    type="text",
-                    text=f"Error: A constraint violation occurred. This typically happens when:\n"
-                         "1. Trying to create a node with a label and property combination that must be unique\n"
-                         "2. Violating a relationship constraint\n\n"
-                         "Details: {e}\n\n"
-                         "You might need to check if the entity already exists before creating it."
-                )]
-            elif "syntax" in error_msg:
-                return [types.TextContent(
-                    type="text",
-                    text=f"Syntax Error in Cypher query:\n{e}\n\n"
-                         f"Your query: {query}\n\n"
-                         "Common syntax issues include:\n"
-                         "1. Missing or unbalanced parentheses/brackets/braces\n"
-                         "2. Incorrect property access (node.property instead of node['property'])\n"
-                         "3. Missing quotes around property values\n"
-                         "4. Incorrect relationship direction (-->, <--, --)"
-                )]
-            else:
-                return [types.TextContent(
-                    type="text",
-                    text=f"Error executing query: {e}\n\n"
-                         f"Query: {query}\n\n"
-                         f"Parameters: {params}\n\n"
-                         "If this is unexpected, try:\n"
-                         "1. Breaking down the query into smaller parts\n"
-                         "2. Using run_custom_query for testing before write operations\n"
-                         "3. Checking Neo4j documentation for correct syntax"
-                )]
-
-    async def get_guidance_hub(self) -> List[types.TextContent]:
-        """Get the AI Guidance Hub content, which serves as the central entry point for navigation."""
-        query = """
-        MATCH (hub:AiGuidanceHub {id: 'main_hub'})
-        RETURN hub.description AS description
-        """
-
-        try:
-            async with self.driver.session(database=self.database) as session:
-                results_json = await session.execute_read(self._read_query, query, {})
-                results = json.loads(results_json)
-
-                if results and len(results) > 0:
-                    return [types.TextContent(type="text", text=results[0]["description"])]
-                else:
-                    # If hub doesn't exist, create it with default content
-                    return await self._create_default_hub()
-        except Exception as e:
-            logger.error(f"Error retrieving guidance hub: {e}")
+            logger.error(f"Error executing write query: {e}")
             return [types.TextContent(type="text", text=f"Error: {e}")]
 
     async def _create_default_hub(self) -> List[types.TextContent]:
         """Create a default guidance hub if none exists."""
         default_description = """
-Welcome AI Assistant. This is your central hub for coding assistance using our Neo4j knowledge graph. Choose your path:
-1.  **Execute Task:** If you know the action keyword (e.g., FIX, REFACTOR), directly query for the ActionTemplate: Use get_action_template tool with the keyword parameter.
-2.  **List Workflows/Templates:** Use list_action_templates tool to see available actions.
-3.  **View Core Practices:** Use get_best_practices tool to understand essential rules.
-4.  **Project Information:** Use get_project tool to retrieve project details and README content.
-5.  **Log Completion:** After successful testing, use log_workflow_execution to record successful completions.
+# NeoCoder Neo4j-Guided AI Workflow
 
-Always follow template steps precisely, especially testing before logging.
+Welcome! This system uses a Neo4j knowledge graph to guide AI coding assistance and other workflows. The system supports multiple "incarnations" with different functionalities.
+
+## Core Functionality
+
+1. **Coding Workflow** (Original incarnation)
+   - Follow structured templates for code modification
+   - Access project information and history
+   - Record successful workflow executions
+
+2. **Research Orchestration** (Alternate incarnation)
+   - Manage scientific hypotheses and experiments
+   - Track experimental protocols and observations
+   - Analyze results and generate publication drafts
+
+3. **Decision Support** (Alternate incarnation)
+   - Create and evaluate decision alternatives
+   - Attach evidence to decisions
+   - Track stakeholder inputs
+
+## Getting Started
+
+- To switch incarnations, use `switch_incarnation(incarnation_type="...")` 
+- To list available incarnations, use `list_incarnations()`
+- To get specific tool suggestions, use `suggest_tool(task_description="...")`
+- To check database connection status, use `check_connection()`
+
+Each incarnation has its own set of specialized tools alongside the core Neo4j interaction capabilities.
         """
 
         query = """
@@ -487,477 +676,6 @@ Always follow template steps precisely, especially testing before logging.
             logger.error(f"Error creating default hub: {e}")
             return [types.TextContent(type="text", text=f"Error creating default hub: {e}")]
 
-    async def get_action_template(
-        self,
-        keyword: str = Field(..., description="The template keyword (e.g., FIX, REFACTOR, DEPLOY)"),
-        version: Optional[str] = Field(None, description="Specific version to retrieve (default: current)")
-    ) -> List[types.TextContent]:
-        """Get a specific action template by keyword and optional version."""
-        query = """
-        MATCH (t:ActionTemplate {keyword: $keyword})
-        WHERE 1=1
-        """
-
-        params = {"keyword": keyword}
-
-        if version:
-            query += " AND t.version = $version"
-            params["version"] = version
-        else:
-            query += " AND t.isCurrent = true"
-
-        query += """
-        RETURN t.keyword AS keyword,
-               t.version AS version,
-               t.description AS description,
-               t.complexity AS complexity,
-               t.estimatedEffort AS estimatedEffort,
-               t.steps AS steps
-        """
-
-        try:
-            async with self.driver.session(database=self.database) as session:
-                results_json = await session.execute_read(self._read_query, query, params)
-                results = json.loads(results_json)
-
-                if results and len(results) > 0:
-                    # Format the template for better readability
-                    template = results[0]
-                    text = f"# {template['keyword']} Template (v{template['version']})\n\n"
-                    text += f"**Description:** {template['description']}\n"
-                    text += f"**Complexity:** {template['complexity']}\n"
-                    text += f"**Estimated Effort:** {template['estimatedEffort']} minutes\n\n"
-                    text += "## Steps:\n\n"
-                    text += template['steps']
-
-                    return [types.TextContent(type="text", text=text)]
-                else:
-                    return [types.TextContent(type="text", text=f"No template found with keyword '{keyword}'{' v' + version if version else ''}")]
-        except Exception as e:
-            logger.error(f"Error retrieving action template: {e}")
-            return [types.TextContent(type="text", text=f"Error: {e}")]
-
-    async def list_action_templates(
-        self,
-        include_inactive: bool = Field(False, description="Include non-current template versions"),
-        domain: Optional[str] = Field(None, description="Filter templates by domain (e.g., 'web', 'ml', 'backend')")
-    ) -> List[types.TextContent]:
-        """List all available action templates, optionally filtered by domain."""
-        query = """
-        MATCH (t:ActionTemplate)
-        WHERE 1=1
-        """
-
-        params = {}
-
-        if not include_inactive:
-            query += " AND t.isCurrent = true"
-
-        if domain:
-            query += " AND t.domain = $domain"
-            params["domain"] = domain
-
-        query += """
-        RETURN t.keyword AS keyword,
-               t.version AS version,
-               t.isCurrent AS current,
-               t.description AS description,
-               t.complexity AS complexity,
-               t.estimatedEffort AS estimatedEffort,
-               t.domain AS domain
-        ORDER BY t.keyword, t.version DESC
-        """
-
-        try:
-            async with self.driver.session(database=self.database) as session:
-                results_json = await session.execute_read(self._read_query, query, params)
-                results = json.loads(results_json)
-
-                if results and len(results) > 0:
-                    # Format the templates as a readable table
-                    text = "# Available Action Templates\n\n"
-                    text += "| Keyword | Version | Status | Complexity | Effort (min) | Description |\n"
-                    text += "| ------- | ------- | ------ | ---------- | ------------ | ----------- |\n"
-
-                    for t in results:
-                        current = "Current" if t.get("current") else "Inactive"
-                        text += f"| {t.get('keyword', 'N/A')} | {t.get('version', 'N/A')} | {current} | {t.get('complexity', 'N/A')} | {t.get('estimatedEffort', 'N/A')} | {t.get('description', 'N/A')} |\n"
-
-                    return [types.TextContent(type="text", text=text)]
-                else:
-                    return [types.TextContent(type="text", text="No action templates found in the database.")]
-        except Exception as e:
-            logger.error(f"Error listing action templates: {e}")
-            return [types.TextContent(type="text", text=f"Error: {e}")]
-
-    async def get_best_practices(self) -> List[types.TextContent]:
-        """Get the best practices guide for coding workflows."""
-        query = """
-        MATCH (hub:AiGuidanceHub {id: 'main_hub'})-[:LINKS_TO]->(bp:BestPracticesGuide)
-        RETURN bp.content AS content
-        """
-
-        try:
-            async with self.driver.session(database=self.database) as session:
-                results_json = await session.execute_read(self._read_query, query, {})
-                results = json.loads(results_json)
-
-                if results and len(results) > 0:
-                    return [types.TextContent(type="text", text=results[0]["content"])]
-                else:
-                    # If best practices guide doesn't exist, create it with default content
-                    return await self._create_default_best_practices()
-        except Exception as e:
-            logger.error(f"Error retrieving best practices: {e}")
-            return [types.TextContent(type="text", text=f"Error: {e}")]
-
-    async def _create_default_best_practices(self) -> List[types.TextContent]:
-        """Create a default best practices guide if none exists."""
-        default_content = """
-# Core Coding & System Practices
-
-- **Efficiency First:** Prefer editing existing code over complete rewrites where feasible. Avoid temporary patch files.
-- **Meaningful Naming:** Do not name functions, variables, or files 'temp', 'fixed', 'patch'. Use descriptive names reflecting purpose.
-- **README is Key:** ALWAYS review the project's README before starting work. Find it via the :Project node.
-- **Test Rigorously:** Before logging completion, ALL relevant tests must pass. If tests fail, revisit the code, do not log success.
-- **Update After Success:** ONLY AFTER successful testing, update the Neo4j project tree AND the project's README with changes made.
-- **Risk Assessment:** Always evaluate the potential impact of changes and document any areas that need monitoring.
-- **Metrics Collection:** Track completion time and success rates to improve future estimation accuracy.
-        """
-
-        query_hub = """
-        MERGE (hub:AiGuidanceHub {id: 'main_hub'})
-        RETURN hub
-        """
-
-        query_bp = """
-        MATCH (hub:AiGuidanceHub {id: 'main_hub'})
-        MERGE (bp:BestPracticesGuide {id: 'core_practices'})
-        ON CREATE SET bp.content = $content
-        MERGE (hub)-[:LINKS_TO]->(bp)
-        RETURN bp.content AS content
-        """
-
-        try:
-            async with self.driver.session(database=self.database) as session:
-                # Ensure hub exists
-                await session.execute_write(self._read_query, query_hub, {})
-
-                # Create best practices guide
-                results_json = await session.execute_write(
-                    self._read_query, query_bp, {"content": default_content}
-                )
-                results = json.loads(results_json)
-
-                if results and len(results) > 0:
-                    return [types.TextContent(type="text", text=results[0]["content"])]
-                else:
-                    return [types.TextContent(type="text", text="Error creating default best practices guide")]
-        except Exception as e:
-            logger.error(f"Error creating default best practices guide: {e}")
-            return [types.TextContent(type="text", text=f"Error: {e}")]
-
-    async def get_project(
-        self,
-        project_id: str = Field(..., description="The unique project identifier")
-    ) -> List[types.TextContent]:
-        """Get a project by ID, including its README content."""
-        query = """
-        MATCH (p:Project {projectId: $projectId})
-        RETURN p.projectId AS projectId,
-               p.name AS name,
-               p.readmeContent AS readmeContent,
-               p.readmeUrl AS readmeUrl,
-               p.currentVersion AS currentVersion,
-               p.lastDeployment AS lastDeployment
-        """
-
-        try:
-            async with self.driver.session(database=self.database) as session:
-                results_json = await session.execute_read(
-                    self._read_query, query, {"projectId": project_id}
-                )
-                results = json.loads(results_json)
-
-                if results and len(results) > 0:
-                    project = results[0]
-                    text = f"# Project: {project.get('name', project_id)}\n\n"
-
-                    if project.get('currentVersion'):
-                        text += f"**Current Version:** {project['currentVersion']}\n"
-
-                    if project.get('lastDeployment'):
-                        text += f"**Last Deployment:** {project['lastDeployment']}\n"
-
-                    text += "\n## README Content:\n\n"
-
-                    if project.get('readmeContent'):
-                        text += project['readmeContent']
-                    elif project.get('readmeUrl'):
-                        text += f"README available at: {project['readmeUrl']}"
-                    else:
-                        text += "No README content available."
-
-                    return [types.TextContent(type="text", text=text)]
-                else:
-                    return [types.TextContent(type="text", text=f"No project found with ID '{project_id}'")]
-        except Exception as e:
-            logger.error(f"Error retrieving project: {e}")
-            return [types.TextContent(type="text", text=f"Error: {e}")]
-
-    async def list_projects(self) -> List[types.TextContent]:
-        """List all projects in the database."""
-        query = """
-        MATCH (p:Project)
-        RETURN p.projectId AS projectId,
-               p.name AS name,
-               p.currentVersion AS currentVersion
-        ORDER BY p.name
-        """
-
-        try:
-            async with self.driver.session(database=self.database) as session:
-                results_json = await session.execute_read(self._read_query, query, {})
-                results = json.loads(results_json)
-
-                if results and len(results) > 0:
-                    text = "# Available Projects\n\n"
-                    text += "| Project ID | Name | Current Version |\n"
-                    text += "| ---------- | ---- | --------------- |\n"
-
-                    for p in results:
-                        text += f"| {p.get('projectId', 'N/A')} | {p.get('name', 'N/A')} | {p.get('currentVersion', 'N/A')} |\n"
-
-                    return [types.TextContent(type="text", text=text)]
-                else:
-                    return [types.TextContent(type="text", text="No projects found in the database.")]
-        except Exception as e:
-            logger.error(f"Error listing projects: {e}")
-            return [types.TextContent(type="text", text=f"Error: {e}")]
-
-    async def log_workflow_execution(
-        self,
-        project_id: str = Field(..., description="The project identifier"),
-        keyword: str = Field(..., description="The template keyword used (e.g., FIX, REFACTOR)"),
-        description: str = Field(..., description="Brief description of the work performed"),
-        modified_files: List[str] = Field(..., description="List of file paths that were modified"),
-        execution_time_seconds: Optional[int] = Field(None, description="Time taken to complete the workflow in seconds"),
-        test_results: Optional[str] = Field(None, description="Summary of test results"),
-        environment: Optional[str] = Field(None, description="Target environment (for DEPLOY workflows)"),
-        deployed_version: Optional[str] = Field(None, description="Deployed version (for DEPLOY workflows)")
-    ) -> List[types.TextContent]:
-        """Log a successful workflow execution after completing all steps and passing all tests."""
-        # Generate a workflow ID
-        workflow_id = str(uuid.uuid4())
-
-        # Base query for creating the workflow execution node
-        query = """
-        CREATE (exec:WorkflowExecution {
-          id: $workflowId,
-          timestamp: datetime(),
-          keywordUsed: $keyword,
-          description: $description,
-          status: "Completed"
-        """
-
-        # Add optional parameters
-        params = {
-            "workflowId": workflow_id,
-            "keyword": keyword,
-            "description": description,
-            "projectId": project_id,
-            "modifiedFiles": modified_files
-        }
-
-        if execution_time_seconds is not None:
-            query += ", executionTime: $executionTime"
-            params["executionTime"] = execution_time_seconds
-
-        if test_results is not None:
-            query += ", testResults: $testResults"
-            params["testResults"] = test_results
-
-        if environment is not None:
-            query += ", environment: $environment"
-            params["environment"] = environment
-
-        if deployed_version is not None:
-            query += ", deployedVersion: $deployedVersion"
-            params["deployedVersion"] = deployed_version
-
-        # Complete the node creation and add relationships
-        query += """
-        })
-        WITH exec
-        MATCH (p:Project {projectId: $projectId})
-        MERGE (exec)-[:APPLIED_TO_PROJECT]->(p)
-        WITH exec
-        MATCH (t:ActionTemplate {keyword: $keyword, isCurrent: true})
-        MERGE (exec)-[:USED_TEMPLATE]->(t)
-        WITH exec
-        FOREACH (filePath IN $modifiedFiles |
-          MERGE (f:File {path: filePath, project_id: $projectId})
-          MERGE (exec)-[:MODIFIED]->(f)
-        )
-        RETURN exec.id AS id, exec.timestamp AS timestamp
-        """
-
-        try:
-            async with self.driver.session(database=self.database) as session:
-                results_json = await session.execute_write(self._read_query, query, params)
-                results = json.loads(results_json)
-
-                if results and len(results) > 0:
-                    timestamp = results[0]["timestamp"]
-                    text = "Successfully logged workflow execution:\n\n"
-                    text += f"- Workflow ID: {workflow_id}\n"
-                    text += f"- Timestamp: {timestamp}\n"
-                    text += f"- Action: {keyword}\n"
-                    text += f"- Project: {project_id}\n"
-                    text += f"- Description: {description}\n"
-                    text += f"- Modified Files: {len(modified_files)} files\n"
-
-                    return [types.TextContent(type="text", text=text)]
-                else:
-                    return [types.TextContent(type="text", text="Error logging workflow execution")]
-        except Exception as e:
-            logger.error(f"Error logging workflow execution: {e}")
-            return [types.TextContent(type="text", text=f"Error: {e}")]
-    async def get_workflow_history(
-        self,
-        project_id: Optional[str] = Field(None, description="Filter by project ID"),
-        keyword: Optional[str] = Field(None, description="Filter by template keyword"),
-        days: int = Field(30, description="Number of days to include in history"),
-        limit: int = Field(20, description="Maximum number of executions to return")
-    ) -> List[types.TextContent]:
-        """Get workflow execution history, optionally filtered by project or keyword."""
-        query = """
-        MATCH (w:WorkflowExecution)
-        WHERE w.timestamp > datetime() - duration({days: $days})
-        """
-
-        params = {"days": days, "limit": limit}
-
-        if project_id:
-            query += """
-            AND (w)-[:APPLIED_TO_PROJECT]->(:Project {projectId: $projectId})
-            """
-            params["projectId"] = project_id
-
-        if keyword:
-            query += """
-            AND w.keywordUsed = $keyword
-            """
-            params["keyword"] = keyword
-
-        query += """
-        OPTIONAL MATCH (w)-[:MODIFIED]->(f)
-        WITH w, count(f) as modifiedFileCount
-        RETURN w.id AS id,
-               w.keywordUsed AS keyword,
-               w.timestamp AS timestamp,
-               w.description AS description,
-               modifiedFileCount
-        ORDER BY w.timestamp DESC
-        LIMIT $limit
-        """
-
-        try:
-            async with self.driver.session(database=self.database) as session:
-                results_json = await session.execute_read(self._read_query, query, params)
-                results = json.loads(results_json)
-
-                if results and len(results) > 0:
-                    text = "# Workflow Execution History\n\n"
-
-                    if project_id:
-                        text += f"Project: {project_id}\n\n"
-                    if keyword:
-                        text += f"Action: {keyword}\n\n"
-
-                    text += "| Date | Action | Description | Files Modified |\n"
-                    text += "| ---- | ------ | ----------- | -------------- |\n"
-
-                    for w in results:
-                        timestamp = w.get("timestamp", "")[:19]  # Truncate to remove milliseconds
-                        text += f"| {timestamp} | {w.get('keyword', 'N/A')} | {w.get('description', 'N/A')} | {w.get('modifiedFileCount', 0)} |\n"
-
-                    return [types.TextContent(type="text", text=text)]
-                else:
-                    return [types.TextContent(type="text", text="No workflow executions found matching the criteria.")]
-        except Exception as e:
-            logger.error(f"Error retrieving workflow history: {e}")
-            return [types.TextContent(type="text", text=f"Error: {e}")]
-
-    async def add_template_feedback(
-        self,
-        keyword: str = Field(..., description="Template keyword to provide feedback on"),
-        content: str = Field(..., description="Feedback content"),
-        severity: str = Field("MEDIUM", description="Feedback severity (LOW, MEDIUM, HIGH)"),
-        tags: Optional[List[str]] = Field(None, description="Tags for categorizing feedback")
-    ) -> List[types.TextContent]:
-        """Add feedback for a template to help improve it."""
-        # Generate a feedback ID
-        feedback_id = str(uuid.uuid4())
-        feedback_tags = tags or []
-
-        query = """
-        MATCH (t:ActionTemplate {keyword: $keyword, isCurrent: true})
-        CREATE (f:Feedback {
-          id: $id,
-          content: $content,
-          timestamp: datetime(),
-          source: 'AI',
-          severity: $severity,
-          tags: $tags
-        })
-        CREATE (f)-[:REGARDING]->(t)
-        RETURN f.id AS id, t.keyword AS keyword
-        """
-
-        params = {
-            "id": feedback_id,
-            "keyword": keyword,
-            "content": content,
-            "severity": severity,
-            "tags": feedback_tags
-        }
-
-        try:
-            async with self.driver.session(database=self.database) as session:
-                results_json = await session.execute_write(self._read_query, query, params)
-                results = json.loads(results_json)
-
-                if results and len(results) > 0:
-                    return [types.TextContent(
-                        type="text",
-                        text=f"Successfully added feedback for template '{keyword}' with ID: {feedback_id}"
-                    )]
-                else:
-                    return [types.TextContent(
-                        type="text",
-                        text=f"No current template found with keyword '{keyword}'"
-                    )]
-        except Exception as e:
-            logger.error(f"Error adding template feedback: {e}")
-            return [types.TextContent(type="text", text=f"Error: {e}")]
-
-    async def run_custom_query(
-        self,
-        query: str = Field(..., description="Custom Cypher query to execute"),
-        params: Optional[Dict[str, Any]] = Field(None, description="Query parameters")
-    ) -> List[types.TextContent]:
-        """Run a custom Cypher query for advanced operations."""
-        params = params or {}
-
-        try:
-            async with self.driver.session(database=self.database) as session:
-                results_json = await session.execute_read(self._read_query, query, params)
-                return [types.TextContent(type="text", text=results_json)]
-        except Exception as e:
-            logger.error(f"Error executing custom query: {e}")
-            return [types.TextContent(type="text", text=f"Error: {e}")]
-
     def run(self, transport: str = "stdio"):
         """Run the MCP server."""
         self.mcp.run(transport=transport)
@@ -965,7 +683,15 @@ Always follow template steps precisely, especially testing before logging.
 
 def create_server(db_url: str, username: str, password: str, database: str = "neo4j") -> Neo4jWorkflowServer:
     """Create and return a Neo4jWorkflowServer instance."""
+    logger.info(f"Creating Neo4j driver with URL: {db_url}, username: {username}, database: {database}")
     driver = AsyncGraphDatabase.driver(db_url, auth=(username, password))
+    
+    # Set environment variables for init_db to use
+    os.environ["NEO4J_URL"] = db_url
+    os.environ["NEO4J_USERNAME"] = username
+    os.environ["NEO4J_PASSWORD"] = password
+    os.environ["NEO4J_DATABASE"] = database
+    
     return Neo4jWorkflowServer(driver, database)
 
 
