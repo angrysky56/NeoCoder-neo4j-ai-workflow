@@ -11,7 +11,6 @@ import logging
 import os
 import sys
 from typing import List, Optional
-
 from neo4j import AsyncGraphDatabase, AsyncDriver
 
 # Configure logging
@@ -20,17 +19,50 @@ logger = logging.getLogger("mcp_neocoder_init")
 
 from enum import Enum
 
-# Incarnation types
-class IncarnationType(str, Enum):
-    """Supported incarnation types for the NeoCoder framework."""
-    CODING = "coding"                       # Original coding workflow
-    RESEARCH = "research_orchestration"     # Research lab notebook
-    DECISION = "decision_support"           # Decision-making system
-    LEARNING = "continuous_learning"        # Learning environment
-    SIMULATION = "complex_system"           # Complex system simulator
+# Import and use the IncarnationType enum from the polymorphic adapter
+from .incarnations.polymorphic_adapter import IncarnationType
 
 # List of incarnation type values for validation
 INCARNATION_TYPES = [t.value for t in IncarnationType]
+
+# Dynamically discover available incarnation types
+def discover_incarnation_types():
+    """Discover available incarnation types from the filesystem."""
+    import os
+    import importlib.util
+
+    incarnation_types = []
+    current_dir = os.path.dirname(os.path.abspath(__file__))
+    incarnations_dir = os.path.join(current_dir, "incarnations")
+
+    if not os.path.exists(incarnations_dir):
+        logger.warning(f"Incarnations directory not found: {incarnations_dir}")
+        return INCARNATION_TYPES  # Fall back to the predefined list
+
+    # Match module filenames to incarnation types
+    for entry in os.listdir(incarnations_dir):
+        if entry.startswith("__") or not entry.endswith(".py"):
+            continue
+
+        module_name = entry[:-3]  # Remove .py extension
+
+        # Skip base modules and adapters
+        if module_name in ("base_incarnation", "polymorphic_adapter"):
+            continue
+
+        # Try to match filename to incarnation type
+        if module_name.endswith("_incarnation"):
+            # Extract the type from the filename (e.g., research_incarnation.py -> research)
+            incarnation_name = module_name.replace("_incarnation", "")
+
+            # Add to discovered types
+            for inc_type in IncarnationType:
+                if inc_type.value.startswith(incarnation_name):
+                    incarnation_types.append(inc_type.value)
+                    logger.info(f"Discovered incarnation type: {inc_type.value} from {module_name}")
+                    break
+
+    return incarnation_types if incarnation_types else INCARNATION_TYPES
 
 
 async def init_neo4j_connection(uri: str, user: str, password: str) -> AsyncDriver:
@@ -262,22 +294,72 @@ Each incarnation provides its own set of specialized tools while maintaining cor
         raise
 
 
+async def create_dynamic_links_between_hubs(driver: AsyncDriver, database: str = "neo4j", incarnations: List[str] = None):
+    """Create relationships between the main hub and all incarnation-specific hubs."""
+    logger.info("Creating dynamic links between hubs...")
+
+    # Get all AiGuidanceHub nodes
+    query = """
+    MATCH (hub:AiGuidanceHub)
+    WHERE hub.id <> 'main_hub' AND hub.id ENDS WITH '_hub'
+    RETURN hub.id AS id
+    """
+
+    try:
+        async with driver.session(database=database) as session:
+            # Get all hub IDs using to_eager_result() instead
+            result = await session.run(query)
+            eager_result = await result.to_eager_result()
+
+            # Create links for each hub
+            main_hub_query = """
+            MATCH (main:AiGuidanceHub {id: 'main_hub'})
+            MATCH (inc:AiGuidanceHub {id: $hub_id})
+            MERGE (main)-[:HAS_INCARNATION {type: $inc_type}]->(inc)
+            """
+
+            for record in eager_result.records:
+                hub_id = record.get("id")
+                if hub_id:
+                    # Extract incarnation type from hub ID (e.g., research_hub -> research)
+                    inc_type = hub_id.replace("_hub", "")
+
+                    # Create link
+                    await session.run(main_hub_query, {"hub_id": hub_id, "inc_type": inc_type})
+                    logger.info(f"Created link for incarnation: {inc_type}")
+
+        logger.info("Hub links created successfully")
+    except Exception as e:
+        logger.error(f"Error creating hub links: {e}")
+        raise
+
+
 async def create_links_between_hubs(driver: AsyncDriver, database: str = "neo4j"):
-    """Create relationships between the main hub and incarnation-specific hubs."""
-    logger.info("Creating links between hubs...")
+    """Create relationships between the main hub and incarnation-specific hubs (legacy version).
+    This is kept for backward compatibility but we should prefer create_dynamic_links_between_hubs.
+    """
+    logger.info("Creating links between predefined hubs...")
 
     # Links to incarnation hubs
     query = """
     MATCH (main:AiGuidanceHub {id: 'main_hub'})
-    MATCH (research:AiGuidanceHub {id: 'research_hub'})
-    MATCH (decision:AiGuidanceHub {id: 'decision_hub'})
-    MATCH (learning:AiGuidanceHub {id: 'learning_hub'})
-    MATCH (simulation:AiGuidanceHub {id: 'simulation_hub'})
 
-    MERGE (main)-[:HAS_INCARNATION {type: 'research'}]->(research)
-    MERGE (main)-[:HAS_INCARNATION {type: 'decision'}]->(decision)
-    MERGE (main)-[:HAS_INCARNATION {type: 'learning'}]->(learning)
-    MERGE (main)-[:HAS_INCARNATION {type: 'simulation'}]->(simulation)
+    OPTIONAL MATCH (research:AiGuidanceHub {id: 'research_hub'})
+    OPTIONAL MATCH (decision:AiGuidanceHub {id: 'decision_hub'})
+    OPTIONAL MATCH (learning:AiGuidanceHub {id: 'learning_hub'})
+    OPTIONAL MATCH (simulation:AiGuidanceHub {id: 'simulation_hub'})
+
+    FOREACH(x IN CASE WHEN research IS NOT NULL THEN [1] ELSE [] END |
+        MERGE (main)-[:HAS_INCARNATION {type: 'research_orchestration'}]->(research))
+
+    FOREACH(x IN CASE WHEN decision IS NOT NULL THEN [1] ELSE [] END |
+        MERGE (main)-[:HAS_INCARNATION {type: 'decision_support'}]->(decision))
+
+    FOREACH(x IN CASE WHEN learning IS NOT NULL THEN [1] ELSE [] END |
+        MERGE (main)-[:HAS_INCARNATION {type: 'continuous_learning'}]->(learning))
+
+    FOREACH(x IN CASE WHEN simulation IS NOT NULL THEN [1] ELSE [] END |
+        MERGE (main)-[:HAS_INCARNATION {type: 'complex_system'}]->(simulation))
 
     RETURN main
     """
@@ -299,8 +381,12 @@ async def init_db(incarnations: Optional[List[str]] = None):
     neo4j_password = os.environ.get("NEO4J_PASSWORD", "password")
     neo4j_database = os.environ.get("NEO4J_DATABASE", "neo4j")
 
-    # If no incarnations specified, initialize all
-    incarnations = incarnations or INCARNATION_TYPES
+    # Discover available incarnation types
+    available_incarnations = discover_incarnation_types()
+    logger.info(f"Discovered incarnation types: {available_incarnations}")
+
+    # If no incarnations specified, initialize all discovered
+    incarnations = incarnations or available_incarnations
 
     # Connect to Neo4j
     driver = await init_neo4j_connection(neo4j_uri, neo4j_user, neo4j_password)
@@ -310,23 +396,45 @@ async def init_db(incarnations: Optional[List[str]] = None):
         await init_base_schema(driver, neo4j_database)
 
         # Initialize incarnation-specific schemas
-        if "research" in incarnations:
+        if "research_orchestration" in incarnations:
             await init_research_schema(driver, neo4j_database)
 
-        if "decision" in incarnations:
+        if "decision_support" in incarnations:
             await init_decision_schema(driver, neo4j_database)
 
-        if "learning" in incarnations:
+        if "continuous_learning" in incarnations:
             await init_learning_schema(driver, neo4j_database)
 
-        if "simulation" in incarnations:
+        if "complex_system" in incarnations:
             await init_simulation_schema(driver, neo4j_database)
+
+        # Create incarnation-specific schemas for other discovered incarnations
+        # This is just a placeholder and should be implemented properly
+        for inc_type in incarnations:
+            if inc_type not in ["research_orchestration", "decision_support", "continuous_learning", "complex_system"]:
+                logger.info(f"Creating basic schema for incarnation: {inc_type}")
+                hub_id = f"{inc_type}_hub"
+                hub_description = f"This is the {inc_type} incarnation of the NeoCoder framework."
+
+                try:
+                    # Create a basic hub for this incarnation
+                    hub_query = f"""
+                    MERGE (hub:AiGuidanceHub {{id: '{hub_id}'}})
+                    ON CREATE SET hub.description = '{hub_description}'
+                    RETURN hub
+                    """
+
+                    async with driver.session(database=neo4j_database) as session:
+                        await session.run(hub_query)
+
+                except Exception as e:
+                    logger.error(f"Error creating hub for {inc_type}: {e}")
 
         # Create main guidance hub
         await create_main_guidance_hub(driver, neo4j_database)
 
-        # Create links between hubs
-        await create_links_between_hubs(driver, neo4j_database)
+        # Create links between hubs for all discovered incarnations
+        await create_dynamic_links_between_hubs(driver, neo4j_database, incarnations)
 
         logger.info("Database initialization complete!")
     except Exception as e:

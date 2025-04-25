@@ -14,7 +14,7 @@ import mcp.types as types
 from pydantic import Field
 from neo4j import AsyncDriver, AsyncTransaction
 
-from .polymorphic_adapter import BaseIncarnation, IncarnationType
+from .base_incarnation import BaseIncarnation, IncarnationType
 
 logger = logging.getLogger("mcp_neocoder.decision_incarnation")
 
@@ -29,6 +29,16 @@ class DecisionSupport(BaseIncarnation):
     incarnation_type = IncarnationType.DECISION
     description = "Decision Support System for data-driven decision making"
     version = "0.1.0"
+    
+    # Explicitly define which methods should be registered as tools
+    _tool_methods = [
+        "create_decision",
+        "list_decisions",
+        "get_decision",
+        "add_alternative",
+        "add_metric",
+        "add_evidence"
+    ]
     
     def __init__(self, driver: AsyncDriver, database: str = "neo4j"):
         """Initialize the decision support incarnation."""
