@@ -143,6 +143,10 @@ All incarnations share these core elements:
   - Simulate failure propagation using path queries
   - Optional quantum-inspired scheduler for parameter testing
 - **knowledge_graph** - Knowledge graph management system
+  - Create and manage entities with observations
+  - Connect entities with typed relationships
+  - Search and visualize knowledge structures
+  - Support for complex semantic queries
 - **data_analysis** - Data analysis and visualization tools
 
 Each incarnation provides its own set of specialized tools that are automatically registered when the server starts. These tools are available for use in Claude or other AI assistants that connect to the MCP server.
@@ -284,6 +288,48 @@ The MCP server provides the following tools to AI assistants:
 - **suggest_tool**: Get tool suggestions based on task description
 
 Each incarnation provides additional specialized tools that are automatically registered when the incarnation is activated.
+
+#### Knowledge Graph Tools
+
+The Knowledge Graph incarnation provides these specialized tools for managing and analyzing knowledge structures:
+
+- **create_entities**: Create multiple new entities with observations
+  - Each entity has a name, type, and a list of observations
+  - All entities are properly labeled for efficient querying
+  
+- **create_relations**: Connect entities with typed relationships
+  - Relations are created with proper typing and timestamps
+  - Relations must specify from entity, to entity, and relation type
+  
+- **add_observations**: Add new observations to existing entities
+  - Add multiple observations to one or more entities
+  - Observations are timestamped for temporal tracking
+  
+- **delete_entities**: Remove entities and their associated data
+  - Deletes the entity, its observations, and connected relationships
+  - Provides cascading deletion for clean graph management
+  
+- **delete_observations**: Remove specific observations from entities
+  - Targeted deletion of specific observation content
+  - Preserves entity and relationship structure
+  
+- **delete_relations**: Remove relationships between entities
+  - Specify exact relationships to remove by type and connected entities
+  - Maintains entity and observation data
+  
+- **read_graph**: View the entire knowledge graph structure
+  - Returns entities, their observations, and relationships
+  - Formatted for easy reading and analysis
+  
+- **search_nodes**: Find entities by name, type, or observation content
+  - Full-text search capabilities with relevance ranking
+  - Highlights matching terms in search results
+  
+- **open_nodes**: Get detailed information about specific entities
+  - Shows all observations, incoming and outgoing relationships
+  - Provides complete contextual view of selected entities
+
+These tools provide a comprehensive knowledge graph management system that efficiently leverages Neo4j's graph capabilities.
 
 #### Cypher Snippet Toolkit
 
@@ -480,6 +526,23 @@ Gemini 2.5 Pro Preview 3-25
 ChatGPT o3
 
 ## Recent Updates
+
+### 2025-04-26: Fixed Knowledge Graph API Functions (v1.3.0)
+- Fixed the issue with Knowledge Graph API functions not properly integrating with Neo4j node labeling system
+- Implemented properly labeled entities with :Entity label instead of generic :KnowledgeNode
+- Added full set of knowledge graph management functions:
+  - `create_entities`: Create entities with proper labeling and observations
+  - `create_relations`: Connect entities with typed relationships 
+  - `add_observations`: Add observations to existing entities
+  - `delete_entities`: Remove entities and their connections
+  - `delete_observations`: Remove specific observations from entities
+  - `delete_relations`: Remove relationships between entities
+  - `read_graph`: View the entire knowledge graph structure
+  - `search_nodes`: Find entities by name, type, or observation content
+  - `open_nodes`: Get detailed information about specific entities
+- Added fulltext search support with fallback for non-fulltext environments
+- Added proper schema initialization with constraints and indexes for knowledge graph
+- Updated guidance hub content with usage instructions for the new API functions
 
 ### 2025-04-25: Expanded Incarnation Documentation (v1.2.0)
 - Added detailed documentation on the architectural principles behind multiple incarnations

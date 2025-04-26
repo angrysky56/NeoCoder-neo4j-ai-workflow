@@ -1,6 +1,88 @@
 # NeoCoder Neo4j AI Workflow Changelog
 
-## 2025-04-24: Fixed Incarnation Tool Registration
+## 2025-04-26: Fixed Knowledge Graph API Functions (v1.3.0)
+
+### Issues Fixed
+
+1. **Neo4j Node Labeling Integration**:
+   - Fixed issue where entities created via `create_entities` weren't properly labeled in Neo4j
+   - Implemented proper `:Entity` label for all knowledge graph nodes
+   - Added observation labeling with `:Observation` for better querying
+
+2. **Relationship Type Management**:
+   - Implemented proper relationship typing with fallback mechanisms
+   - Added support for dynamic relationship types with appropriate fallbacks
+   - Fixed issues with relationship discovery and traversal
+
+3. **Search Capabilities**:
+   - Added fulltext search with proper indexing
+   - Implemented relevance-based result ordering
+   - Added fallback for environments without fulltext search indexes
+
+### Implementation Details
+
+- Knowledge Graph functions now properly use Neo4j labeling:
+  ```cypher
+  UNWIND $entities AS entity
+  MERGE (e:Entity {name: entity.name})
+  ON CREATE SET e.entityType = entity.entityType
+  WITH e, entity
+  UNWIND entity.observations AS obs
+  CREATE (o:Observation {content: obs, timestamp: datetime()})
+  CREATE (e)-[:HAS_OBSERVATION]->(o)
+  ```
+
+- Added schema initialization with proper indexes and constraints:
+  ```cypher
+  CREATE CONSTRAINT knowledge_entity_name IF NOT EXISTS 
+  FOR (e:Entity) REQUIRE e.name IS UNIQUE
+
+  CREATE INDEX knowledge_entity_type IF NOT EXISTS 
+  FOR (e:Entity) ON (e.entityType)
+
+  CREATE FULLTEXT INDEX entity_observation_fulltext IF NOT EXISTS 
+  FOR (o:Observation) ON EACH [o.content]
+  ```
+
+- Added comprehensive knowledge graph API with 9 specialized functions:
+  - `create_entities`: Create multiple entities with observations
+  - `create_relations`: Connect entities with typed relationships
+  - `add_observations`: Add observations to existing entities
+  - `delete_entities`: Remove entities and their connections
+  - `delete_observations`: Remove specific observations
+  - `delete_relations`: Remove relationships
+  - `read_graph`: View the entire graph
+  - `search_nodes`: Search for entities
+  - `open_nodes`: Get detailed information
+
+### Verification
+
+- Tested entity creation with proper Neo4j labeling
+- Verified relationship creation with type properties
+- Confirmed fulltext search functionality with fallbacks
+- Validated entity deletion with cascading observation removal
+
+### Next Steps
+
+1. Add visualization capabilities for knowledge graph nodes
+2. Implement automatic relationship inference
+3. Add schema visualization tools
+4. Integrate with vector embedding for semantic search
+
+## 2025-04-25: Expanded Incarnation Documentation (v1.2.0)
+
+### Changes
+
+1. **Architectural Documentation**:
+   - Added detailed documentation on architectural principles
+   - Described common graph schema motifs across incarnations
+   - Documented the relationship between different incarnation types
+
+2. **Implementation Roadmap**:
+   - Added information about quantum-inspired approaches
+   - Outlined future integration plans
+
+## 2025-04-24: Fixed Incarnation Tool Registration (v1.1.0)
 
 ### Issues Fixed
 
