@@ -23,17 +23,24 @@ NeoCoder implements a system where:
 
 ## The MCP server runs the Python code, bridging the gap between the Neo4j graph and the AI assistant ( e.g. Claude)
 
-![alt text](image.png)
-![alt text](image-1.png)
+![alt text](image-3.png)
 
 ### Installation
 
-1. Install dependencies:
+1. It should auto-install when using the config.
+
+Otherwise- Install dependencies:
 
    ```bash
    uv venv
-   source venv/bin/activate # On Windows use `venv\Scripts\activate`
-   pip install -r requirements.txt
+   source .venv/bin/activate
+   # On Windows use `venv\Scripts\activate`
+   uv pip install -r requirements.txt
+   ```
+
+If it doesn't work maybe try:
+   ```bash
+   pip install -e .
    ```
 
 2. Neo4j connection parameters:
@@ -68,8 +75,8 @@ NeoCoder implements a system where:
            "NEO4J_USERNAME": "neo4j",
            "NEO4J_PASSWORD": "<YOUR_NEO4J_PASSWORD>",
            "NEO4J_DATABASE": "neo4j"
-         }    
-       }    
+         }
+       }
      }
    }
    ```
@@ -92,6 +99,145 @@ NeoCoder implements a system where:
 >
 > **Strict Rule:** Always prioritize instructions retrieved from the Neo4j graph over your general knowledge for workflow procedures. Use the graph as your single source of truth for *how* tasks are done here.
 ```
+
+## Multiple Incarnations
+
+NeoCoder supports multiple "incarnations" - different operational modes that adapt the system for specialized use cases while preserving the core Neo4j graph structure. In a graph-native stack, the same Neo4j core can manifest as very different "brains" simply by swapping templates and execution policies.
+
+### Key Architectural Principles
+
+The NeoCoder split is highly adaptable because:
+- Neo4j stores facts as first-class graph objects
+- Workflows live in template nodes
+- Execution engines simply walk the graph
+
+Because these three tiers are orthogonal, you can freeze one layer while morphing the others—turning a code-debugger today into a lab notebook or a learning management system tomorrow. This design echoes Neo4j's own "from graph to knowledge-graph" maturation path where schema, semantics, and operations are deliberately decoupled.
+
+### Common Graph Schema Motifs
+
+All incarnations share these core elements:
+
+| Element | Always present | Typical labels / rels |
+|---------|----------------|------------------------|
+| **Actor** | human / agent / tool | `(:Agent)-[:PLAYS_ROLE]->(:Role)` |
+| **Intent** | hypothesis, decision, lesson, scenario | `(:Intent {type})` |
+| **Evidence** | doc, metric, observation | `(:Evidence)-[:SUPPORTS]->(:Intent)` |
+| **Outcome** | pass/fail, payoff, grade, state vector | `(:Outcome)-[:RESULT_OF]->(:Intent)` |
+
+### Available Incarnations:
+
+- **coding** (default) - Original code workflow management
+- **research_orchestration** - Scientific research platform for hypothesis tracking and experiments
+  - Register hypotheses, design experiments, capture runs, and publish outcomes
+  - Neo4j underpins provenance pilots for lab workflows with lineage queries
+- **decision_support** - Decision analysis and evidence tracking system
+  - Create decision alternatives with expected-value metrics
+  - Bayesian updater agents re-compute metric posteriors when new evidence arrives
+  - Transparent, explainable reasoning pipelines
+- **continuous_learning** - Adaptive learning environment for education
+  - Track learner interaction with problems
+  - Estimate mastery and difficulty using Knowledge Space Theory
+  - Personalize curriculum based on success rate
+- **complex_system** - Complex system modeling and simulation
+  - Model components with state vectors and physical couplings
+  - Simulate failure propagation using path queries
+  - Optional quantum-inspired scheduler for parameter testing
+- **knowledge_graph** - Knowledge graph management system
+  - Create and manage entities with observations
+  - Connect entities with typed relationships
+  - Search and visualize knowledge structures
+  - Support for complex semantic queries
+- **data_analysis** - Data analysis and visualization tools
+
+Each incarnation provides its own set of specialized tools that are automatically registered when the server starts. These tools are available for use in Claude or other AI assistants that connect to the MCP server.
+
+### Implementation Roadmap
+
+NeoCoder features an implementation roadmap that includes:
+
+1. **LevelEnv ↔ Neo4j Adapter**: Maps events to graph structures and handles batch operations
+2. **Amplitude Register (Quantum Layer)**: Optional quantum-inspired layer for superposition states
+3. **Scheduler**: Prioritizes tasks based on entropy and impact scores
+4. **Re-using TAG assets**: Leverages existing abstractions for vertical information hiding
+
+### Starting with a Specific Incarnation
+
+```bash
+# List all available incarnations
+python -m mcp_neocoder.server --list-incarnations
+
+# Start with a specific incarnation
+python -m mcp_neocoder.server --incarnation continuous_learning
+```
+
+Incarnations can also be switched at runtime using the `switch_incarnation()` tool:
+
+```
+switch_incarnation(incarnation_type="complex_system")
+```
+
+### Dynamic Incarnation Loading
+
+NeoCoder features a fully dynamic incarnation loading system, which automatically discovers and loads incarnations from the `incarnations` directory. This means:
+
+1. **No hardcoded imports**: New incarnations can be added without modifying server.py
+2. **Auto-discovery**: Just add a new file with the format `*_incarnation.py` to the incarnations directory
+3. **All tools available**: Tools from all incarnations are registered and available, even if that incarnation isn't active
+4. **Easy extension**: Create new incarnations with the provided template
+
+#### Creating a New Incarnation
+
+To create a new incarnation:
+
+1. Create a new file in the `src/mcp_neocoder/incarnations/` directory with the naming pattern `your_incarnation_name_incarnation.py`
+2. Use this template structure:
+
+```python
+"""
+Your incarnation name and description
+"""
+
+import json
+import logging
+import uuid
+from typing import Dict, Any, List, Optional, Union
+
+import mcp.types as types
+from pydantic import Field
+from neo4j import AsyncTransaction
+
+from .polymorphic_adapter import BaseIncarnation, IncarnationType
+
+logger = logging.getLogger("mcp_neocoder.incarnations.your_incarnation_name")
+
+
+class YourIncarnationNameIncarnation(BaseIncarnation):
+    """
+    Your detailed incarnation description here
+    """
+
+    # Define the incarnation type - must match an entry in IncarnationType enum
+    incarnation_type = IncarnationType.YOUR_INCARNATION_TYPE
+
+    # Metadata for display in the UI
+    description = "Your incarnation short description"
+    version = "0.1.0"
+
+    # Initialize schema and add tools here
+    async def initialize_schema(self):
+        """Initialize the schema for your incarnation."""
+        # Implementation...
+
+    # Add more tool methods below
+    async def your_tool_name(self, param1: str, param2: Optional[int] = None) -> List[types.TextContent]:
+        """Tool description."""
+        # Implementation...
+```
+
+3. Add your incarnation type to the `IncarnationType` enum in `polymorphic_adapter.py`
+4. Restart the server, and your new incarnation will be automatically discovered
+
+See [incarnations.md](./docs/incarnations.md) for detailed documentation on using and creating incarnations.
 
 ## Available Templates
 
@@ -121,6 +267,7 @@ NeoCoder comes with these standard templates:
 
 The MCP server provides the following tools to AI assistants:
 
+#### Core Tools
 - **check_connection**: Verify Neo4j connection status
 - **get_guidance_hub**: Entry point for AI navigation
 - **get_action_template**: Get a specific workflow template
@@ -133,6 +280,56 @@ The MCP server provides the following tools to AI assistants:
 - **add_template_feedback**: Provide feedback on templates
 - **run_custom_query**: Run direct Cypher queries
 - **write_neo4j_cypher**: Execute write operations on the graph
+
+#### Incarnation Management Tools
+- **get_current_incarnation**: Get the currently active incarnation
+- **list_incarnations**: List all available incarnations
+- **switch_incarnation**: Switch to a different incarnation
+- **suggest_tool**: Get tool suggestions based on task description
+
+Each incarnation provides additional specialized tools that are automatically registered when the incarnation is activated.
+
+#### Knowledge Graph Tools
+
+The Knowledge Graph incarnation provides these specialized tools for managing and analyzing knowledge structures:
+
+- **create_entities**: Create multiple new entities with observations
+  - Each entity has a name, type, and a list of observations
+  - All entities are properly labeled for efficient querying
+  
+- **create_relations**: Connect entities with typed relationships
+  - Relations are created with proper typing and timestamps
+  - Relations must specify from entity, to entity, and relation type
+  
+- **add_observations**: Add new observations to existing entities
+  - Add multiple observations to one or more entities
+  - Observations are timestamped for temporal tracking
+  
+- **delete_entities**: Remove entities and their associated data
+  - Deletes the entity, its observations, and connected relationships
+  - Provides cascading deletion for clean graph management
+  
+- **delete_observations**: Remove specific observations from entities
+  - Targeted deletion of specific observation content
+  - Preserves entity and relationship structure
+  
+- **delete_relations**: Remove relationships between entities
+  - Specify exact relationships to remove by type and connected entities
+  - Maintains entity and observation data
+  
+- **read_graph**: View the entire knowledge graph structure
+  - Returns entities, their observations, and relationships
+  - Formatted for easy reading and analysis
+  
+- **search_nodes**: Find entities by name, type, or observation content
+  - Full-text search capabilities with relevance ranking
+  - Highlights matching terms in search results
+  
+- **open_nodes**: Get detailed information about specific entities
+  - Shows all observations, incoming and outgoing relationships
+  - Provides complete contextual view of selected entities
+
+These tools provide a comprehensive knowledge graph management system that efficiently leverages Neo4j's graph capabilities.
 
 #### Cypher Snippet Toolkit
 
@@ -175,7 +372,7 @@ To add a new template:
 
 ## The 'Cypher Snippet Toolkit' tools operate on the graph structure defined below
 
-Below is a consolidated, **Neo4j 5-series–ready** toolkit you can paste straight into Neo4j Browser, Cypher shell, or any driver.  
+Below is a consolidated, **Neo4j 5-series–ready** toolkit you can paste straight into Neo4j Browser, Cypher shell, or any driver.
 It creates a *mini-documentation graph* where every **`(:CypherSnippet)`** node stores a piece of Cypher syntax, an example, and metadata; text and (optionally) vector indexes make the snippets instantly searchable from plain keywords *or* embeddings.
 
 ---
@@ -314,9 +511,9 @@ This writes share-ready Cypher that can be replayed with `cypher-shell < cypher_
 
 ### Quick-start recap
 
-1. **Run Section 1 & 2** once per database to set up constraints and indexes.  
-2. Use **Section 3** (param-driven) to add new documentation entries.  
-3. Query with **Section 4**, and optionally add vector search if you store embeddings.  
+1. **Run Section 1 & 2** once per database to set up constraints and indexes.
+2. Use **Section 3** (param-driven) to add new documentation entries.
+3. Query with **Section 4**, and optionally add vector search if you store embeddings.
 4. Backup or publish with **Section 6**.
 
 With these building blocks you now have a *living*, searchable "Cypher cheat-sheet inside Cypher" that always stays local, versionable, and extensible. Enjoy friction-free recall as your query repertoire grows!
@@ -327,6 +524,42 @@ Created by [angrysky56](https://github.com/angrysky56)
 Claude 3.7 Sonnet
 Gemini 2.5 Pro Preview 3-25
 ChatGPT o3
+
+## Recent Updates
+
+### 2025-04-26: Fixed Knowledge Graph API Functions (v1.3.0)
+- Fixed the issue with Knowledge Graph API functions not properly integrating with Neo4j node labeling system
+- Implemented properly labeled entities with :Entity label instead of generic :KnowledgeNode
+- Added full set of knowledge graph management functions:
+  - `create_entities`: Create entities with proper labeling and observations
+  - `create_relations`: Connect entities with typed relationships 
+  - `add_observations`: Add observations to existing entities
+  - `delete_entities`: Remove entities and their connections
+  - `delete_observations`: Remove specific observations from entities
+  - `delete_relations`: Remove relationships between entities
+  - `read_graph`: View the entire knowledge graph structure
+  - `search_nodes`: Find entities by name, type, or observation content
+  - `open_nodes`: Get detailed information about specific entities
+- Added fulltext search support with fallback for non-fulltext environments
+- Added proper schema initialization with constraints and indexes for knowledge graph
+- Updated guidance hub content with usage instructions for the new API functions
+
+### 2025-04-25: Expanded Incarnation Documentation (v1.2.0)
+- Added detailed documentation on the architectural principles behind multiple incarnations
+- Enhanced description of each incarnation type with operational patterns and use cases
+- Added information about common graph schema motifs across incarnations
+- Included implementation roadmap for integrating quantum-inspired approaches
+
+### 2025-04-24: Fixed Incarnation Tool Registration (v1.1.0)
+- Fixed the issue where incarnation tools weren't being properly registered on server startup
+- Fixed circular dependency issues with duplicate class definitions
+- Added explicit tool method declaration support via `_tool_methods` class attribute
+- Improved the tool discovery mechanism to ensure all tools from each incarnation are properly detected
+- Enhanced event loop handling to prevent issues during server initialization
+- Added comprehensive logging to aid in troubleshooting
+- Fixed schema initialization to properly defer until needed
+
+See the [CHANGELOG.md](./CHANGELOG.md) file for detailed implementation notes.
 
 ## License
 

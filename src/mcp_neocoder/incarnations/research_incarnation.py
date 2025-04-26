@@ -16,7 +16,7 @@ import mcp.types as types
 from pydantic import Field
 from neo4j import AsyncGraphDatabase, AsyncDriver, AsyncTransaction
 
-from .polymorphic_adapter import BaseIncarnation, IncarnationType
+from .base_incarnation import BaseIncarnation, IncarnationType
 
 logger = logging.getLogger("mcp_neocoder.research_incarnation")
 
@@ -32,10 +32,33 @@ class ResearchOrchestration(BaseIncarnation):
     description = "Research Orchestration Platform for scientific workflows"
     version = "0.1.0"
     
+    # Explicitly define which methods should be registered as tools
+    _tool_methods = [
+        "register_hypothesis",
+        "list_hypotheses",
+        "get_hypothesis",
+        "update_hypothesis",
+        "create_protocol",
+        "list_protocols",
+        "get_protocol",
+        "create_experiment",
+        "list_experiments",
+        "get_experiment",
+        "update_experiment",
+        "record_observation",
+        "list_observations",
+        "compute_statistics",
+        "create_publication_draft"
+    ]
+    
     def __init__(self, driver: AsyncDriver, database: str = "neo4j"):
         """Initialize the research incarnation."""
         self.driver = driver
         self.database = database
+        # Call base class __init__ which will register all tools
+        super().__init__(driver, database)
+    
+    # No need to manually register tools anymore - the tool registry will discover them automatically
     
     async def _read_query(self, tx: AsyncTransaction, query: str, params: dict) -> str:
         """Execute a read query and return results as JSON string."""
@@ -52,23 +75,25 @@ class ResearchOrchestration(BaseIncarnation):
     async def initialize_schema(self):
         """Initialize the Neo4j schema for research orchestration."""
         # Define constraints and indexes for research schema
-        schema_query = """
-        // Create constraints for unique IDs
-        CREATE CONSTRAINT research_hypothesis_id IF NOT EXISTS FOR (h:Hypothesis) REQUIRE h.id IS UNIQUE;
-        CREATE CONSTRAINT research_experiment_id IF NOT EXISTS FOR (e:Experiment) REQUIRE e.id IS UNIQUE;
-        CREATE CONSTRAINT research_protocol_id IF NOT EXISTS FOR (p:Protocol) REQUIRE p.id IS UNIQUE;
-        CREATE CONSTRAINT research_observation_id IF NOT EXISTS FOR (o:Observation) REQUIRE o.id IS UNIQUE;
-        CREATE CONSTRAINT research_run_id IF NOT EXISTS FOR (r:Run) REQUIRE r.id IS UNIQUE;
-        
-        // Create indexes for performance
-        CREATE INDEX research_hypothesis_status IF NOT EXISTS FOR (h:Hypothesis) ON (h.status);
-        CREATE INDEX research_experiment_status IF NOT EXISTS FOR (e:Experiment) ON (e.status);
-        CREATE INDEX research_protocol_name IF NOT EXISTS FOR (p:Protocol) ON (p.name);
-        """
+        # Define constraints and indexes for research schema
+        # Neo4j 4.x/5.x constraint syntax: CREATE CONSTRAINT name IF NOT EXISTS FOR (n:Label) REQUIRE n.prop IS UNIQUE
+        schema_queries = [
+            "CREATE CONSTRAINT research_hypothesis_id IF NOT EXISTS FOR (h:Hypothesis) REQUIRE h.id IS UNIQUE",
+            "CREATE CONSTRAINT research_experiment_id IF NOT EXISTS FOR (e:Experiment) REQUIRE e.id IS UNIQUE",
+            "CREATE CONSTRAINT research_protocol_id IF NOT EXISTS FOR (p:Protocol) REQUIRE p.id IS UNIQUE",
+            "CREATE CONSTRAINT research_observation_id IF NOT EXISTS FOR (o:Observation) REQUIRE o.id IS UNIQUE",
+            "CREATE CONSTRAINT research_run_id IF NOT EXISTS FOR (r:Run) REQUIRE r.id IS UNIQUE",
+            
+            "CREATE INDEX research_hypothesis_status IF NOT EXISTS FOR (h:Hypothesis) ON (h.status)",
+            "CREATE INDEX research_experiment_status IF NOT EXISTS FOR (e:Experiment) ON (e.status)",
+            "CREATE INDEX research_protocol_name IF NOT EXISTS FOR (p:Protocol) ON (p.name)"
+        ]
         
         try:
             async with self.driver.session(database=self.database) as session:
-                await session.execute_write(lambda tx: tx.run(schema_query))
+                # Execute each constraint/index query individually
+                for query in schema_queries:
+                    await session.execute_write(lambda tx: tx.run(query))
                 
                 # Create base guidance hub for research if it doesn't exist
                 await self.ensure_research_hub_exists()
@@ -128,26 +153,6 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
         
         async with self.driver.session(database=self.database) as session:
             await session.execute_write(lambda tx: tx.run(query, params))
-    
-    async def register_tools(self, server):
-        """Register research incarnation-specific tools with the server."""
-        server.mcp.add_tool(self.register_hypothesis)
-        server.mcp.add_tool(self.list_hypotheses)
-        server.mcp.add_tool(self.get_hypothesis)
-        server.mcp.add_tool(self.update_hypothesis)
-        server.mcp.add_tool(self.create_protocol)
-        server.mcp.add_tool(self.list_protocols)
-        server.mcp.add_tool(self.get_protocol)
-        server.mcp.add_tool(self.create_experiment)
-        server.mcp.add_tool(self.list_experiments)
-        server.mcp.add_tool(self.get_experiment)
-        server.mcp.add_tool(self.update_experiment)
-        server.mcp.add_tool(self.record_observation)
-        server.mcp.add_tool(self.list_observations)
-        server.mcp.add_tool(self.compute_statistics)
-        server.mcp.add_tool(self.create_publication_draft)
-        
-        logger.info("Research incarnation tools registered")
     
     async def get_guidance_hub(self):
         """Get the guidance hub for research incarnation."""
@@ -1397,4 +1402,4 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
                 return [types.TextContent(type="text", text=publication)]
         except Exception as e:
             logger.error(f"Error creating publication draft: {e}")
-            return [types.TextContent(type="text", text=f"Error: {e}")]
+            return [types.TextContent(type="text", text=f"Error creating publication draft: {e}")]
