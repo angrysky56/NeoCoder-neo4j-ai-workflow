@@ -23,12 +23,13 @@ NeoCoder implements a system where:
 
 ## The MCP server runs the Python code, bridging the gap between the Neo4j graph and the AI assistant ( e.g. Claude)
 
-![alt text](image.png)
-![alt text](image-1.png)
+![alt text](image-3.png)
 
 ### Installation
 
-1. Install dependencies:
+1. It should auto-install when using the config.
+
+Otherwise- Install dependencies:
 
    ```bash
    uv venv
