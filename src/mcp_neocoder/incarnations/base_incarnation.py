@@ -31,6 +31,7 @@ class IncarnationType(str, Enum):
     LEARNING = "continuous_learning"       # Learning environment
     SIMULATION = "complex_system"          # Complex system simulator
     KNOWLEDGE_GRAPH = "knowledge_graph"    # Knowledge graph management
+    CODE_ANALYSIS = "code_analysis"        # Code analysis with AST/ASG
     
     @classmethod
     def extend(cls, new_types: Dict[str, str]):

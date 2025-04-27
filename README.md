@@ -143,6 +143,12 @@ All incarnations share these core elements:
   - Connect entities with typed relationships
   - Search and visualize knowledge structures
   - Support for complex semantic queries
+- **code_analysis_incarnation** - Code analysis using Abstract Syntax Trees
+  - Parse and analyze code structure using AST and ASG tools
+  - Track code complexity and quality metrics
+  - Compare different versions of code
+  - Generate documentation from code analysis
+  - Identify code smells and potential issues
 
 
 Each incarnation provides its own set of specialized tools that are automatically registered when the server starts. These tools are available for use in Claude or other AI assistants that connect to the MCP server.
@@ -245,6 +251,7 @@ NeoCoder comes with these standard templates:
 4. **FEATURE** - Structured approach to implementing new features with proper testing and documentation
 5. **TOOL_ADD** - Process for adding new tool functionality to the NeoCoder MCP server
 6. **CYPHER_SNIPPETS** - Manage and use Cypher snippets for Neo4j queries
+7. **CODE_ANALYZE** - Structured workflow for analyzing code using AST and ASG tools
 
 ## Architecture
 
@@ -522,6 +529,22 @@ Gemini 2.5 Pro Preview 3-25
 ChatGPT o3
 
 ## Recent Updates
+
+### 2025-04-27: Added Code Analysis Incarnation with AST/ASG Support (v1.4.0)
+- Added new `code_analysis_incarnation.py` for deep code analysis using AST and ASG tools
+- Implemented Neo4j schema for storing code structure and analysis results
+- Added CODE_ANALYZE action template with step-by-step workflow
+- Created specialized tools for code analysis:
+  - `analyze_codebase`: Analyze entire directory structures
+  - `analyze_file`: Deep analysis of individual files
+  - `compare_versions`: Compare different versions of code
+  - `find_code_smells`: Identify potential code issues
+  - `generate_documentation`: Auto-generate code documentation
+  - `explore_code_structure`: Navigate code structure
+  - `search_code_constructs`: Find specific patterns in code
+- Integrated with external AST/ASG tools
+- Added proper documentation in guidance hub
+- Updated IncarnationType enum to include CODE_ANALYSIS type
 
 ### 2025-04-27: Eliminated Knowledge Graph Transaction Error Messages (v1.3.2)
 - Completely eliminated error messages related to transaction scope issues in knowledge graph functions

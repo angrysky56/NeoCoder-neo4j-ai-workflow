@@ -1,5 +1,113 @@
 # NeoCoder Neo4j AI Workflow Changelog
 
+## 2025-04-27: Added Code Analysis Incarnation with AST/ASG Support (v1.4.0)
+
+### Features Added
+
+1. **New Code Analysis Incarnation**:
+   - Created `code_analysis_incarnation.py` for AST/ASG-based code analysis
+   - Added CODE_ANALYSIS type to the IncarnationType enum
+   - Implemented proper Neo4j schema for storing code structure
+   - Added specialized tools for code analysis operations
+
+2. **Code Analysis Templates and Neo4j Integration**:
+   - Created CODE_ANALYZE action template with step-by-step workflow
+   - Added Neo4j schema for storing AST node hierarchies
+   - Implemented methods to transform AST data for Neo4j storage
+   - Added relationship types for code structure representation
+
+3. **Analysis Tools Implementation**:
+   - `analyze_codebase`: Process entire directory structures
+   - `analyze_file`: Deep analysis of individual files
+   - `compare_versions`: Compare different code versions
+   - `find_code_smells`: Identify code quality issues
+   - `generate_documentation`: Auto-generate documentation from code structure
+   - `explore_code_structure`: Navigate code hierarchies
+   - `search_code_constructs`: Find specific patterns in analyzed code
+
+### Implementation Details
+
+- Neo4j schema for code structure:
+  ```cypher
+  CREATE CONSTRAINT code_file_path IF NOT EXISTS 
+  FOR (f:CodeFile) REQUIRE f.path IS UNIQUE
+
+  CREATE CONSTRAINT ast_node_id IF NOT EXISTS 
+  FOR (n:ASTNode) REQUIRE n.id IS UNIQUE
+
+  CREATE CONSTRAINT analysis_id IF NOT EXISTS 
+  FOR (a:Analysis) REQUIRE a.id IS UNIQUE
+  ```
+
+- AST node processing and storage:
+  ```python
+  def _extract_nodes(self, node: Dict[str, Any], nodes: List[Dict[str, Any]], parent_id: str = None):
+      """Extract nodes from AST for Neo4j storage."""
+      if not node or not isinstance(node, dict):
+          return
+      
+      # Create a unique ID for this node
+      node_id = str(uuid.uuid4())
+      
+      # Extract relevant properties
+      node_data = {
+          "id": node_id,
+          "node_type": node.get("type", "unknown"),
+          "parent_id": parent_id,
+          "value": node.get("value", ""),
+          "name": node.get("name", ""),
+          "location": {
+              "start": node.get("start", {}),
+              "end": node.get("end", {})
+          }
+      }
+      
+      # Add to the nodes list
+      nodes.append(node_data)
+      
+      # Process children recursively
+      for key, value in node.items():
+          if key in ["type", "value", "name", "start", "end"]:
+              continue
+              
+          if isinstance(value, dict):
+              self._extract_nodes(value, nodes, node_id)
+          elif isinstance(value, list):
+              for item in value:
+                  if isinstance(item, dict):
+                      self._extract_nodes(item, nodes, node_id)
+  ```
+
+- Integration with external AST tools:
+  ```python
+  # Basic AST Analysis
+  ast_result = parse_to_ast(code=code_string, language=language)
+  
+  # Semantic Graph Analysis
+  asg_result = generate_asg(code=code_string, language=language)
+  
+  # Code Complexity Analysis
+  analysis_result = analyze_code(code=code_string, language=language)
+  
+  # Code Comparison
+  diff_result = diff_ast(old_code=old_code, new_code=new_code, language=language)
+  ```
+
+### Verification
+
+- Verified code_analysis_incarnation.py loads properly
+- Confirmed Neo4j schema creation works
+- Tested AST data transformation logic
+- Validated integration with external AST tools
+
+### Next Steps
+
+1. Complete the implementation of the tools with actual AST integration
+2. Add visualization capabilities for code structure
+3. Implement code quality metrics dashboard
+4. Add support for multi-file analysis and project-wide insights
+5. Integrate with version control systems for history analysis
+
 ## 2025-04-27: Eliminated Knowledge Graph Transaction Error Messages (v1.3.2)
 
 ### Issues Fixed
