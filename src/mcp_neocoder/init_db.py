@@ -262,13 +262,12 @@ async def create_main_guidance_hub(driver: AsyncDriver, database: str = "neo4j")
 
 Welcome to the NeoCoder Polymorphic Framework. This system can transform between multiple incarnations to support different use cases:
 
-## Available Incarnations
-
-1. **Coding Workflow** - The original NeoCoder for AI-assisted coding
-2. **Research Orchestration** - Scientific workflow management & hypothesis tracking
-3. **Decision Support** - Transparent, data-driven decision making
-4. **Continuous Learning** - Adaptive learning environment
-5. **Complex System Simulation** - Model and simulate complex systems
+## Default Available Incarnation Templates
+- **base_incarnation**: The original NeoCoder for AI-assisted coding
+- **data_analysis_incarnation**: Data Analysis Incarnation
+- **decision_incarnation**: Decision Support System
+- **knowledge_graph_incarnation**: Knowledge Graph Incarnation
+- **research_incarnation**: Research Orchestration Platform
 
 ## Getting Started
 

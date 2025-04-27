@@ -164,6 +164,7 @@ async def _switch_incarnation_async(
                 "data": IncarnationType.DATA_ANALYSIS,
                 "analysis": IncarnationType.DATA_ANALYSIS,
                 "coding": IncarnationType.CODING,
+                "neocoder": IncarnationType.CODING,
                 "code": IncarnationType.CODING
             }
 
