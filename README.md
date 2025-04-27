@@ -126,28 +126,24 @@ All incarnations share these core elements:
 
 ### Available Incarnations:
 
-- **coding** (default) - Original code workflow management
-- **research_orchestration** - Scientific research platform for hypothesis tracking and experiments
+- **base_incarnation** (default) - Original NeoCoder, Tool, Templates and Incarnations Workflow management
+- **research_incarnation** - Scientific research platform for hypothesis tracking and experiments
   - Register hypotheses, design experiments, capture runs, and publish outcomes
   - Neo4j underpins provenance pilots for lab workflows with lineage queries
-- **decision_support** - Decision analysis and evidence tracking system
+- **decision_incarnation** - Decision analysis and evidence tracking system
   - Create decision alternatives with expected-value metrics
   - Bayesian updater agents re-compute metric posteriors when new evidence arrives
   - Transparent, explainable reasoning pipelines
-- **continuous_learning** - Adaptive learning environment for education
-  - Track learner interaction with problems
-  - Estimate mastery and difficulty using Knowledge Space Theory
-  - Personalize curriculum based on success rate
-- **complex_system** - Complex system modeling and simulation
+- **data_analysis_incarnation** - Complex system modeling and simulation
   - Model components with state vectors and physical couplings
   - Simulate failure propagation using path queries
   - Optional quantum-inspired scheduler for parameter testing
-- **knowledge_graph** - Knowledge graph management system
+- **knowledge_graph_incarnation** - Knowledge graph management system
   - Create and manage entities with observations
   - Connect entities with typed relationships
   - Search and visualize knowledge structures
   - Support for complex semantic queries
-- **data_analysis** - Data analysis and visualization tools
+
 
 Each incarnation provides its own set of specialized tools that are automatically registered when the server starts. These tools are available for use in Claude or other AI assistants that connect to the MCP server.
 
@@ -296,35 +292,35 @@ The Knowledge Graph incarnation provides these specialized tools for managing an
 - **create_entities**: Create multiple new entities with observations
   - Each entity has a name, type, and a list of observations
   - All entities are properly labeled for efficient querying
-  
+
 - **create_relations**: Connect entities with typed relationships
   - Relations are created with proper typing and timestamps
   - Relations must specify from entity, to entity, and relation type
-  
+
 - **add_observations**: Add new observations to existing entities
   - Add multiple observations to one or more entities
   - Observations are timestamped for temporal tracking
-  
+
 - **delete_entities**: Remove entities and their associated data
   - Deletes the entity, its observations, and connected relationships
   - Provides cascading deletion for clean graph management
-  
+
 - **delete_observations**: Remove specific observations from entities
   - Targeted deletion of specific observation content
   - Preserves entity and relationship structure
-  
+
 - **delete_relations**: Remove relationships between entities
   - Specify exact relationships to remove by type and connected entities
   - Maintains entity and observation data
-  
+
 - **read_graph**: View the entire knowledge graph structure
   - Returns entities, their observations, and relationships
   - Formatted for easy reading and analysis
-  
+
 - **search_nodes**: Find entities by name, type, or observation content
   - Full-text search capabilities with relevance ranking
   - Highlights matching terms in search results
-  
+
 - **open_nodes**: Get detailed information about specific entities
   - Shows all observations, incoming and outgoing relationships
   - Provides complete contextual view of selected entities
@@ -527,12 +523,39 @@ ChatGPT o3
 
 ## Recent Updates
 
+### 2025-04-27: Eliminated Knowledge Graph Transaction Error Messages (v1.3.2)
+- Completely eliminated error messages related to transaction scope issues in knowledge graph functions
+- Implemented server-side error message interception and replacement for a smoother user experience
+- Added a new safer execution pattern for all database operations:
+  - Created `_safe_execute_write` method to eliminate transaction scope errors in write operations
+  - Created `_safe_read_query` method to ensure proper transaction handling for read operations
+  - Improved entity count tracking for accurate operation feedback
+- Enhanced error recovery to continue operations even when JSON parsing fails
+- Simplified and improved all knowledge graph tool implementations
+- Maintained full backward compatibility with existing knowledge graph data
+- Enhanced guidance hub with clearer usage examples
+
+### 2025-04-27: Fixed Knowledge Graph Transaction Scope Issues (v1.3.1)
+- Fixed critical issue with knowledge graph functions returning "transaction out of scope" errors
+- Implemented a transaction-safe approach for all knowledge graph operations
+- Updated all knowledge graph tools to properly handle transaction contexts:
+  - Fixed `create_entities` to properly return results
+  - Fixed `create_relations` with a simplified approach
+  - Fixed `add_observations` to ensure data is committed
+  - Fixed `delete_entities`, `delete_observations`, and `delete_relations` functions
+  - Fixed `read_graph` to fetch data in multiple safe transactions
+  - Fixed `search_nodes` with a more robust query approach
+  - Fixed `open_nodes` to query entity details safely
+- Enhanced guidance hub with clear examples of knowledge graph tool usage
+- Improved error handling throughout knowledge graph operations
+- Maintained backward compatibility with existing knowledge graph data
+
 ### 2025-04-26: Fixed Knowledge Graph API Functions (v1.3.0)
 - Fixed the issue with Knowledge Graph API functions not properly integrating with Neo4j node labeling system
 - Implemented properly labeled entities with :Entity label instead of generic :KnowledgeNode
 - Added full set of knowledge graph management functions:
   - `create_entities`: Create entities with proper labeling and observations
-  - `create_relations`: Connect entities with typed relationships 
+  - `create_relations`: Connect entities with typed relationships
   - `add_observations`: Add observations to existing entities
   - `delete_entities`: Remove entities and their connections
   - `delete_observations`: Remove specific observations from entities
