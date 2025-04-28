@@ -528,6 +528,17 @@ Claude 3.7 Sonnet
 Gemini 2.5 Pro Preview 3-25
 ChatGPT o3
 
+## Code Analysis
+
+A comprehensive analysis of the NeoCoder codebase is available in the `/analysis` directory. This includes:
+
+- Architecture overview
+- Incarnation system analysis
+- Code metrics and structure
+- Workflow template analysis
+- Integration points
+- Recommendations for future development
+
 ## Recent Updates
 
 ### 2025-04-27: Added Code Analysis Incarnation with AST/ASG Support (v1.4.0)
