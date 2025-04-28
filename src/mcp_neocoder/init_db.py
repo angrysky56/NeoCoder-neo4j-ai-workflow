@@ -19,8 +19,8 @@ logger = logging.getLogger("mcp_neocoder_init")
 
 from enum import Enum
 
-# Import and use the IncarnationType enum from the polymorphic adapter
-from .incarnations.polymorphic_adapter import IncarnationType
+# Import and use the IncarnationType enum from the incarnations package
+from .incarnations.base_incarnation import IncarnationType
 
 # List of incarnation type values for validation
 INCARNATION_TYPES = [t.value for t in IncarnationType]

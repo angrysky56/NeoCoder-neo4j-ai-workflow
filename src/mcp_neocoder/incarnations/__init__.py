@@ -25,8 +25,12 @@ from typing import Dict, Type, List, Optional, Set, Any
 
 logger = logging.getLogger("mcp_neocoder.incarnations")
 
-# Export the polymorphic_adapter module to make BaseIncarnation available
-from .polymorphic_adapter import BaseIncarnation, IncarnationType
+# Re-export the BaseIncarnation and IncarnationType from base_incarnation
+from .base_incarnation import (
+    BaseIncarnation, 
+    IncarnationType,
+    get_incarnation_type_from_filename
+)
 
 # Dictionary to track loaded incarnation modules
 INCARNATION_MODULES = {}
@@ -38,7 +42,7 @@ def discover_incarnations():
 
     for file_path in incarnations_dir.glob("*.py"):
         # Skip __init__.py and other special files
-        if file_path.name.startswith("__") or file_path.name == "polymorphic_adapter.py":
+        if file_path.name.startswith("__"):
             continue
 
         module_name = file_path.stem
@@ -75,20 +79,30 @@ def discover_incarnations():
 # Register all discovered incarnation classes in this central registry
 INCARNATION_CLASSES = discover_incarnations()
 
-# This is complete bullshit Claude and we discussed not doing this many times, it prevents modularity and efficient adding of new incarnations and tools. Find a way to import the incarnations from their folder properly.
-# We need to explicitly import all incarnation modules to ensure their tools are registered
-# This ensures that the modules are loaded and their classes are properly initialized
-# Even if they're dynamically discovered above, we need to ensure they're properly imported
+# To maintain backward compatibility and ensure all incarnations are properly loaded,
+# we explicitly import key incarnation modules
 try:
-    from .data_analysis_incarnation import DataAnalysisIncarnation
-    from .research_incarnation import ResearchOrchestration
-    from .decision_incarnation import DecisionSupport
-    from .knowledge_graph_incarnation import KnowledgeGraphIncarnation
-
-    # Register any other incarnation classes here
-    # Dynamically import all potential incarnation modules
+    # Import common incarnation modules
+    modules_to_import = [
+        'data_analysis_incarnation',
+        'research_incarnation',
+        'decision_incarnation',
+        'knowledge_graph_incarnation'
+    ]
+    
+    for module_name in modules_to_import:
+        try:
+            if module_name in sys.modules:
+                logger.info(f"Module {module_name} already imported")
+            else:
+                importlib.import_module(f".{module_name}", package="mcp_neocoder.incarnations")
+                logger.info(f"Successfully imported module: {module_name}")
+        except ImportError as e:
+            logger.warning(f"Module {module_name} not available: {e}")
+    
+    # Dynamically import any other discovered incarnation modules
     for module_name in INCARNATION_MODULES:
-        if module_name not in ['data_analysis_incarnation', 'research_incarnation', 'decision_incarnation', 'knowledge_graph_incarnation']:
+        if module_name not in modules_to_import:
             logger.info(f"Ensuring import of additional module: {module_name}")
             if module_name.endswith('_incarnation'):
                 try:

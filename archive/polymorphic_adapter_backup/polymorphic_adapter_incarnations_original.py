@@ -18,8 +18,8 @@ import mcp.types as types
 from pydantic import Field
 from neo4j import AsyncTransaction
 
-# Import the BaseIncarnation and related types from incarnations.base_incarnation
-from .incarnations.base_incarnation import BaseIncarnation, IncarnationType, get_incarnation_type_from_filename
+# Import the BaseIncarnation from base_incarnation to avoid duplication
+from .base_incarnation import BaseIncarnation, IncarnationType, get_incarnation_type_from_filename
 
 logger = logging.getLogger("mcp_neocoder.polymorphic_adapter")
 
@@ -89,7 +89,7 @@ def switch_incarnation(
 ) -> List[types.TextContent]:
     """Switch the server to a different incarnation."""
     import asyncio
-
+    
     # Handle async operation in a way that respects the current event loop
     try:
         # Get the current running loop or create a new one
@@ -100,7 +100,7 @@ def switch_incarnation(
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             return loop.run_until_complete(_switch_incarnation_async(server, incarnation_type))
-
+        
         # If we already have a running loop
         if loop.is_running():
             # Create a future and schedule the coroutine
@@ -122,18 +122,18 @@ async def _switch_incarnation_async(
     """Async implementation of switch_incarnation."""
     try:
         # First, ensure that incarnation types are up to date by extending with any new types
-        from .incarnation_registry import registry
+        from ..incarnation_registry import registry
         registry.extend_incarnation_types()
-
+        
         # Import the updated enum
-        from .incarnations.base_incarnation import IncarnationType
-
+        from .base_incarnation import IncarnationType
+        
         logger.info(f"Trying to switch to incarnation type: {incarnation_type}")
-
+        
         # Log available types for debugging
         available_types = [t.value for t in IncarnationType]
         logger.info(f"Available incarnation types: {available_types}")
-
+        
         # First try exact match
         target_type = None
         for inc_type in IncarnationType:
@@ -141,16 +141,16 @@ async def _switch_incarnation_async(
                 target_type = inc_type
                 logger.info(f"Exact match found for incarnation type: {inc_type.value}")
                 break
-
+                
         # If no exact match, try a fuzzy match
         if not target_type:
             for inc_type in IncarnationType:
-                if (incarnation_type.lower() in inc_type.value.lower() or
+                if (incarnation_type.lower() in inc_type.value.lower() or 
                     incarnation_type.lower() in inc_type.name.lower()):
                     target_type = inc_type
                     logger.info(f"Fuzzy match found for incarnation type: {incarnation_type} -> {inc_type.value}")
                     break
-
+        
         # If still no match, check common aliases
         if not target_type:
             aliases = {
@@ -164,23 +164,22 @@ async def _switch_incarnation_async(
                 "data": IncarnationType.DATA_ANALYSIS,
                 "analysis": IncarnationType.DATA_ANALYSIS,
                 "coding": IncarnationType.CODING,
-                "neocoder": IncarnationType.CODING,
                 "code": IncarnationType.CODING
             }
-
+            
             for alias, inc_type in aliases.items():
                 if alias.lower() in incarnation_type.lower():
                     target_type = inc_type
                     logger.info(f"Alias match found: {alias} -> {inc_type.value}")
                     break
-
+        
         if not target_type:
             available_types_str = ", ".join(available_types)
             return [types.TextContent(
                 type="text",
                 text=f"Unknown incarnation type: '{incarnation_type}'. Available types: {available_types_str}"
             )]
-
+        
         try:
             logger.info(f"Setting incarnation to: {target_type.value}")
             await server.set_incarnation(target_type)
@@ -192,7 +191,7 @@ async def _switch_incarnation_async(
         except Exception as set_err:
             logger.error(f"Error in set_incarnation: {set_err}")
             return [types.TextContent(type="text", text=f"Error setting incarnation: {set_err}")]
-
+            
     except Exception as e:
         logger.error(f"Error switching incarnation: {e}")
         import traceback
@@ -203,7 +202,7 @@ async def _switch_incarnation_async(
 def get_current_incarnation(server) -> List[types.TextContent]:
     """Get the currently active incarnation type."""
     import asyncio
-
+    
     # Handle async operation in a way that respects the current event loop
     try:
         # Get the current running loop or create a new one
@@ -214,7 +213,7 @@ def get_current_incarnation(server) -> List[types.TextContent]:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             return loop.run_until_complete(_get_current_incarnation_async(server))
-
+        
         # If we already have a running loop
         if loop.is_running():
             # Create a future and schedule the coroutine
@@ -251,7 +250,7 @@ async def _get_current_incarnation_async(server) -> List[types.TextContent]:
 def list_incarnations(server) -> List[types.TextContent]:
     """List all available incarnations."""
     import asyncio
-
+    
     # Handle async operation in a way that respects the current event loop
     try:
         # Get the current running loop or create a new one
@@ -262,7 +261,7 @@ def list_incarnations(server) -> List[types.TextContent]:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
             return loop.run_until_complete(_list_incarnations_async(server))
-
+        
         # If we already have a running loop
         if loop.is_running():
             # Create a future and schedule the coroutine
@@ -281,9 +280,9 @@ async def _list_incarnations_async(server) -> List[types.TextContent]:
     """Async implementation of list_incarnations."""
     try:
         # First, ensure that incarnation types are up to date by extending with any new types
-        from .incarnation_registry import registry
+        from ..incarnation_registry import registry
         registry.extend_incarnation_types()
-
+        
         # Get incarnations from server
         incarnations = await server.list_available_incarnations()
 

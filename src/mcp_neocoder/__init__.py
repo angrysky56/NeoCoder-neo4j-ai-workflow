@@ -11,7 +11,8 @@ for specialized use cases while preserving the core Neo4j graph structure.
 from .server import create_server, Neo4jWorkflowServer
 from .incarnation_registry import registry as incarnation_registry
 from .tool_registry import registry as tool_registry
-from .incarnations.polymorphic_adapter import IncarnationType, BaseIncarnation
+# Import directly from the main polymorphic_adapter
+from .polymorphic_adapter import IncarnationType, BaseIncarnation
 
 __version__ = "0.1.0"
 __all__ = [

@@ -18,7 +18,7 @@ import mcp.types as types
 from pydantic import Field
 from neo4j import AsyncTransaction
 
-# Import the BaseIncarnation and related types from incarnations.base_incarnation
+# Import the BaseIncarnation from base_incarnation to avoid duplication
 from .incarnations.base_incarnation import BaseIncarnation, IncarnationType, get_incarnation_type_from_filename
 
 logger = logging.getLogger("mcp_neocoder.polymorphic_adapter")
