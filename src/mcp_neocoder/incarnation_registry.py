@@ -15,7 +15,7 @@ import re
 from pathlib import Path
 from typing import Dict, Type, List, Optional, Any, Tuple, Set
 
-from .incarnations.base_incarnation import BaseIncarnation, IncarnationType, get_incarnation_type_from_filename
+from .incarnations.base_incarnation import BaseIncarnation
 
 logger = logging.getLogger("mcp_neocoder.incarnation_registry")
 
@@ -24,10 +24,10 @@ class IncarnationRegistry:
 
     def __init__(self):
         """Initialize an empty incarnation registry."""
-        self.incarnations: Dict[IncarnationType, Type[BaseIncarnation]] = {}
-        self.instances: Dict[IncarnationType, BaseIncarnation] = {}
+        self.incarnations: Dict[str, Type[BaseIncarnation]] = {}
+        self.instances: Dict[str, BaseIncarnation] = {}
         self.loaded_modules = set()
-        self.dynamic_types = {}
+        self.dynamic_types = {}  # Still needed for compatibility with existing code
 
     def register(self, incarnation_class: Type[BaseIncarnation]) -> None:
         """Register an incarnation class with the registry.
@@ -35,35 +35,37 @@ class IncarnationRegistry:
         Args:
             incarnation_class: The incarnation class to register.
         """
-        # Check if the class has the required incarnation_type attribute
-        if not hasattr(incarnation_class, 'incarnation_type'):
-            logger.warning(f"Cannot register {incarnation_class.__name__}: missing incarnation_type attribute")
-            return
+        # Check for name attribute
+        if hasattr(incarnation_class, 'name'):
+            incarnation_name = incarnation_class.name
 
-        incarnation_type = incarnation_class.incarnation_type
+            # Convert to string if it's an enum or other object with value attribute
+            if hasattr(incarnation_name, 'value'):
+                incarnation_name = incarnation_name.value
+                incarnation_class.name = incarnation_name
 
-        # Log registration
-        logger.info(f"Registering incarnation: {incarnation_type.value} ({incarnation_class.__name__})")
+            # Register using the name
+            self.incarnations[incarnation_name] = incarnation_class
+            logger.info(f"Registered incarnation: {incarnation_name} ({incarnation_class.__name__})")
+        else:
+            logger.warning(f"Cannot register {incarnation_class.__name__}: missing name attribute")
 
-        # Add to registry
-        self.incarnations[incarnation_type] = incarnation_class
-
-    def get(self, incarnation_type: IncarnationType) -> Optional[Type[BaseIncarnation]]:
-        """Get an incarnation class by its type.
+    def get(self, incarnation: str) -> Optional[Type[BaseIncarnation]]:
+        """Get an incarnation class by its type identifier.
 
         Args:
-            incarnation_type: The type of incarnation to retrieve.
+            incarnation: The type identifier of incarnation to retrieve.
 
         Returns:
             The incarnation class, or None if not found.
         """
-        return self.incarnations.get(incarnation_type)
+        return self.incarnations.get(incarnation)
 
-    def get_instance(self, incarnation_type: IncarnationType, driver: Any, database: str) -> Optional[BaseIncarnation]:
+    def get_instance(self, incarnation: str, driver: Any, database: str) -> Optional[BaseIncarnation]:
         """Get or create an incarnation instance.
 
         Args:
-            incarnation_type: The type of incarnation to retrieve.
+            incarnation: The type identifier of incarnation to retrieve.
             driver: The Neo4j driver to use.
             database: The Neo4j database name.
 
@@ -71,17 +73,17 @@ class IncarnationRegistry:
             An instance of the incarnation, or None if not found.
         """
         # Return existing instance if available
-        if incarnation_type in self.instances:
-            return self.instances[incarnation_type]
+        if incarnation in self.instances:
+            return self.instances[incarnation]
 
         # Get the class and create a new instance
-        incarnation_class = self.get(incarnation_type)
+        incarnation_class = self.get(incarnation)
         if not incarnation_class:
             return None
 
         # Create a new instance
         instance = incarnation_class(driver, database)
-        self.instances[incarnation_type] = instance
+        self.instances[incarnation] = instance
         return instance
 
     def list(self) -> List[dict]:
@@ -92,7 +94,7 @@ class IncarnationRegistry:
         """
         return [
             {
-                "type": inc_type.value,
+                "type": inc_type,
                 "name": inc_class.__name__,
                 "description": getattr(inc_class, 'description', "No description"),
                 "version": getattr(inc_class, 'version', "Unknown")
@@ -101,73 +103,89 @@ class IncarnationRegistry:
         ]
 
     def discover_dynamic_types(self) -> Dict[str, str]:
-        """Discover potential new incarnation types from filenames.
-        
+        """Discover incarnation types from actual implementations.
+
+        This method scans all incarnation implementations and dynamically builds
+        a set of types without any hardcoded references.
+
         Returns:
             Dict mapping uppercase identifiers to type values
         """
         dynamic_types = {}
-        
+
         # Get the package directory
         current_dir = os.path.dirname(os.path.abspath(__file__))
         incarnations_dir = os.path.join(current_dir, "incarnations")
-        
+
         if not os.path.exists(incarnations_dir):
             logger.warning(f"Incarnations directory not found: {incarnations_dir}")
             return dynamic_types
-            
-        # Check all Python files in the directory
+
+        # Simple discovery approach: scan for *_incarnation.py files
         for entry in os.listdir(incarnations_dir):
-            if not entry.endswith('.py') or entry.startswith('__'):
+            if not entry.endswith('_incarnation.py') or entry.startswith('__'):
                 continue
-                
-            # Skip base modules
-            if entry in ['base_incarnation.py', 'polymorphic_adapter.py']:
+
+            # Skip base incarnation
+            if entry == 'base_incarnation.py':
                 continue
-                
-            # Extract potential type from filename
-            type_value = get_incarnation_type_from_filename(entry)
-            if type_value:
-                # Convert snake_case to UPPER_SNAKE_CASE for enum name
-                enum_name = type_value.upper()
-                
-                # Check if this type is already in IncarnationType
-                if not any(member.value == type_value for member in IncarnationType):
-                    dynamic_types[enum_name] = type_value
-                    logger.info(f"Discovered potential new incarnation type: {enum_name}={type_value}")
-        
+
+            # Extract type from filename (e.g., "data_analysis" from "data_analysis_incarnation.py")
+            file_type = entry[:-14]  # Remove "_incarnation.py" (14 chars)
+            if file_type:
+                enum_name = file_type.upper()
+                dynamic_types[enum_name] = file_type
+                logger.info(f"Discovered incarnation type: {enum_name}={file_type}")
+
+                # Also add simplified versions for easier reference
+                if '_' in file_type:
+                    parts = file_type.split('_')
+                    simple_name = parts[0].upper()
+                    if simple_name != enum_name and simple_name not in dynamic_types:
+                        dynamic_types[simple_name] = file_type
+                        logger.info(f"Added simplified alias: {simple_name}={file_type}")
+
         return dynamic_types
 
-    def extend_incarnation_types(self) -> Type[IncarnationType]:
-        """Extend the IncarnationType enum with dynamically discovered types.
-        
+    def discover_incarnation_identifiers(self) -> Dict[str, str]:
+        """Discover all incarnation identifiers from filenames.
+
+        This method scans the incarnations directory for valid incarnation files
+        and returns their identifiers.
+
         Returns:
-            The updated IncarnationType enum class
+            Dictionary of discovered incarnation identifiers
         """
-        # Discover dynamic types
-        self.dynamic_types = self.discover_dynamic_types()
+        # Build on top of the existing dynamic types discovery
+        discovered_types = self.discover_dynamic_types()
+
+        # Just return the values (actual identifiers) rather than the enum mapping
+        identifiers = {value: value for _, value in discovered_types.items()}
         
-        if not self.dynamic_types:
-            logger.info("No new incarnation types discovered")
-            return IncarnationType
+        if not identifiers:
+            # Fallback to direct directory scan if no types were discovered
+            current_dir = os.path.dirname(os.path.abspath(__file__))
+            incarnations_dir = os.path.join(current_dir, "incarnations")
             
-        # Extend the enum with new types
-        extended_enum = IncarnationType.extend(self.dynamic_types)
-        logger.info(f"Extended IncarnationType with {len(self.dynamic_types)} new types: {list(self.dynamic_types.keys())}")
+            if os.path.exists(incarnations_dir):
+                for entry in os.listdir(incarnations_dir):
+                    if entry.endswith('_incarnation.py') and not entry.startswith('__') and entry != 'base_incarnation.py':
+                        # Extract identifier from filename
+                        inc_type = entry[:-14]  # Remove "_incarnation.py"
+                        identifiers[inc_type] = inc_type
+                        logger.info(f"Direct scan found incarnation: {inc_type}")
         
-        # Update global reference
-        sys.modules[IncarnationType.__module__].IncarnationType = extended_enum
-        
-        return extended_enum
+        logger.info(f"Discovered incarnation identifiers: {list(identifiers.keys())}")
+        return identifiers
 
     def discover(self) -> None:
         """Discover and register all incarnation classes in the package.
 
         This method scans the incarnations directory for classes that inherit from BaseIncarnation.
         """
-        # First extend the IncarnationType enum with dynamic types
-        self.extend_incarnation_types()
-        
+        # Discover incarnation identifiers first
+        self.discover_incarnation_identifiers()
+
         # Now discover incarnation classes
         current_dir = os.path.dirname(os.path.abspath(__file__))
         incarnations_dir = os.path.join(current_dir, "incarnations")
@@ -178,59 +196,77 @@ class IncarnationRegistry:
             logger.warning(f"Incarnations directory not found: {incarnations_dir}")
             return
 
-        # Load all Python files in the incarnations directory
+        # Process each incarnation file
         for entry in os.listdir(incarnations_dir):
-            # Skip __init__.py, __pycache__, and other non-Python files
-            if entry.startswith("__") or not entry.endswith(".py"):
+            # Only process *_incarnation.py files
+            if not entry.endswith('_incarnation.py') or entry.startswith('__'):
                 continue
-                
-            # Skip base modules
-            if entry in ["base_incarnation.py", "polymorphic_adapter.py"]:
+
+            # Skip base incarnation
+            if entry == 'base_incarnation.py':
                 continue
 
             module_name = entry[:-3]  # Remove .py extension
-            module_path = os.path.join(incarnations_dir, entry)
 
+            # Skip if already loaded
+            if module_name in self.loaded_modules:
+                logger.debug(f"Module {module_name} already loaded, skipping")
+                continue
+
+            # Import the module
             try:
-                if module_name in self.loaded_modules:
-                    logger.debug(f"Module {module_name} already loaded, skipping")
-                    continue
-
-                # Dynamically import the module
-                spec = importlib.util.spec_from_file_location(
-                    f"mcp_neocoder.incarnations.{module_name}",
-                    module_path
-                )
-                module = importlib.util.module_from_spec(spec)
-                sys.modules[spec.name] = module
-                spec.loader.exec_module(module)
+                # Use importlib to load the module
+                module = importlib.import_module(f"mcp_neocoder.incarnations.{module_name}")
                 self.loaded_modules.add(module_name)
 
-                logger.info(f"Loaded incarnation module: {module_name}")
-
-                # Find all classes that inherit from BaseIncarnation
+                # Find all incarnation classes in the module
                 for name, obj in inspect.getmembers(module):
+                    # Check if it's a class that inherits from BaseIncarnation
                     if (inspect.isclass(obj) and
                         issubclass(obj, BaseIncarnation) and
                         obj is not BaseIncarnation):
-                        # Log details of found incarnation for debugging
-                        logger.info(f"Found incarnation class: {name}, type: {getattr(obj, 'incarnation_type', 'Unknown')}")
-                        self.register(obj)
+                        
+                        # Check if it has either 'incarnation' or 'name' attribute
+                        if hasattr(obj, 'incarnation'):
+                            # Get incarnation type as string (in case it's still an enum value)
+                            inc_type = obj.incarnation
+                            if hasattr(inc_type, 'value'):  # Handle case where it might still be an enum
+                                inc_type = inc_type.value
 
+                            logger.info(f"Found incarnation class via 'incarnation' attribute: {name}, type: {inc_type}")
+
+                            # Update the incarnation to be a string if it's not already
+                            if hasattr(inc_type, 'value'):
+                                obj.incarnation = inc_type
+                                
+                            # Add a name attribute if it doesn't exist
+                            if not hasattr(obj, 'name'):
+                                obj.name = inc_type
+                                
+                            self.register(obj)
+                        elif hasattr(obj, 'name'):
+                            # Also register classes that have a 'name' but no 'incarnation' attribute
+                            logger.info(f"Found incarnation class via 'name' attribute: {name}, name: {obj.name}")
+                            
+                            # Add an incarnation attribute that matches the name for compatibility
+                            if not hasattr(obj, 'incarnation'):
+                                obj.incarnation = obj.name
+                                
+                            self.register(obj)
+                        else:
+                            logger.warning(f"Skipping class {name} in {module_name}: missing both 'incarnation' and 'name' attributes")
             except Exception as e:
-                logger.error(f"Error discovering incarnation in module {module_name}: {e}")
-                import traceback
-                logger.error(traceback.format_exc())
+                logger.error(f"Error importing incarnation module {module_name}: {e}")
 
-    def discover_incarnation_types(self) -> List[IncarnationType]:
+    def discover_incarnations(self) -> List[str]:
         """Discover all incarnation types based on module filenames.
 
         This can be used even before classes are loaded to determine available incarnations.
 
         Returns:
-            A list of incarnation types found in the directory.
+            A list of incarnation type identifiers found in the directory.
         """
-        incarnation_types = []
+        incarnations = []
 
         # Get the package directory
         current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -238,7 +274,7 @@ class IncarnationRegistry:
 
         if not os.path.exists(incarnations_dir):
             logger.warning(f"Incarnations directory not found: {incarnations_dir}")
-            return incarnation_types
+            return incarnations
 
         # Match module filenames to incarnation types
         for entry in os.listdir(incarnations_dir):
@@ -255,22 +291,17 @@ class IncarnationRegistry:
             if module_name.endswith("_incarnation"):
                 # Extract the type from the filename (e.g., research_incarnation.py -> research)
                 incarnation_name = module_name.replace("_incarnation", "")
+                incarnations.append(incarnation_name)
 
-                # Find matching IncarnationType
-                for inc_type in IncarnationType:
-                    if inc_type.value.startswith(incarnation_name):
-                        incarnation_types.append(inc_type)
-                        break
-
-        return incarnation_types
+        return incarnations
 
     def create_template_incarnation(self, name: str, output_path: Optional[str] = None) -> str:
         """Create a template incarnation file with the given name.
-        
+
         Args:
             name: The name of the incarnation (e.g., 'my_feature')
             output_path: Optional path to save the file (defaults to incarnations directory)
-            
+
         Returns:
             The path to the created file
         """
@@ -281,20 +312,21 @@ class IncarnationRegistry:
         else:
             file_name = f"{name}.py"
             name = name.replace('_incarnation', '')
-            
+
         # Generate type value - ensure it's in snake_case
         type_value = name
-        
-        # Generate class name - convert to CamelCase
+
+        # Generate class name - class name should ALWAYS match the filename
+        # without the .py suffix, e.g., DataAnalysisIncarnation for data_analysis_incarnation.py
         class_name = ''.join(word.capitalize() for word in name.split('_')) + 'Incarnation'
-        
+
         # Determine output path
         if not output_path:
             current_dir = os.path.dirname(os.path.abspath(__file__))
             output_path = os.path.join(current_dir, "incarnations", file_name)
         elif os.path.isdir(output_path):
             output_path = os.path.join(output_path, file_name)
-            
+
         # Generate template content
         template = f'''"""
 {class_name} for the NeoCoder framework.
@@ -309,9 +341,9 @@ from typing import Dict, Any, List, Optional, Union
 
 import mcp.types as types
 from pydantic import Field
-from neo4j import AsyncTransaction
+from neo4j import AsyncDriver, AsyncTransaction
 
-from .base_incarnation import BaseIncarnation, IncarnationType
+from .base_incarnation import BaseIncarnation
 
 logger = logging.getLogger("mcp_neocoder.incarnations.{name}")
 
@@ -319,30 +351,33 @@ logger = logging.getLogger("mcp_neocoder.incarnations.{name}")
 class {class_name}(BaseIncarnation):
     """
     {class_name} for the NeoCoder framework.
-    
+
     Provides tools for {name.replace('_', ' ')} functionality.
     """
-    
-    # Define the incarnation type - must match an entry in IncarnationType enum
-    # This will be auto-discovered based on the filename
-    incarnation_type = IncarnationType.{name.upper()}
-    
+
+    # IMPORTANT: The class name above MUST match the filename pattern
+    # e.g., {class_name} for {name}_incarnation.py
+
+    # Define the incarnation type with a string identifier
+    # This should match the filename without the '_incarnation.py' suffix
+    incarnation_type = "{type_value}"
+
     # Metadata for display in the UI
     description = "{name.replace('_', ' ').title()} incarnation for the NeoCoder framework"
     version = "0.1.0"
-    
+
     # Optional list of tool methods that should be registered
     _tool_methods = [
         "example_tool_one",
         "example_tool_two"
     ]
-    
+
     # Schema creation queries - run when incarnation is initialized
     schema_queries = [
         f"CREATE CONSTRAINT {name}_entity_id IF NOT EXISTS FOR (e:{name.capitalize()}) REQUIRE e.id IS UNIQUE",
         f"CREATE INDEX {name}_entity_name IF NOT EXISTS FOR (e:{name.capitalize()}) ON (e.name)",
     ]
-    
+
     # Hub content - what users see when they access this incarnation's guidance hub
     hub_content = """
 # {name.replace('_', ' ').title()} Hub
@@ -369,7 +404,7 @@ This system provides the following capabilities:
 
 Each entity in the system has full tracking and audit capabilities.
     """
-    
+
     async def example_tool_one(
         self,
         param1: str = Field(..., description="Description of parameter 1"),
@@ -383,7 +418,7 @@ Each entity in the system has full tracking and audit capabilities.
         except Exception as e:
             logger.error(f"Error in example_tool_one: {{e}}")
             return [types.TextContent(type="text", text=f"Error: {{e}}")]
-    
+
     async def example_tool_two(
         self,
         param1: str = Field(..., description="Description of parameter 1")

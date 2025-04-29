@@ -13,7 +13,7 @@ import mcp.types as types
 from pydantic import Field
 from neo4j import AsyncTransaction
 
-from .base_incarnation import BaseIncarnation, IncarnationType
+from .base_incarnation import BaseIncarnation
 
 logger = logging.getLogger("mcp_neocoder.incarnations.knowledge_graph")
 
@@ -21,22 +21,22 @@ logger = logging.getLogger("mcp_neocoder.incarnations.knowledge_graph")
 class KnowledgeGraphIncarnation(BaseIncarnation):
     """
     Knowledge Graph incarnation of the NeoCoder framework.
-    
+
     Manage and analyze knowledge graphs
     """
-    
-    # Define the incarnation type - must match an entry in IncarnationType enum
-    incarnation_type = IncarnationType.KNOWLEDGE_GRAPH
-    
+
+    # Define the incarnation name as a string value
+    name = "knowledge_graph"
+
     # Metadata for display in the UI
     description = "Manage and analyze knowledge graphs"
     version = "1.0.0"
-    
+
     # Explicitly define which methods should be registered as tools
-    _tool_methods = ["create_entities", "create_relations", "add_observations", 
+    _tool_methods = ["create_entities", "create_relations", "add_observations",
                      "delete_entities", "delete_observations", "delete_relations",
                      "read_graph", "search_nodes", "open_nodes"]
-                     
+
     async def _execute_and_return_json(self, tx, query, params):
         """
         Execute a query and return results as JSON string within the same transaction.
@@ -44,7 +44,7 @@ class KnowledgeGraphIncarnation(BaseIncarnation):
         """
         result = await tx.run(query, params)
         records = await result.values()
-        
+
         # Process records into a format that can be JSON serialized
         processed_data = []
         for record in records:
@@ -54,38 +54,38 @@ class KnowledgeGraphIncarnation(BaseIncarnation):
                 # We'll use field names from the query or generic column names
                 field_names = ['col0', 'col1', 'col2', 'col3', 'col4', 'col5']  # Generic defaults
                 row_data = {}
-                
+
                 for i, value in enumerate(record):
                     if i < len(field_names):
                         row_data[field_names[i]] = value
                     else:
                         row_data[f'col{i}'] = value
-                        
+
                 processed_data.append(row_data)
             else:
                 # Record is already a dict or another format
                 processed_data.append(record)
-                
+
         return json.dumps(processed_data, default=str)
-        
+
     async def _safe_read_query(self, session, query, params=None):
         """Execute a read query safely, handling all errors internally.
-        
+
         This approach completely prevents transaction scope errors from reaching the user.
         """
         if params is None:
             params = {}
-            
+
         try:
             # Define a function that captures and processes everything within the transaction
             async def execute_and_process_in_tx(tx):
                 try:
                     # Run the query
                     result = await tx.run(query, params)
-                    
+
                     # Process the records inside the transaction
                     records = await result.values()
-                    
+
                     # Convert records to a list of dictionaries for JSON serialization
                     processed_data = []
                     for record in records:
@@ -94,40 +94,40 @@ class KnowledgeGraphIncarnation(BaseIncarnation):
                             # For simple list results with defined column names
                             field_names = ['col0', 'col1', 'col2', 'col3', 'col4', 'col5']
                             row_data = {}
-                            
+
                             for i, value in enumerate(record):
                                 if i < len(field_names):
                                     row_data[field_names[i]] = value
                                 else:
                                     row_data[f'col{i}'] = value
-                                    
+
                             processed_data.append(row_data)
                         else:
                             # Record is already a dict or another format
                             processed_data.append(record)
-                    
+
                     # Convert to JSON string inside the transaction
                     return json.dumps(processed_data, default=str)
                 except Exception as inner_e:
                     # Catch any errors inside the transaction
                     logger.error(f"Error inside transaction: {inner_e}")
                     return json.dumps([])
-            
+
             # Execute the query within transaction boundaries
             result_json = await session.execute_read(execute_and_process_in_tx)
-            
+
             # Parse the JSON result (which should always be valid)
             try:
                 return json.loads(result_json)
             except json.JSONDecodeError as json_error:
                 logger.error(f"Error parsing JSON result: {json_error}")
                 return []
-                
+
         except Exception as e:
             # Log error but suppress it from the user
             logger.error(f"Error executing read query: {e}")
             return []
-        
+
     async def get_guidance_hub(self):
         """Get the guidance hub for this incarnation."""
         hub_description = """
@@ -166,34 +166,34 @@ Each entity and relationship in the system has full tracking capabilities, allow
 """
         # Directly return the guidance hub content to avoid transaction scope issues
         return [types.TextContent(type="text", text=hub_description)]
-    
+
     async def initialize_schema(self):
         """Initialize the Neo4j schema for Knowledge Graph."""
         # Define constraints and indexes for the schema
         schema_queries = [
             # Entity constraints
             "CREATE CONSTRAINT knowledge_entity_name IF NOT EXISTS FOR (e:Entity) REQUIRE e.name IS UNIQUE",
-            
+
             # Indexes for efficient querying
             "CREATE INDEX knowledge_entity_type IF NOT EXISTS FOR (e:Entity) ON (e.entityType)",
             "CREATE FULLTEXT INDEX entity_observation_fulltext IF NOT EXISTS FOR (o:Observation) ON EACH [o.content]",
             "CREATE FULLTEXT INDEX entity_name_fulltext IF NOT EXISTS FOR (e:Entity) ON EACH [e.name]"
         ]
-        
+
         try:
             async with self.driver.session(database=self.database) as session:
                 # Execute each constraint/index query individually
                 for query in schema_queries:
                     await session.execute_write(lambda tx: tx.run(query))
-                    
+
                 # Create base guidance hub for this incarnation if it doesn't exist
                 await self.ensure_guidance_hub_exists()
-                
+
             logger.info("Knowledge Graph incarnation schema initialized")
         except Exception as e:
             logger.error(f"Error initializing knowledge_graph schema: {e}")
             raise
-    
+
     async def ensure_guidance_hub_exists(self):
         """Create the guidance hub for this incarnation if it doesn't exist."""
         query = """
@@ -201,7 +201,7 @@ Each entity and relationship in the system has full tracking capabilities, allow
         ON CREATE SET hub.description = $description
         RETURN hub
         """
-        
+
         description = """
 # Knowledge Graph
 
@@ -234,24 +234,24 @@ This system helps you manage and analyze knowledge graphs with the following cap
 
 Each entity in the system has proper Neo4j labels for efficient querying and visualization.
         """
-        
+
         params = {"description": description}
-        
+
         async with self.driver.session(database=self.database) as session:
             await session.execute_write(lambda tx: tx.run(query, params))
-    
+
     async def get_guidance_hub(self):
         """Get the guidance hub for this incarnation."""
         query = """
         MATCH (hub:AiGuidanceHub {id: 'knowledge_graph_hub'})
         RETURN hub.description AS description
         """
-        
+
         try:
             async with self.driver.session(database=self.database) as session:
                 results_json = await session.execute_read(self._read_query, query, {})
                 results = json.loads(results_json)
-                
+
                 if results and len(results) > 0:
                     return [types.TextContent(type="text", text=results[0]["description"])]
                 else:
@@ -262,13 +262,13 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
         except Exception as e:
             logger.error(f"Error retrieving knowledge_graph guidance hub: {e}")
             return [types.TextContent(type="text", text=f"Error: {e}")]
-    
+
     # Knowledge Graph API functions
-    
+
     # Helper methods to avoid transaction scope errors
     async def _safe_execute_write(self, session, query, params):
         """Execute a write query safely and handle all errors internally.
-        
+
         This approach completely prevents transaction scope errors from reaching the user.
         """
         try:
@@ -292,7 +292,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                     # but return empty stats
                     logger.warning(f"Query executed but couldn't get stats: {inner_e}")
                     return True, {}
-            
+
             # Execute the transaction function
             success, stats = await session.execute_write(execute_in_tx)
             return success
@@ -300,7 +300,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             # Log but suppress errors
             logger.error(f"Error executing write query: {e}")
             return False
-    
+
     async def create_entities(
         self,
         entities: List[Dict[str, Any]] = Field(..., description="An array of entity objects to create")
@@ -309,7 +309,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
         try:
             if not entities:
                 return [types.TextContent(type="text", text="Error: No entities provided")]
-            
+
             # Validate entities
             for entity in entities:
                 if 'name' not in entity:
@@ -318,7 +318,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                     return [types.TextContent(type="text", text="Error: All entities must have an 'entityType' property")]
                 if 'observations' not in entity or not isinstance(entity['observations'], list):
                     return [types.TextContent(type="text", text="Error: All entities must have an 'observations' array")]
-            
+
             # Build the Cypher query for creating entities with proper labels
             query = """
             UNWIND $entities AS entity
@@ -330,26 +330,26 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             CREATE (e)-[:HAS_OBSERVATION]->(o)
             RETURN count(e) AS entityCount
             """
-            
+
             # First get a count of the entities to be created for the response message
             entity_count = len(entities)
             observation_count = sum(len(entity.get('observations', [])) for entity in entities)
-            
+
             # Execute the query using our safe execution method
             async with self.driver.session(database=self.database) as session:
                 success = await self._safe_execute_write(session, query, {"entities": entities})
-                
+
                 if success:
                     # Give feedback based on the intended operation, not the actual results
                     response = f"Successfully created {entity_count} entities with {observation_count} observations."
                     return [types.TextContent(type="text", text=response)]
                 else:
                     return [types.TextContent(type="text", text="Error creating entities. Please check server logs.")]
-                
+
         except Exception as e:
             logger.error(f"Error in create_entities: {e}")
             return [types.TextContent(type="text", text=f"Error: {e}")]
-    
+
     async def create_relations(
         self,
         relations: List[Dict[str, str]] = Field(..., description="An array of relation objects to create")
@@ -358,7 +358,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
         try:
             if not relations:
                 return [types.TextContent(type="text", text="Error: No relations provided")]
-            
+
             # Validate relations
             for relation in relations:
                 if 'from' not in relation:
@@ -367,7 +367,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                     return [types.TextContent(type="text", text="Error: All relations must have a 'to' property")]
                 if 'relationType' not in relation:
                     return [types.TextContent(type="text", text="Error: All relations must have a 'relationType' property")]
-            
+
             # Use simplified approach without dynamic relationship type - most compatible
             simple_query = """
             UNWIND $relations AS rel
@@ -377,24 +377,24 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             ON CREATE SET r.type = rel.relationType, r.timestamp = datetime()
             RETURN count(r) AS relationCount
             """
-            
+
             # Get relation count for the response message
             relation_count = len(relations)
-            
+
             # Execute the query using our safe execution method
             async with self.driver.session(database=self.database) as session:
                 success = await self._safe_execute_write(session, query=simple_query, params={"relations": relations})
-                
+
                 if success:
                     response = f"Successfully created {relation_count} relations between entities."
                     return [types.TextContent(type="text", text=response)]
                 else:
                     return [types.TextContent(type="text", text="Error creating relations. Please check server logs.")]
-                
+
         except Exception as e:
             logger.error(f"Error in create_relations: {e}")
             return [types.TextContent(type="text", text=f"Error: {e}")]
-    
+
     async def add_observations(
         self,
         observations: List[Dict[str, Any]] = Field(..., description="An array of observations to add to existing entities")
@@ -403,7 +403,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
         try:
             if not observations:
                 return [types.TextContent(type="text", text="Error: No observations provided")]
-            
+
             # Validate observations
             for observation in observations:
                 if 'entityName' not in observation:
@@ -412,7 +412,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                     return [types.TextContent(type="text", text="Error: All observations must have a 'contents' array")]
                 if not observation['contents']:
                     return [types.TextContent(type="text", text="Error: All observations must have at least one content item")]
-            
+
             # Build the Cypher query
             query = """
             UNWIND $observations AS obs
@@ -423,25 +423,25 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             CREATE (e)-[:HAS_OBSERVATION]->(o)
             RETURN count(o) AS totalObservations
             """
-            
+
             # Get observation and entity counts for the response message
             entity_count = len(observations)
             observation_count = sum(len(obs.get('contents', [])) for obs in observations)
-            
+
             # Execute the query using our safe execution method
             async with self.driver.session(database=self.database) as session:
                 success = await self._safe_execute_write(session, query, {"observations": observations})
-                
+
                 if success:
                     response = f"Successfully added {observation_count} observations to {entity_count} entities."
                     return [types.TextContent(type="text", text=response)]
                 else:
                     return [types.TextContent(type="text", text="Error adding observations. Please check server logs.")]
-                
+
         except Exception as e:
             logger.error(f"Error in add_observations: {e}")
             return [types.TextContent(type="text", text=f"Error: {e}")]
-    
+
     async def delete_entities(
         self,
         entityNames: List[str] = Field(..., description="An array of entity names to delete")
@@ -450,7 +450,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
         try:
             if not entityNames:
                 return [types.TextContent(type="text", text="Error: No entity names provided")]
-            
+
             # Build the Cypher query
             query = """
             UNWIND $entityNames AS name
@@ -459,24 +459,24 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             DETACH DELETE e, o
             RETURN count(DISTINCT e) as deletedEntities
             """
-            
+
             async with self.driver.session(database=self.database) as session:
                 result = await session.execute_write(
                     lambda tx: tx.run(query, {"entityNames": entityNames})
                 )
                 records = await result.values()
-                
+
                 if records and len(records) > 0:
                     deleted_count = records[0][0]
                     response = f"Successfully deleted {deleted_count} entities with their observations and relations."
                     return [types.TextContent(type="text", text=response)]
                 else:
                     return [types.TextContent(type="text", text="No entities were deleted.")]
-                
+
         except Exception as e:
             logger.error(f"Error in delete_entities: {e}")
             return [types.TextContent(type="text", text=f"Error: {e}")]
-    
+
     async def delete_observations(
         self,
         deletions: List[Dict[str, Any]] = Field(..., description="An array of specifications for observations to delete")
@@ -485,7 +485,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
         try:
             if not deletions:
                 return [types.TextContent(type="text", text="Error: No deletion specifications provided")]
-            
+
             # Validate deletions
             for deletion in deletions:
                 if 'entityName' not in deletion:
@@ -494,7 +494,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                     return [types.TextContent(type="text", text="Error: All deletion specs must have an 'observations' array")]
                 if not deletion['observations']:
                     return [types.TextContent(type="text", text="Error: All deletion specs must specify at least one observation")]
-            
+
             # Build the Cypher query
             query = """
             UNWIND $deletions AS deletion
@@ -505,25 +505,25 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             DETACH DELETE o
             RETURN count(o) AS totalDeleted
             """
-            
+
             # Get counts for the response message
             entity_count = len(deletions)
             observation_count = sum(len(deletion.get('observations', [])) for deletion in deletions)
-            
+
             # Execute the query using our safe execution method
             async with self.driver.session(database=self.database) as session:
                 success = await self._safe_execute_write(session, query, {"deletions": deletions})
-                
+
                 if success:
                     response = f"Successfully deleted {observation_count} observations from {entity_count} entities."
                     return [types.TextContent(type="text", text=response)]
                 else:
                     return [types.TextContent(type="text", text="Error deleting observations. Please check server logs.")]
-                
+
         except Exception as e:
             logger.error(f"Error in delete_observations: {e}")
             return [types.TextContent(type="text", text=f"Error: {e}")]
-    
+
     async def delete_relations(
         self,
         relations: List[Dict[str, str]] = Field(..., description="An array of relations to delete")
@@ -532,7 +532,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
         try:
             if not relations:
                 return [types.TextContent(type="text", text="Error: No relations provided for deletion")]
-            
+
             # Validate relations
             for relation in relations:
                 if 'from' not in relation:
@@ -541,7 +541,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                     return [types.TextContent(type="text", text="Error: All relations must have a 'to' property")]
                 if 'relationType' not in relation:
                     return [types.TextContent(type="text", text="Error: All relations must have a 'relationType' property")]
-            
+
             # For non-APOC environments, handle relationship deletion
             # We'll use a generic relation with a type property in practice
             query = """
@@ -550,24 +550,24 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             DELETE r
             RETURN count(r) as deletedRelations
             """
-            
+
             # Get relation count for the response message
             relation_count = len(relations)
-            
+
             # Execute the query using our safe execution method
             async with self.driver.session(database=self.database) as session:
                 success = await self._safe_execute_write(session, query, {"relations": relations})
-                
+
                 if success:
                     response = f"Successfully deleted {relation_count} relations."
                     return [types.TextContent(type="text", text=response)]
                 else:
                     return [types.TextContent(type="text", text="Error deleting relations. Please check server logs.")]
-                
+
         except Exception as e:
             logger.error(f"Error in delete_relations: {e}")
             return [types.TextContent(type="text", text=f"Error: {e}")]
-    
+
     async def read_graph(self) -> List[types.TextContent]:
         """Read the entire knowledge graph"""
         try:
@@ -578,66 +578,66 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
 {observations_section}
 {relations_section}
 """
-            
+
             # Query to get all entities
             entity_query = """
             MATCH (e:Entity)
             WITH e ORDER BY e.name
             RETURN e.name as name, e.entityType as type
             """
-            
+
             async with self.driver.session(database=self.database) as session:
                 # Get all entities using the safe read method
                 entities_data = await self._safe_read_query(session, entity_query)
-                
+
                 if not entities_data:
                     return [types.TextContent(type="text", text="The knowledge graph is empty.")]
-                
+
                 # Process each entity to build the complete graph view
                 formatted_entities = []
-                
+
                 for entity in entities_data:
                     entity_name = entity.get("name", "")
                     entity_type = entity.get("type", "Unknown")
-                    
+
                     # Get observations for this entity
                     obs_query = """
                     MATCH (e:Entity {name: $name})-[:HAS_OBSERVATION]->(o:Observation)
                     RETURN o.content as content
                     """
-                    
+
                     obs_data = await self._safe_read_query(session, obs_query, {"name": entity_name})
-                    
+
                     observations = []
                     if obs_data:
                         observations = [o.get("content", "") for o in obs_data if "content" in o]
-                    
+
                     # Get relations for this entity
                     rel_query = """
                     MATCH (e:Entity {name: $name})-[r:RELATES_TO]->(related:Entity)
                     RETURN r.type as type, related.name as target
                     """
-                    
+
                     rel_data = await self._safe_read_query(session, rel_query, {"name": entity_name})
-                    
+
                     relations = []
                     if rel_data:
-                        relations = [{"type": r.get("type", ""), "target": r.get("target", "")} 
+                        relations = [{"type": r.get("type", ""), "target": r.get("target", "")}
                                     for r in rel_data if "type" in r and "target" in r]
-                    
+
                     # Format sections for display
                     observations_section = ""
                     if observations:
                         observations_section = "### Observations:\n"
                         for obs in observations:
                             observations_section += f"- {obs}\n"
-                    
+
                     relations_section = ""
                     if relations:
                         relations_section = "### Relations:\n"
                         for rel in relations:
                             relations_section += f"- {rel['type']} -> {rel['target']}\n"
-                    
+
                     # Format the complete entity section
                     entity_section = entity_section_template.format(
                         name=entity_name,
@@ -645,21 +645,21 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                         observations_section=observations_section,
                         relations_section=relations_section
                     )
-                    
+
                     formatted_entities.append(entity_section)
-                
+
                 # Combine all entity sections
                 all_entities = "\n".join(formatted_entities)
-                
+
                 # Create the final response
                 response = f"# Knowledge Graph\n\nFound {len(entities_data)} entities in the knowledge graph.\n\n{all_entities}"
-                
+
                 return [types.TextContent(type="text", text=response)]
-                
+
         except Exception as e:
             logger.error(f"Error in read_graph: {e}")
             return [types.TextContent(type="text", text=f"Error reading knowledge graph: {e}")]
-    
+
     async def search_nodes(
         self,
         query: str = Field(..., description="The search query to match against entity names, types, and observation content")
@@ -668,7 +668,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
         try:
             if not query or len(query.strip()) < 2:
                 return [types.TextContent(type="text", text="Error: Search query must be at least 2 characters")]
-            
+
             # Simplified query that works without fulltext search
             simple_query = """
             MATCH (e:Entity)
@@ -677,45 +677,45 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             OPTIONAL MATCH (e)-[:HAS_OBSERVATION]->(o:Observation)
             WITH e, collect(o.content) AS observations
             RETURN e.name AS entityName, e.entityType AS entityType, observations
-            
+
             UNION
-            
+
             MATCH (e:Entity)-[:HAS_OBSERVATION]->(o:Observation)
             WHERE o.content CONTAINS $query
             WITH e, collect(o.content) AS observations
             RETURN e.name AS entityName, e.entityType AS entityType, observations
-            
+
             LIMIT 10
             """
-            
+
             async with self.driver.session(database=self.database) as session:
                 # Use the safe read method
                 result_data = await self._safe_read_query(session, simple_query, {"query": query})
-                
+
                 # Process and format the results
                 if not result_data:
                     return [types.TextContent(type="text", text=f"No entities found matching '{query}'.")]
-                
+
                 # Remove duplicates (same entity may appear multiple times if it matched multiple criteria)
                 unique_entities = {}
                 for entity in result_data:
                     entity_name = entity.get("entityName", "")
                     if entity_name and entity_name not in unique_entities:
                         unique_entities[entity_name] = entity
-                
+
                 entities = list(unique_entities.values())
-                
+
                 # Build the formatted response
                 response = f"# Search Results for '{query}'\n\n"
                 response += f"Found {len(entities)} matching entities.\n\n"
-                
+
                 for entity in entities:
                     entity_name = entity.get("entityName", "")
                     entity_type = entity.get("entityType", "")
                     observations = entity.get("observations", [])
-                    
+
                     response += f"## {entity_name} ({entity_type})\n\n"
-                    
+
                     if observations:
                         response += "### Observations:\n"
                         for obs in observations:
@@ -727,16 +727,16 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                                 end_idx = start_idx + len(query)
                                 match_text = obs[start_idx:end_idx]
                                 highlighted_obs = obs.replace(match_text, f"**{match_text}**")
-                                    
+
                             response += f"- {highlighted_obs}\n"
                         response += "\n"
-                
+
                 return [types.TextContent(type="text", text=response)]
-                
+
         except Exception as e:
             logger.error(f"Error in search_nodes: {e}")
             return [types.TextContent(type="text", text=f"Error searching knowledge graph: {e}")]
-    
+
     async def open_nodes(
         self,
         names: List[str] = Field(..., description="An array of entity names to retrieve")
@@ -745,63 +745,63 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
         try:
             if not names:
                 return [types.TextContent(type="text", text="Error: No entity names provided")]
-            
+
             # Build a more efficient unified query that works for multiple entities
             entity_query = """
             UNWIND $names AS name
             MATCH (e:Entity {name: name})
             RETURN e.name AS name, e.entityType AS type
             """
-            
+
             async with self.driver.session(database=self.database) as session:
                 # Get basic entity data
                 entities_data = await self._safe_read_query(session, entity_query, {"names": names})
-                
+
                 if not entities_data:
                     return [types.TextContent(type="text", text=f"No entities found with the specified names.")]
-                
+
                 # Process each entity
                 entity_details = []
-                
+
                 for entity in entities_data:
                     entity_name = entity.get("name", "")
                     entity_type = entity.get("type", "Unknown")
-                    
+
                     # Get observations in a separate query
                     obs_query = """
                     MATCH (e:Entity {name: $name})-[:HAS_OBSERVATION]->(o:Observation)
                     RETURN o.content as content
                     """
-                    
+
                     observations_data = await self._safe_read_query(session, obs_query, {"name": entity_name})
                     observations = []
                     if observations_data:
                         observations = [o.get("content", "") for o in observations_data if "content" in o]
-                    
+
                     # Get outgoing relations
                     out_rel_query = """
                     MATCH (e:Entity {name: $name})-[r:RELATES_TO]->(related:Entity)
                     RETURN r.type as type, related.name as target
                     """
-                    
+
                     out_rel_data = await self._safe_read_query(session, out_rel_query, {"name": entity_name})
                     out_relations = []
                     if out_rel_data:
-                        out_relations = [{"type": r.get("type", ""), "target": r.get("target", "")} 
+                        out_relations = [{"type": r.get("type", ""), "target": r.get("target", "")}
                                       for r in out_rel_data if "type" in r and "target" in r]
-                    
+
                     # Get incoming relations
                     in_rel_query = """
                     MATCH (other:Entity)-[r:RELATES_TO]->(e:Entity {name: $name})
                     RETURN r.type as type, other.name as source
                     """
-                    
+
                     in_rel_data = await self._safe_read_query(session, in_rel_query, {"name": entity_name})
                     in_relations = []
                     if in_rel_data:
-                        in_relations = [{"type": r.get("type", ""), "source": r.get("source", "")} 
+                        in_relations = [{"type": r.get("type", ""), "source": r.get("source", "")}
                                      for r in in_rel_data if "type" in r and "source" in r]
-                    
+
                     # Add processed entity to the results
                     entity_details.append({
                         "name": entity_name,
@@ -810,33 +810,33 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                         "outRelations": out_relations,
                         "inRelations": in_relations
                     })
-                
+
                 # Format the response
                 response = "# Entity Details\n\n"
-                
+
                 for entity in entity_details:
                     response += f"## {entity['name']} ({entity['type']})\n\n"
-                    
+
                     if entity['observations']:
                         response += "### Observations:\n"
                         for obs in entity['observations']:
                             response += f"- {obs}\n"
                         response += "\n"
-                    
+
                     if entity['outRelations']:
                         response += "### Outgoing Relations:\n"
                         for rel in entity['outRelations']:
                             response += f"- {rel['type']} -> {rel['target']}\n"
                         response += "\n"
-                    
+
                     if entity['inRelations']:
                         response += "### Incoming Relations:\n"
                         for rel in entity['inRelations']:
                             response += f"- {rel['source']} -> {rel['type']} -> {entity['name']}\n"
                         response += "\n"
-                
+
                 return [types.TextContent(type="text", text=response)]
-                
+
         except Exception as e:
             logger.error(f"Error in open_nodes: {e}")
             return [types.TextContent(type="text", text=f"Error retrieving entity details: {e}")]

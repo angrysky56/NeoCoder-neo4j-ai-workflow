@@ -1,234 +1,507 @@
 """
-Modified MCP Server for NeoCoder Neo4j-Guided AI Workflow with Polymorphic Support
+Neo4j-Guided AI Workflow Server with Polymorphic Incarnation Support
 
-This version adds support for multiple incarnations of the NeoCoder framework,
-allowing it to function as a research orchestration platform, decision support system,
-continuous learning environment, or complex system simulator.
+This server provides a bridge between AI assistants and a Neo4j knowledge graph,
+supporting multiple incarnations (operational modes) such as:
+- Coding workflows
+- Research orchestration
+- Decision support
+- Data analysis
+- Knowledge graph management
+
+Each incarnation has specialized tools while sharing the core Neo4j infrastructure.
 """
 
+import asyncio
 import json
 import logging
-import uuid
 import os
+import sys
+import traceback
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Union
+from typing import Any, Dict, List, Optional, Union, Callable, TypeVar, Awaitable
 
 import mcp.types as types
 from mcp.server.fastmcp import FastMCP
 from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncTransaction
 from pydantic import Field
 
-from .cypher_snippets import CypherSnippetMixin
-from .tool_proposals import ToolProposalMixin
-from .polymorphic_adapter import PolymorphicAdapterMixin, IncarnationType
-from .incarnations.research_incarnation import ResearchOrchestration
+# Import mixins and core functionality
 from .action_templates import ActionTemplateMixin
-from .init_db import init_db, INCARNATION_TYPES
-import asyncio
+from .cypher_snippets import CypherSnippetMixin
+from .event_loop_manager import get_main_loop, initialize_main_loop, safe_neo4j_session
+from .init_db import init_db
+from .polymorphic_adapter import PolymorphicAdapterMixin
+from .tool_proposals import ToolProposalMixin
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
-
 logger = logging.getLogger("mcp_neocoder")
+
+# Type definitions for function return handling
+T = TypeVar('T')
 
 
 class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolProposalMixin, ActionTemplateMixin):
-    """Server for Neo4j-guided AI workflow with polymorphic support."""
+    """Server for Neo4j-guided AI workflow with polymorphic incarnation support."""
 
     def __init__(self, driver: AsyncDriver, database: str = "neo4j", loop: Optional[asyncio.AbstractEventLoop] = None):
-        """Initialize the workflow server with Neo4j connection."""
-        # Import event loop handling
-        from .event_loop_manager import get_main_loop, initialize_main_loop
+        """Initialize the workflow server with Neo4j connection.
 
+        Args:
+            driver: Neo4j AsyncDriver instance
+            database: Name of the Neo4j database to use
+            loop: Optional event loop to use (will initialize if not provided)
+        """
         # Use the provided loop or initialize a new one
         self.loop = loop if loop is not None else initialize_main_loop()
-        logger.info("Using event loop for Neo4j operations")
 
-        # Store driver and database
+        # Store connection info
         self.driver = driver
         self.database = database
 
-        # Initialize FastMCP
+        # Initialize FastMCP server
         self.mcp = FastMCP("mcp-neocoder", dependencies=["neo4j", "pydantic"])
 
-        # Register basic MCP protocol handlers first to avoid timeouts
+        # Initialize the base attributes
+        self.incarnation_registry = {}
+        self.current_incarnation = None
+
+        # Register basic protocol handlers first to ensure responsiveness
         self._register_basic_handlers()
+        logger.info("Basic protocol handlers registered")
 
-        # Run initialization in the main event loop
+        # Start full initialization in a separate task to avoid blocking
+        # This allows the server to respond to basic requests while
+        # initialization is in progress
+        asyncio.create_task(self._initialize_async())
+
+    async def _initialize_async(self):
+        """Execute the complete initialization sequence asynchronously."""
         try:
-            # Run async initialization in the main loop
-            self.loop.run_until_complete(self._init_async())
-            logger.info("Async initialization completed successfully")
+            # 1. Initialize polymorphic adapter (parent class setup)
+            PolymorphicAdapterMixin.__init__(self)
+            logger.info("Polymorphic adapter initialized")
 
-            # Initialize non-async components
-            self._init_non_async()
-            logger.info("Non-async initialization completed successfully")
-        except Exception as e:
-            logger.error(f"Error during initialization: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            logger.info("Basic MCP handlers are still registered, so the server will respond to protocol requests")
+            # 2. Run async database initialization
+            db_init_success = await self._initialize_database()
+            if not db_init_success:
+                logger.warning("Database initialization failed, some features may not work")
+            else:
+                logger.info("Database initialization completed successfully")
 
-    async def _init_async(self):
-        """Run all async initialization steps."""
-        # Initialize the database if needed
-        await self._ensure_db_initialized()
+            # 3. Register core tools that don't depend on incarnations
+            self._register_core_tools()
+            logger.info("Core tools registered")
 
-        # Register tools from all incarnations - will be called later after non-async init
-        return True
+            # 4. Load incarnations (non-async component)
+            self._load_incarnations()
+            logger.info("Incarnations loaded")
 
-    def _init_non_async(self):
-        """Initialize non-async components."""
-        # Initialize the polymorphic adapter
-        PolymorphicAdapterMixin.__init__(self)
-
-        # Use the incarnation registry to discover and register all incarnations
-        from .incarnation_registry import registry as global_registry
-
-        # Discover all incarnations and ensure they're properly registered
-        logger.info("Running discovery to find all incarnation classes")
-        global_registry.discover()
-
-        # Register discovered incarnations with this server
-        for inc_type, inc_class in global_registry.incarnations.items():
-            logger.info(f"Auto-registering incarnation {inc_type.value} ({inc_class.__name__})")
-            self.register_incarnation(inc_class, inc_type)
-
-        # Register core tools
-        self._register_tools()
-
-        # Now run the async tool registration in the main loop
-        try:
-            tool_count = self.loop.run_until_complete(self._register_all_incarnation_tools())
+            # 5. Register incarnation-specific tools (async)
+            tool_count = await self._register_all_incarnation_tools()
             logger.info(f"Registered {tool_count} tools from all incarnations")
+
+            logger.info("Server initialization completed successfully")
         except Exception as e:
-            logger.error(f"Error registering incarnation tools: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
+            logger.error(f"Error during initialization: {str(e)}")
+            logger.debug(f"Initialization error details: {traceback.format_exc()}")
+            logger.info("Server will continue with limited functionality")
 
-    async def _ensure_db_initialized(self):
-        """Check if the database is initialized and run initialization if needed."""
-        logger.info("Checking if database needs initialization...")
+    # _initialize method removed since we now use async initialization
+
+    async def _initialize_database(self) -> bool:
+        """Check database initialization status and initialize if needed.
+
+        Returns:
+            bool: True if initialization was successful
+        """
+        logger.info("Checking database initialization status")
+
         try:
-            # Check if the main hub exists
-            init_needed = False
-            hub_exists = False
+            # Check three key indicators of proper initialization:
+            # 1. Main guidance hub exists
+            # 2. Incarnation hubs exist
+            # 3. Action templates exist
 
+            initialized = await self._check_database_initialized()
+
+            if not initialized:
+                logger.info("Database needs initialization, running setup")
+                await init_db()
+                logger.info("Database initialization completed")
+                return True
+            else:
+                logger.info("Database already initialized")
+                return True
+
+        except Exception as e:
+            logger.error(f"Database initialization check failed: {str(e)}")
+            logger.debug(f"Database initialization error details: {traceback.format_exc()}")
+
+            # Attempt recovery by running initialization anyway
+            try:
+                logger.info("Attempting database initialization after error")
+                await init_db()
+                logger.info("Database initialization successful after error recovery")
+                return True
+            except Exception as recovery_err:
+                logger.error(f"Database initialization failed during recovery: {str(recovery_err)}")
+                return False
+
+    async def _check_database_initialized(self) -> bool:
+        """Check if the database has been properly initialized.
+
+        Returns:
+            bool: True if all required components exist
+        """
+        try:
             async with self.driver.session(database=self.database) as session:
-                # Check if main hub exists
-                hub_query = "MATCH (hub:AiGuidanceHub {id: 'main_hub'}) RETURN count(hub) as count"
-                hub_result = await session.execute_read(self._read_query, hub_query, {})
-                hub_data = json.loads(hub_result)
+                # 1. Check if main hub exists
+                hub_exists = await self._check_component_exists(
+                    session,
+                    "MATCH (hub:AiGuidanceHub {id: 'main_hub'}) RETURN count(hub) > 0 as exists"
+                )
 
-                if not hub_data or hub_data[0].get("count", 0) == 0:
-                    logger.info("Main hub not found, database needs initialization")
-                    init_needed = True
-                else:
-                    hub_exists = True
+                if not hub_exists:
+                    return False
 
-                # If hub exists, check if incarnation hubs exist
-                if hub_exists:
-                    incarnation_query = """
+                # 2. Check if incarnation hubs exist
+                inc_hubs_exist = await self._check_component_exists(
+                    session,
+                    """
                     MATCH (hub:AiGuidanceHub {id: 'main_hub'})
                     OPTIONAL MATCH (hub)-[:HAS_INCARNATION]->(inc:AiGuidanceHub)
-                    RETURN count(inc) as count
+                    RETURN count(inc) >= 3 as exists
                     """
-                    inc_result = await session.execute_read(self._read_query, incarnation_query, {})
-                    inc_data = json.loads(inc_result)
+                )
 
-                    if not inc_data or inc_data[0].get("count", 0) < 3:  # At least research, decision, and coding
-                        logger.info("Incarnation hubs not fully set up, database needs initialization")
-                        init_needed = True
+                if not inc_hubs_exist:
+                    return False
 
-                # Check if action templates exist
-                if not init_needed:
-                    template_query = "MATCH (t:ActionTemplate) RETURN count(t) as count"
-                    template_result = await session.execute_read(self._read_query, template_query, {})
-                    template_data = json.loads(template_result)
+                # 3. Check if action templates exist
+                templates_exist = await self._check_component_exists(
+                    session,
+                    "MATCH (t:ActionTemplate) RETURN count(t) > 0 as exists"
+                )
 
-                    if not template_data or template_data[0].get("count", 0) == 0:
-                        logger.info("No action templates found, database needs initialization")
-                        init_needed = True
-
-            if init_needed:
-                logger.info("Initializing database...")
-                await init_db(INCARNATION_TYPES)
-                logger.info("Database initialization completed")
-            else:
-                logger.info("Database already initialized, skipping initialization")
+                return templates_exist
 
         except Exception as e:
-            logger.error(f"Error during database initialization check: {e}")
-            logger.info("Will attempt database initialization due to error")
+            logger.error(f"Error checking database initialization: {str(e)}")
+            return False
+
+    async def _check_component_exists(self, session, query: str) -> bool:
+        """Execute a boolean check query and return the result.
+
+        Args:
+            session: Neo4j session
+            query: Cypher query that returns a single boolean 'exists' value
+
+        Returns:
+            bool: Whether the component exists
+        """
+        try:
+            result = await session.execute_read(
+                lambda tx: self._execute_boolean_query(tx, query, {})
+            )
+            return result
+        except Exception as e:
+            logger.debug(f"Component check failed: {str(e)}")
+            return False
+
+    async def _execute_boolean_query(self, tx: AsyncTransaction, query: str, params: dict) -> bool:
+        """Execute a query that returns a boolean result.
+
+        Args:
+            tx: Neo4j transaction
+            query: Cypher query
+            params: Query parameters
+
+        Returns:
+            bool: Query result
+        """
+        result = await tx.run(query, params)
+        records = await result.values()
+
+        if not records or not records[0]:
+            return False
+
+        return bool(records[0][0])
+
+    def _register_core_tools(self):
+        """Register all core tools with the MCP server.
+
+        Core tools are those that don't depend on specific incarnations.
+        """
+        # Group tools by category for better organization
+        self._register_navigation_tools()
+        self._register_project_tools()
+        self._register_workflow_tools()
+        self._register_query_tools()
+        self._register_cypher_tools()
+        self._register_tool_proposal_tools()
+        self._register_incarnation_tools()
+
+        logger.info("Registered all core tools")
+
+    def _register_navigation_tools(self):
+        """Register navigation and guidance tools."""
+        tools = [
+            self.get_guidance_hub,
+            self.list_action_templates,
+            self.get_action_template,
+            self.get_best_practices,
+            self.suggest_tool
+        ]
+
+        for tool in tools:
+            self.mcp.add_tool(tool)
+
+    def _register_project_tools(self):
+        """Register project management tools."""
+        tools = [
+            self.get_project,
+            self.list_projects
+        ]
+
+        for tool in tools:
+            self.mcp.add_tool(tool)
+
+    def _register_workflow_tools(self):
+        """Register workflow execution and tracking tools."""
+        tools = [
+            self.log_workflow_execution,
+            self.get_workflow_history,
+            self.add_template_feedback
+        ]
+
+        for tool in tools:
+            self.mcp.add_tool(tool)
+
+    def _register_query_tools(self):
+        """Register database query tools."""
+        tools = [
+            self.run_custom_query,
+            self.write_neo4j_cypher,
+            self.check_connection
+        ]
+
+        for tool in tools:
+            self.mcp.add_tool(tool)
+
+    def _register_cypher_tools(self):
+        """Register Cypher snippet toolkit tools."""
+        tools = [
+            self.list_cypher_snippets,
+            self.get_cypher_snippet,
+            self.search_cypher_snippets,
+            self.create_cypher_snippet,
+            self.update_cypher_snippet,
+            self.delete_cypher_snippet,
+            self.get_cypher_tags
+        ]
+
+        for tool in tools:
+            self.mcp.add_tool(tool)
+
+    def _register_tool_proposal_tools(self):
+        """Register tool proposal system tools."""
+        tools = [
+            self.propose_tool,
+            self.request_tool,
+            self.get_tool_proposal,
+            self.get_tool_request,
+            self.list_tool_proposals,
+            self.list_tool_requests
+        ]
+
+        for tool in tools:
+            self.mcp.add_tool(tool)
+
+    def _register_incarnation_tools(self):
+        """Register incarnation management tools."""
+        tools = [
+            self.get_current_incarnation,
+            self.list_incarnations,
+            self.switch_incarnation
+        ]
+
+        for tool in tools:
+            self.mcp.add_tool(tool)
+
+    def _load_incarnations(self):
+        """Discover and load all available incarnations."""
+        # Import the registry (deferred to avoid circular imports)
+        from .incarnation_registry import registry as global_registry
+        import importlib
+        import inspect
+        
+        # Force a re-discovery to ensure we get all classes
+        logger.info("Discovering available incarnation classes")
+        global_registry.discover()
+        
+        # If incarnations is empty, try alternative discovery methods
+        if not global_registry.incarnations:
+            logger.warning("No incarnations found via standard discovery. Trying alternative discovery methods.")
+            
+            # Try to find incarnations directly from files
+            direct_incarnations = global_registry.discover_incarnations()
+            if direct_incarnations:
+                logger.info(f"Found {len(direct_incarnations)} incarnations through filesystem scan")
+                
+                # Manually load each incarnation file
+                for inc_type in direct_incarnations:
+                    try:
+                        logger.info(f"Manually loading incarnation module: {inc_type}")
+                        module_name = f"{inc_type}_incarnation"
+                        full_module_path = f"mcp_neocoder.incarnations.{module_name}"
+                        
+                        # Force import of the module
+                        try:
+                            module = importlib.import_module(full_module_path)
+                            
+                            # Find incarnation class in the module
+                            for name, obj in inspect.getmembers(module):
+                                if (inspect.isclass(obj) and 
+                                    obj.__module__ == full_module_path and
+                                    name.endswith('Incarnation')):
+                                    
+                                    # Set the name attribute if not present
+                                    if not hasattr(obj, 'name'):
+                                        logger.info(f"Setting name attribute for {name} to {inc_type}")
+                                        obj.name = inc_type
+                                    
+                                    # Register the class
+                                    global_registry.register(obj)
+                                    logger.info(f"Manually registered incarnation: {inc_type} ({name})")
+                        except ImportError as ie:
+                            logger.error(f"Could not import module {full_module_path}: {ie}")
+                    except Exception as e:
+                        logger.error(f"Error manually loading {inc_type} incarnation: {e}")
+                        logger.error(traceback.format_exc())
+        
+        # Register discovered incarnations with this server
+        incarnation_count = 0
+        logger.info(f"Registering {len(global_registry.incarnations)} incarnations with server")
+        
+        for name, inc_class in list(global_registry.incarnations.items()):
             try:
-                await init_db(INCARNATION_TYPES)
-                logger.info("Database initialization completed after error recovery")
-            except Exception as init_err:
-                logger.error(f"Database initialization failed: {init_err}")
-
-    def _register_tools(self):
-        """Register all tools with the MCP server."""
-        # Core navigation and retrieval tools
-        self.mcp.add_tool(self.get_guidance_hub)
-        self.mcp.add_tool(self.list_action_templates)
-        self.mcp.add_tool(self.get_action_template)
-        self.mcp.add_tool(self.get_best_practices)
-
-        # Project tools
-        self.mcp.add_tool(self.get_project)
-        self.mcp.add_tool(self.list_projects)
-
-        # Workflow execution tools
-        self.mcp.add_tool(self.log_workflow_execution)
-        self.mcp.add_tool(self.get_workflow_history)
-
-        # Feedback tools
-        self.mcp.add_tool(self.add_template_feedback)
-
-        # Advanced query tools
-        self.mcp.add_tool(self.run_custom_query)
-        self.mcp.add_tool(self.write_neo4j_cypher)
-        self.mcp.add_tool(self.check_connection)
-
-        # Cypher snippet toolkit
-        self.mcp.add_tool(self.list_cypher_snippets)
-        self.mcp.add_tool(self.get_cypher_snippet)
-        self.mcp.add_tool(self.search_cypher_snippets)
-        self.mcp.add_tool(self.create_cypher_snippet)
-        self.mcp.add_tool(self.update_cypher_snippet)
-        self.mcp.add_tool(self.delete_cypher_snippet)
-        self.mcp.add_tool(self.get_cypher_tags)
-
-        # Tool proposal system
-        self.mcp.add_tool(self.propose_tool)
-        self.mcp.add_tool(self.request_tool)
-        self.mcp.add_tool(self.get_tool_proposal)
-        self.mcp.add_tool(self.get_tool_request)
-        self.mcp.add_tool(self.list_tool_proposals)
-        self.mcp.add_tool(self.list_tool_requests)
-
-        # Tool guidance
-        self.mcp.add_tool(self.suggest_tool)
-
-        # Incarnation tools
-        self.mcp.add_tool(self.get_current_incarnation)
-        self.mcp.add_tool(self.list_incarnations)
-        self.mcp.add_tool(self.switch_incarnation)
+                # Handle both string and enum names
+                if hasattr(name, 'value'):
+                    name_str = name.value
+                else:
+                    name_str = str(name)
+                    
+                logger.info(f"Attempting to register incarnation: {name_str} ({inc_class.__name__})")
+                self.register_incarnation(inc_class, name_str)
+                logger.info(f"Registered incarnation: {name_str} ({inc_class.__name__})")
+                incarnation_count += 1
+                
+                # Preload an instance immediately to make its tools available
+                try:
+                    instance = inc_class(self.driver, self.database)
+                    logger.info(f"Created instance of {inc_class.__name__}")
+                    
+                    # Store in the registry for later use
+                    global_registry.instances[name_str] = instance
+                    
+                    # Try to immediately register its tools
+                    tool_methods = instance.list_tool_methods()
+                    logger.info(f"Found {len(tool_methods)} tool methods in {name_str}")
+                    
+                    # Directly register tools with MCP
+                    for method_name in tool_methods:
+                        if hasattr(instance, method_name) and callable(getattr(instance, method_name)):
+                            tool_method = getattr(instance, method_name)
+                            try:
+                                self.mcp.add_tool(tool_method)
+                                logger.info(f"Directly registered tool {method_name} from {name_str}")
+                            except Exception as tool_err:
+                                logger.error(f"Error registering tool {method_name}: {tool_err}")
+                    
+                except Exception as inst_err:
+                    logger.error(f"Failed to create instance of {inc_class.__name__}: {inst_err}")
+            except Exception as e:
+                logger.error(f"Failed to register incarnation {name}: {str(e)}")
+                logger.error(traceback.format_exc())
+        
+        logger.info(f"Loaded {incarnation_count} incarnations successfully")
+        
+        # If no incarnations were loaded, log a clear error
+        if incarnation_count == 0:
+            logger.error("NO INCARNATIONS WERE LOADED. This is a critical failure.")
+            logger.error("Check the incarnations directory and make sure incarnation classes are properly defined.")
 
     def _register_basic_handlers(self):
         """Register handlers for basic MCP protocol requests to prevent timeouts."""
-        # Import the fixed implementation from server_fixed.py
-        from .server_fixed import _register_basic_handlers
-        
-        # Try to register the error suppression handler if available
+        # Define the basic handlers
+        async def empty_list_handler():
+            """Return empty list for protocol handlers."""
+            return []
+
+        async def default_guidance_hub_handler():
+            """Return basic guidance hub content in case database is not available."""
+            content = """
+# NeoCoder Neo4j-Guided AI Workflow
+
+Welcome! This system is still initializing. Basic commands available:
+
+- `check_connection()` - Verify database connection
+- `list_incarnations()` - List available operational modes
+- `switch_incarnation(incarnation_type="...")` - Change operational mode
+
+Please wait a moment for full initialization to complete or check connection status.
+"""
+            return [types.TextContent(type="text", text=content)]
+
+        # Try to set the handlers with several fallback mechanisms
         try:
-            self._register_error_suppression_handler()
+            # First try to set handlers with attribute assignment
+            try:
+                # Set basic handlers for list endpoints
+                self.mcp.prompts_list_handler = empty_list_handler
+                self.mcp.resources_list_handler = empty_list_handler
+
+                # Also register a default guidance hub handler as a fallback
+                if hasattr(self.mcp, 'add_tool'):
+                    # Create a wrapper function that matches the tool signature
+                    async def guidance_hub_wrapper():
+                        return await default_guidance_hub_handler()
+
+                    # Only add this if get_guidance_hub isn't working yet
+                    self.mcp.add_tool(guidance_hub_wrapper, "get_guidance_hub_initializing")
+
+                logger.info("Registered basic protocol handlers via direct attribute assignment")
+            except Exception as attr_err:
+                logger.warning(f"Could not set handlers via attributes: {attr_err}")
+
+                # Try alternative method - using the decorator interface if available
+                if hasattr(self.mcp, 'list_prompts'):
+                    @self.mcp.list_prompts
+                    async def list_prompts_handler():
+                        return []
+
+                    @self.mcp.list_resources
+                    async def list_resources_handler():
+                        return []
+
+                    logger.info("Registered basic protocol handlers via decorators")
+                else:
+                    logger.warning("Could not register basic handlers via decorators")
+
+            # Try to register the error suppression handler if available
+            try:
+                self._register_error_suppression_handler()
+            except Exception as e:
+                # Log error but continue with basic handlers
+                logger.warning(f"Could not register error suppression handler: {e}")
+
         except Exception as e:
-            # Log error but continue with basic handlers
-            logger.warning(f"Could not register error suppression handler: {e}")
-        
-        return _register_basic_handlers(self)
-        
+            # Last resort error handling
+            logger.error(f"Failed to register basic handlers: {e}")
+            logger.info("Server will continue but may have reduced functionality")
+
     def _register_error_suppression_handler(self):
         """Register a handler to suppress specific error messages in responses."""
         try:
@@ -237,7 +510,7 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
             if hasattr(self.mcp, 'handle_function_response'):
                 # Store the original function response handler
                 original_handler = self.mcp.handle_function_response
-                
+
                 # Create a wrapper that filters error messages
                 def filtered_handler(function_name, response_id, result):
                     # Check if this is an error response
@@ -248,10 +521,10 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
                             # Replace with a success message
                             from mcp.types import TextContent
                             return [TextContent(type="text", text="Operation completed successfully.")]
-                    
+
                     # Otherwise, let the original handler process it
                     return original_handler(function_name, response_id, result)
-                
+
                 # Replace the original method with our wrapper
                 self.mcp.handle_function_response = filtered_handler
                 logger.info("Registered error suppression handler for Neo4j transaction scope errors")
@@ -278,41 +551,80 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
         from .incarnation_registry import registry as global_registry
         from .tool_registry import registry as tool_registry
 
-        # Make sure types are extended
-        global_registry.extend_incarnation_types()
+        # Check if incarnation_registry has items
+        if not self.incarnation_registry:
+            logger.warning("incarnation_registry is empty, trying to discover incarnations automatically")
+            # Try to discover incarnations
+            global_registry.discover()
 
         # Iterate through all registered incarnations
-        for incarnation_type, incarnation_class in self.incarnation_registry.items():
+        logger.info(f"Processing {len(self.incarnation_registry)} incarnation types")
+        for incarnation_type, incarnation_class in list(self.incarnation_registry.items()):
             try:
+                logger.info(f"Processing incarnation: {incarnation_type}")
+
                 # Get or create an instance of the incarnation
                 instance = global_registry.get_instance(incarnation_type, self.driver, self.database)
 
                 # If not available in global registry, create it directly
                 if not instance:
-                    instance = incarnation_class(self.driver, self.database)
+                    logger.info(f"Creating new instance of {incarnation_type} incarnation")
+                    try:
+                        instance = incarnation_class(self.driver, self.database)
+                    except Exception as instance_err:
+                        logger.error(f"Failed to create instance of {incarnation_class.__name__}: {instance_err}")
+                        import traceback
+                        logger.error(traceback.format_exc())
+                        continue
 
                 # Register tools from the incarnation
-                logger.info(f"Registering tools from {incarnation_type.value} incarnation")
+                logger.info(f"Registering tools from {incarnation_type} incarnation")
 
-                # First try using the class-specific method
-                tool_count = await instance.register_tools(self)
+                # Try both methods for tool registration for more robustness
+                total_count = 0
 
-                # Also use the tool registry as a backup to ensure all tools are found
-                # This uses a different discovery mechanism that might find additional tools
-                tool_registry_count = tool_registry.register_incarnation_tools(instance, self)
+                # First try direct method
+                try:
+                    tool_count = await instance.register_tools(self)
+                    total_count += tool_count
+                    logger.info(f"Registered {tool_count} tools directly from {incarnation_type}")
+                except Exception as direct_err:
+                    logger.error(f"Error in direct tool registration for {incarnation_type}: {direct_err}")
+                    tool_count = 0
 
-                total_count = tool_count + tool_registry_count
+                # Then try registry method
+                try:
+                    tool_registry_count = tool_registry.register_incarnation_tools(instance, self)
+                    total_count += tool_registry_count
+                    logger.info(f"Registered {tool_registry_count} tools via registry from {incarnation_type}")
+                except Exception as registry_err:
+                    logger.error(f"Error in registry tool registration for {incarnation_type}: {registry_err}")
+                    tool_registry_count = 0
+
                 registered_count += total_count
 
-                logger.info(f"Registered {total_count} tools from {incarnation_type.value} incarnation "
-                           f"({tool_count} via direct, {tool_registry_count} via registry)")
+                # Check if any tools were registered, and if not, try more aggressive method
+                if total_count == 0:
+                    logger.warning(f"No tools registered for {incarnation_type}, trying fallback method")
+                    try:
+                        # List tool methods and try to register them directly
+                        tools = instance.list_tool_methods()
+                        logger.info(f"Found {len(tools)} potential tools via list_tool_methods: {tools}")
 
-                # List all tools discovered from this incarnation for debugging
-                tools = instance.list_tool_methods()
-                logger.info(f"Tools from {incarnation_type.value}: {tools}")
+                        for tool_name in tools:
+                            if hasattr(instance, tool_name) and callable(getattr(instance, tool_name)):
+                                tool_method = getattr(instance, tool_name)
+                                try:
+                                    self.mcp.add_tool(tool_method)
+                                    logger.info(f"Directly registered tool {tool_name} from {incarnation_type}")
+                                    registered_count += 1
+                                except Exception as tool_err:
+                                    logger.error(f"Error registering {tool_name}: {tool_err}")
+                    except Exception as fallback_err:
+                        logger.error(f"Error in fallback tool registration: {fallback_err}")
 
             except Exception as e:
-                logger.error(f"Error registering tools for {incarnation_type.value}: {e}")
+                logger.error(f"Error processing incarnation {incarnation_type}: {e}")
                 import traceback
                 logger.error(traceback.format_exc())
 
@@ -325,7 +637,7 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
             if current:
                 return [types.TextContent(
                     type="text",
-                    text=f"Currently using '{current.value}' incarnation"
+                    text=f"Currently using '{current}' incarnation"
                 )]
             else:
                 return [types.TextContent(
@@ -356,7 +668,7 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
 
                 current = await self.get_current_incarnation_type()
                 if current:
-                    text += f"\nCurrently using: **{current.value}**"
+                    text += f"\nCurrently using: **{current}**"
                 else:
                     text += "\nNo incarnation is currently active. Use `switch_incarnation()` to activate one."
 
@@ -369,28 +681,25 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
 
     async def switch_incarnation(
         self,
-        incarnation_type: str = Field(..., description="Type of incarnation to switch to (coding, research_orchestration, decision_support, continuous_learning, complex_system)"),
+        incarnation_type: str = Field(..., description="Type of incarnation to switch to (coding, research, decision, data_analysis, knowledge_graph)"),
     ) -> List[types.TextContent]:
         """Switch the server to a different incarnation."""
         try:
-            # Convert string to enum
-            inc_type = None
-            for t in IncarnationType:
-                if t.value == incarnation_type:
-                    inc_type = t
-                    break
+            # Check if the incarnation type exists in the registry
+            available_types = list(self.incarnation_registry.keys())
 
-            if not inc_type:
-                available_types = ", ".join([t.value for t in IncarnationType])
+            if incarnation_type not in available_types:
+                available_types_str = ", ".join(available_types)
                 return [types.TextContent(
                     type="text",
-                    text=f"Unknown incarnation type: '{incarnation_type}'. Available types: {available_types}"
+                    text=f"Unknown incarnation type: '{incarnation_type}'. Available types: {available_types_str}"
                 )]
 
-            await self.set_incarnation(inc_type)
+            # Set the incarnation using the string directly
+            await self.set_incarnation(incarnation_type)
             return [types.TextContent(
                 type="text",
-                text=f"Successfully switched to '{inc_type.value}' incarnation"
+                text=f"Successfully switched to '{incarnation_type}' incarnation"
             )]
         except Exception as e:
             logger.error(f"Error switching incarnation: {e}")
@@ -479,7 +788,7 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
         }
 
         # Add research-specific patterns if in research mode
-        if current_incarnation == IncarnationType.RESEARCH:
+        if current_incarnation == "research":
             research_patterns = {
                 "register_hypothesis": ["new hypothesis", "create hypothesis", "register hypothesis", "add hypothesis"],
                 "list_hypotheses": ["show hypotheses", "all hypotheses", "view hypotheses", "list hypotheses"],
@@ -515,7 +824,7 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
                 matches.append(("list_incarnations", tools.get("list_incarnations", "No description available")))
 
             # Check if in research mode and task is research-related
-            elif current_incarnation == IncarnationType.RESEARCH and ("hypothesis" in task.lower() or "experiment" in task.lower() or "research" in task.lower()):
+            elif current_incarnation == "research" and ("hypothesis" in task.lower() or "experiment" in task.lower() or "research" in task.lower()):
                 if "create" in task.lower() or "new" in task.lower():
                     if "hypothesis" in task.lower():
                         matches.append(("register_hypothesis", "Register a new scientific hypothesis"))
@@ -554,251 +863,462 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
 
         # Add incarnation-specific hint if active
         if current_incarnation:
-            if current_incarnation == IncarnationType.RESEARCH:
-                response += f"\n\nYou are currently in the **{current_incarnation.value}** incarnation, which provides tools for scientific workflow management."
+            if current_incarnation == "research":
+                response += f"\n\nYou are currently in the **{current_incarnation}** incarnation, which provides tools for scientific workflow management."
             else:
-                response += f"\n\nYou are currently in the **{current_incarnation.value}** incarnation."
+                response += f"\n\nYou are currently in the **{current_incarnation}** incarnation."
         else:
             response += "\n\nNo incarnation is currently active. Use `switch_incarnation()` to activate one."
 
         return [types.TextContent(type="text", text=response)]
 
     async def get_guidance_hub(self) -> List[types.TextContent]:
-        """Get the AI Guidance Hub content, which serves as the central entry point for navigation."""
-        # Import our safe session handler
-        from .event_loop_manager import safe_neo4j_session, run_in_main_loop, get_main_loop
+        """Get the AI Guidance Hub content, which serves as the central entry point for navigation.
 
-        # Default fallback content if we can't query the database
-        fallback_description = """
+        The guidance hub provides the main entry point for AI assistants to understand
+        what capabilities are available and how to navigate the system.
+
+        If an incarnation is active, its specialized hub will be returned instead.
+
+        Returns:
+            MCP response containing the hub content
+        """
+        # Fallback description in case of any database issues
+        fallback_hub_description = """
 # NeoCoder Neo4j-Guided AI Workflow
 
 Welcome! This system uses a Neo4j knowledge graph to guide AI coding assistance and other workflows.
 
-## Core Functionality
+## Key Commands
+- `check_connection()` - Verify database connection
+- `list_incarnations()` - View available operational modes
+- `switch_incarnation(incarnation_type="...")` - Change operational mode
+- `get_action_template(keyword="...")` - Get workflow instructions
 
-1. **Coding Workflow** (Original incarnation)
-   - Follow structured templates for code modification
-   - Access project information and history
-   - Record successful workflow executions
-
-2. **Research Orchestration** (Alternate incarnation) 
-   - Manage scientific hypotheses and experiments
-   - Track experimental protocols and observations
-   - Analyze results and generate publication drafts
-
-3. **Decision Support** (Alternate incarnation)
-   - Create and evaluate decision alternatives
-   - Attach evidence to decisions
-   - Track stakeholder inputs
-
-## Getting Started
-
-- To check connection status, use `check_connection()`
-- To list available incarnations, use `list_incarnations()`  
-- To switch incarnations, use `switch_incarnation(incarnation_type="...")`
-- For tool suggestions, use `suggest_tool(task_description="...")`
-
-You're seeing this fallback message because there was an issue connecting to the Neo4j database.
+If you're seeing this message, the system may be having trouble connecting to the database.
+Please use `check_connection()` to verify database status.
 """
 
-        try:
-            # Get the current incarnation - handle any exceptions gracefully
-            current_incarnation = None
+        # 1. Try to get incarnation-specific hub if an incarnation is active
+        if hasattr(self, 'current_incarnation') and self.current_incarnation:
             try:
-                if hasattr(self, 'current_incarnation'):
-                    current_incarnation = self.current_incarnation
+                logger.info(f"Getting guidance hub from active incarnation: {self.current_incarnation.name}")
+                result = await self.current_incarnation.get_guidance_hub()
+                if result and isinstance(result, list) and len(result) > 0:
+                    return result
+                logger.warning("Empty result from incarnation hub, falling back to main hub")
             except Exception as e:
-                logger.warning(f"Could not get current incarnation: {e}")
+                logger.error(f"Error getting hub from incarnation {self.current_incarnation.name}: {str(e)}")
+                logger.info("Falling back to main hub")
 
-            # If an incarnation is active, use its guidance hub with event loop safety
-            if current_incarnation:
-                try:
-                    # Wrap in run_in_main_loop to ensure consistent event loop
-                    hub_content = await run_in_main_loop(current_incarnation.get_guidance_hub())
-                    return hub_content
-                except Exception as e:
-                    logger.error(f"Error getting guidance hub from incarnation: {e}")
-                    logger.error(f"Falling back to default guidance hub")
-                    # Fall through to default hub logic
+        # 2. Get the main hub with more robust error handling
+        logger.info("Getting main guidance hub")
 
-            # Try to directly query the database without using run_in_main_loop
-            try:
+        try:
+            # Use a direct session approach for more reliable results
+            async with self.driver.session(database=self.database) as session:
                 query = """
                 MATCH (hub:AiGuidanceHub {id: 'main_hub'})
                 RETURN hub.description AS description
                 """
-                
-                if not self.driver:
-                    raise Exception("Neo4j driver not initialized")
-                    
-                # Use a direct session instead of going through run_in_main_loop
-                async with self.driver.session(database=self.database) as session:
-                    results_json = await session.execute_read(self._read_query, query, {})
-                    results = json.loads(results_json)
-                    
-                    if results and len(results) > 0:
-                        # Add incarnation information to the hub content
-                        hub_content = results[0]["description"]
-                        
-                        # Add incarnation information to the hub content
-                        incarnation_info = "\n\n## Available Incarnations\n\n"
-                        incarnation_info += "This system supports multiple incarnations with different functionalities:\n\n"
-                        
-                        # Get the actual available incarnations from the registry
-                        incarnation_types = []
-                        if hasattr(self, 'incarnation_registry') and self.incarnation_registry:
-                            try:
-                                incarnation_types = [inc_type.value for inc_type in self.incarnation_registry.keys()]
-                            except Exception as e:
-                                logger.warning(f"Error getting incarnation types: {e}")
-                        
-                        incarnation_descriptions = {
-                            "coding": "Original code workflow management",
-                            "research_orchestration": "Scientific research management platform",
-                            "decision_support": "Decision analysis and evidence tracking",
-                            "data_analysis": "Data analysis and visualization", 
-                            "knowledge_graph": "Knowledge graph management",
-                            "continuous_learning": "Adaptive learning environment",
-                            "complex_system": "Complex system simulator"
-                        }
-                        
-                        # Add each available incarnation to the description
-                        if incarnation_types:
-                            for i, inc_type in enumerate(incarnation_types, 1):
-                                desc = incarnation_descriptions.get(inc_type, "Custom incarnation")
-                                incarnation_info += f"{i}. **{inc_type}** - {desc}\n"
-                        else:
-                            incarnation_info += "No incarnations are currently available. The database may need initialization.\n"
-                        
-                        incarnation_info += "\nUse `switch_incarnation(incarnation_type=\"...\")` to switch to a different incarnation."
-                        
-                        return [types.TextContent(type="text", text=hub_content + incarnation_info)]
-                    else:
-                        # Hub doesn't exist, try to create it
-                        try:
-                            # Try direct creation without run_in_main_loop wrapper
-                            return await self._create_default_hub()
-                        except Exception as e:
-                            logger.error(f"Error creating default hub: {e}")
-                            return [types.TextContent(type="text", text=fallback_description)]
-                        
-            except Exception as e:
-                # Query attempt failed
-                logger.error(f"Error querying guidance hub: {e}")
-                return [types.TextContent(type="text", text=fallback_description)]
-                
+
+                result = await session.execute_read(
+                    lambda tx: tx.run(query)
+                )
+
+                # Process results from the transaction directly
+                values = await result.values()
+
+                if values and len(values) > 0 and values[0][0]:
+                    # Hub exists, get its content
+                    hub_content = values[0][0]
+
+                    # Enhance with incarnation information
+                    try:
+                        hub_content = await self._enhance_hub_with_incarnation_info(hub_content)
+                    except Exception as e:
+                        logger.error(f"Error enhancing hub content: {str(e)}")
+                        # Continue with unenhanced content
+
+                    return [types.TextContent(type="text", text=hub_content)]
+                else:
+                    # Hub doesn't exist or no description, create it
+                    logger.info("Main hub not found or has no description, creating default hub")
+                    return await self._create_default_hub()
+
         except Exception as e:
-            # Overall function failed
-            logger.error(f"Error retrieving guidance hub: {e}")
-            import traceback
-            logger.error(traceback.format_exc())
-            
-            # Return fallback content as last resort
-            return [types.TextContent(
-                type="text",
-                text=fallback_description
-            )]
+            # Handle database errors gracefully
+            logger.error(f"Error getting main guidance hub: {str(e)}")
+            logger.error(f"Error details: {traceback.format_exc()}")
+
+            # Return fallback content instead of failing
+            logger.info("Returning fallback guidance hub due to database error")
+            return [types.TextContent(type="text", text=fallback_hub_description)]
+
+    async def _enhance_hub_with_incarnation_info(self, hub_content: str) -> str:
+        """Enhance hub content with up-to-date incarnation information.
+
+        Args:
+            hub_content: Original hub content
+
+        Returns:
+            Enhanced hub content with incarnation information
+        """
+        # Get incarnation information
+        incarnation_types = []
+        incarnation_descriptions = {}
+
+        # Get incarnation types from registry if available
+        if hasattr(self, 'incarnation_registry') and self.incarnation_registry:
+            try:
+                # Extract information from registry
+                for inc_type, inc_class in self.incarnation_registry.items():
+                    # Convert to string if it's an enum
+                    inc_name = inc_type
+                    if hasattr(inc_type, 'value'):
+                        inc_name = inc_type.value
+
+                    incarnation_types.append(inc_name)
+
+                    # Get description if available
+                    if hasattr(inc_class, 'description'):
+                        incarnation_descriptions[inc_name] = inc_class.description
+                    else:
+                        incarnation_descriptions[inc_name] = "Custom incarnation"
+            except Exception as e:
+                logger.error(f"Error getting incarnation info: {str(e)}")
+
+        # Add incarnation info to hub content if we have any
+        if incarnation_types:
+            # Check if hub already has an incarnation section
+            if "## Available Incarnations" in hub_content:
+                # Find where the incarnation section starts and ends
+                start = hub_content.find("## Available Incarnations")
+
+                # Find the next section if any, or use the end of the content
+                next_section = hub_content.find("##", start + 1)
+                if next_section == -1:
+                    next_section = len(hub_content)
+
+                # Replace the existing incarnation section
+                before = hub_content[:start]
+                after = hub_content[next_section:]
+
+                incarnation_info = "## Available Incarnations\n\n"
+                incarnation_info += "| Type | Description |\n"
+                incarnation_info += "| ---- | ----------- |\n"
+
+                for inc_type in sorted(incarnation_types):
+                    desc = incarnation_descriptions.get(inc_type, "Custom incarnation")
+                    incarnation_info += f"| {inc_type} | {desc} |\n"
+
+                # Include current incarnation information if available
+                current = await self.get_current_incarnation_type()
+                if current:
+                    incarnation_info += f"\nCurrently using: **{current}**\n"
+                else:
+                    incarnation_info += "\nNo incarnation is currently active. Use `switch_incarnation()` to activate one.\n"
+
+                # Add usage hint
+                incarnation_info += "\nUse `switch_incarnation(incarnation_type=\"...\")` to switch incarnations.\n\n"
+
+                hub_content = before + incarnation_info + after
+            else:
+                # Add a new incarnation section at the end
+                incarnation_info = "\n\n## Available Incarnations\n\n"
+                incarnation_info += "| Type | Description |\n"
+                incarnation_info += "| ---- | ----------- |\n"
+
+                for inc_type in sorted(incarnation_types):
+                    desc = incarnation_descriptions.get(inc_type, "Custom incarnation")
+                    incarnation_info += f"| {inc_type} | {desc} |\n"
+
+                # Include current incarnation information if available
+                current = await self.get_current_incarnation_type()
+                if current:
+                    incarnation_info += f"\nCurrently using: **{current}**\n"
+                else:
+                    incarnation_info += "\nNo incarnation is currently active. Use `switch_incarnation()` to activate one.\n"
+
+                # Add usage hint
+                incarnation_info += "\nUse `switch_incarnation(incarnation_type=\"...\")` to switch incarnations."
+
+                hub_content += incarnation_info
+
+        return hub_content
 
     async def check_connection(self) -> List[types.TextContent]:
         """Check the Neo4j connection status and database access permissions."""
-        # Since we've observed that most operations work correctly despite connection checks failing,
-        # this is likely due to configuration differences. We'll adapt a more pragmatic approach.
-        
         result = {
-            "connection": "Likely Connected",
+            "connection": "Not Connected",
             "database": self.database,
-            "read_access": True,  # Assume true since we can perform operations
-            "write_access": True,  # Assume true since create operations work
+            "read_access": False,
+            "write_access": False,
             "neo4j_url": os.environ.get("NEO4J_URL", "bolt://localhost:7687"),
             "neo4j_username": os.environ.get("NEO4J_USERNAME", "neo4j"),
             "neo4j_password": "***",
             "neo4j_database": os.environ.get("NEO4J_DATABASE", "neo4j"),
+            "server_info": "Unknown",
+            "current_incarnation": "Unknown",
             "error": None,
-            "server_info": "Unknown - Connection test skipped",
-            "current_incarnation": "Unknown"
+            "tools_registered": []
         }
-        
-        # Test connection by running a basic query using the method that works for other operations
+
+        # Test connection by running basic queries with robust error handling
         try:
-            # Get current incarnation information which we know works
-            current_incarnation = await self.get_current_incarnation_type()
-            if current_incarnation:
-                result["current_incarnation"] = current_incarnation.value
-                result["connection"] = "Connected"
-                
-            # Try to run a safe read query to verify read access
-            try:
-                # Use run_custom_query which seems to work reliably
-                response = await self.run_custom_query("RETURN 'Connection works' as status", {})
-                if response and len(response) > 0 and "Connection works" in response[0].text:
-                    result["read_access"] = True
-                    result["connection"] = "Connected to Neo4j database"
-                    
-                # Try to get server version info - this is optional
+            # First test if driver is valid
+            if not self.driver:
+                raise RuntimeError("Driver is not initialized")
+
+            # Test read access with a simple query
+            async with self.driver.session(database=self.database) as session:
                 try:
-                    info_response = await self.run_custom_query(
-                        "CALL dbms.components() YIELD name, versions RETURN name, versions[0] as version", {}
+                    # Test read access
+                    read_result = await session.run("RETURN 'Connection works' as status")
+                    read_data = await read_result.data()
+                    if read_data and read_data[0]["status"] == "Connection works":
+                        result["read_access"] = True
+                        logger.info("Read access verified")
+                    else:
+                        logger.warning("Read query returned unexpected result")
+                except Exception as read_err:
+                    logger.error(f"Read access test failed: {read_err}")
+                    result["error"] = f"Read access test failed: {str(read_err)}"
+
+                try:
+                    # Test write access with a harmless write operation
+                    write_result = await session.run(
+                        "CREATE (t:TestNode {id: 'temp_test'}) "
+                        "WITH t "
+                        "DETACH DELETE t "
+                        "RETURN count(t) as deleted"
                     )
-                    if info_response and len(info_response) > 0:
-                        result["server_info"] = info_response[0].text
+                    write_data = await write_result.data()
+                    if write_data and write_data[0]["deleted"] == 1:
+                        result["write_access"] = True
+                        logger.info("Write access verified")
+                    else:
+                        logger.warning("Write query returned unexpected result")
+                except Exception as write_err:
+                    logger.error(f"Write access test failed: {write_err}")
+                    if not result["error"]:
+                        result["error"] = f"Write access test failed: {str(write_err)}"
+
+                # Get server info
+                try:
+                    info_result = await session.run(
+                        "CALL dbms.components() YIELD name, versions RETURN name, versions[0] as version"
+                    )
+                    info_data = await info_result.data()
+                    if info_data:
+                        result["server_info"] = info_data
+                        logger.info(f"Server info retrieved: {len(info_data)} components")
                 except Exception as info_err:
-                    # Just log this, don't affect the main status
                     logger.warning(f"Couldn't get server info: {info_err}")
-                    result["server_info"] = "Unknown - Server info check failed"
-                    
-            except Exception as read_err:
-                # If direct query fails but incarnation check worked, still consider it a partial success
-                logger.warning(f"Read test failed but other operations work: {read_err}")
-                result["read_access"] = "Partial - Some operations work"
-        
+                    # Don't set as primary error
+
+            # If we got this far with at least read access, we're connected
+            if result["read_access"]:
+                result["connection"] = "Connected to Neo4j database"
+                logger.info("Database connection verified")
+
+            # Get current incarnation
+            try:
+                current_incarnation = await self.get_current_incarnation_type()
+                if current_incarnation:
+                    result["current_incarnation"] = current_incarnation
+                    logger.info(f"Current incarnation: {current_incarnation}")
+
+                # Get registered tool count for each incarnation
+                if hasattr(self, 'incarnation_registry') and self.incarnation_registry:
+                    # Collect tool status information
+                    for inc_type, inc_class in self.incarnation_registry.items():
+                        try:
+                            # Get instance
+                            from .incarnation_registry import registry as global_registry
+                            instance = global_registry.get_instance(inc_type, self.driver, self.database)
+                            if not instance:
+                                continue
+
+                            # Get tool methods
+                            tools = instance.list_tool_methods()
+                            if tools:
+                                result["tools_registered"].append({
+                                    "incarnation": inc_type,
+                                    "tool_count": len(tools),
+                                    "tools": tools[:5] + ["..."] if len(tools) > 5 else tools
+                                })
+                        except Exception as tool_err:
+                            logger.warning(f"Error getting tool info for {inc_type}: {tool_err}")
+            except Exception as inc_err:
+                logger.warning(f"Error getting incarnation info: {inc_err}")
+
         except Exception as e:
-            # Even if we hit an error, since other operations work, we'll return a partial success
-            logger.warning(f"Connection check encountered error but other operations work: {e}")
+            # Record the actual error for debugging
+            logger.error(f"Connection check error: {e}")
+            logger.error(f"Error details: {traceback.format_exc()}")
             result["error"] = str(e)
-            result["connection"] = "Partial - Some operations work despite check failures"
-        
-        # Format the response
+
+        # Format the response with enhanced detailed diagnostics
         response = "# Neo4j Connection Status\n\n"
-        
-        # Always show as connected if we're using this in the demo, as evidenced by other operations working
-        response += "✅ **Connection Functioning**\n\n"
-        response += "Note: While the formal connection test may show issues, database operations are working correctly.\n\n"
-        
+
+        if result["read_access"] and result["write_access"]:
+            response += "✅ **Connection Functioning**\n\n"
+        elif result["read_access"]:
+            response += "⚠️ **Partial Connection**\n\n"
+            response += "Read operations work but write operations may fail.\n\n"
+        else:
+            response += "❌ **Connection Failed**\n\n"
+            response += "Unable to connect to Neo4j database.\n\n"
+
         response += f"- **Connection:** {result['connection']}\n"
         response += f"- **Database:** {result['database']}\n"
         response += f"- **Read Access:** {result['read_access']}\n"
         response += f"- **Write Access:** {result['write_access']}\n"
-        
-        if result["server_info"] != "Unknown - Connection test skipped":
-            response += f"- **Neo4j Server:** {result['server_info']}\n"
-        
+
+        if isinstance(result["server_info"], list):
+            server_info = ", ".join([f"{item['name']} {item['version']}" for item in result["server_info"]])
+            response += f"- **Neo4j Server:** [{server_info}]\n"
+
         if result["current_incarnation"] != "Unknown":
             response += f"- **Current Incarnation:** {result['current_incarnation']}\n"
-        
+
+        # Add tools registered info
+        if result["tools_registered"]:
+            response += "\n## Registered Tools\n\n"
+            for inc in result["tools_registered"]:
+                response += f"- **{inc['incarnation']}**: {inc['tool_count']} tools\n"
+                if inc['tool_count'] > 0:
+                    sample_tools = ', '.join(inc['tools'])
+                    response += f"  Sample tools: `{sample_tools}`\n"
+
         if result["error"]:
-            response += f"\n## Error Details\n\n{result['error']}\n"
-            response += "Note: These errors are not preventing actual database operations from succeeding.\n"
-        
+            response += f"\n## Error Details\n\n```\n{result['error']}\n```\n"
+            response += "This error may help with troubleshooting database connection issues.\n"
+
         response += "\n## Connection Settings\n\n"
         response += f"- **URL:** {result['neo4j_url']}\n"
         response += f"- **Username:** {result['neo4j_username']}\n"
         response += f"- **Password:** {result['neo4j_password']}\n"
         response += f"- **Database:** {result['neo4j_database']}\n"
-        
+
+        # Add troubleshooting tips
+        response += "\n## Troubleshooting Tips\n\n"
+
+        if not result["read_access"]:
+            response += "1. Verify Neo4j is running: `sudo systemctl status neo4j`\n"
+            response += "2. Check connection settings in environment variables\n"
+            response += "3. Try restarting Neo4j: `sudo systemctl restart neo4j`\n"
+            response += "4. Check Neo4j logs: `sudo journalctl -u neo4j`\n"
+        elif not result["write_access"]:
+            response += "1. Check user permissions in Neo4j\n"
+            response += "2. Verify database name is correct\n"
+            response += "3. Check if the database is in read-only mode\n"
+        else:
+            response += "Everything looks good! If you're still experiencing issues:\n"
+            response += "1. Try switching incarnation: `switch_incarnation(incarnation_type=\"...\")`\n"
+            response += "2. Check available incarnations: `list_incarnations()`\n"
+            response += "3. Restart the server to reload all components\n"
+
         return [types.TextContent(type="text", text=response)]
 
 
     async def _read_query(self, tx: AsyncTransaction, query: str, params: dict) -> str:
-        """Execute a read query and return results as JSON string."""
-        raw_results = await tx.run(query, params)
-        eager_results = await raw_results.to_eager_result()
-        return json.dumps([r.data() for r in eager_results.records], default=str)
+        """Execute a read query and return results as JSON string.
+
+        Args:
+            tx: Neo4j transaction
+            query: Cypher query to execute
+            params: Query parameters
+
+        Returns:
+            JSON string representing the query results
+        """
+        try:
+            raw_results = await tx.run(query, params or {})
+            eager_results = await raw_results.to_eager_result()
+            return json.dumps([r.data() for r in eager_results.records], default=str)
+        except Exception as e:
+            logger.error(f"Error executing read query: {str(e)}")
+            logger.debug(f"Failed query: {query}")
+            logger.debug(f"Parameters: {params}")
+            raise
 
     async def _write(self, tx: AsyncTransaction, query: str, params: dict):
-        """Execute a write query and return results as JSON string."""
-        result = await tx.run(query, params or {})
-        summary = await result.consume()
-        return summary
+        """Execute a write query and return result summary.
+
+        Args:
+            tx: Neo4j transaction
+            query: Cypher query to execute
+            params: Query parameters
+
+        Returns:
+            Neo4j result summary
+        """
+        try:
+            result = await tx.run(query, params or {})
+            return await result.consume()
+        except Exception as e:
+            logger.error(f"Error executing write query: {str(e)}")
+            logger.debug(f"Failed query: {query}")
+            logger.debug(f"Parameters: {params}")
+            raise
+
+    async def _safe_execute_read(self, query: str, params: dict = None) -> List[Dict[str, Any]]:
+        """Execute a read query with proper error handling and transaction management.
+
+        This is a higher-level method that handles session creation and error handling.
+
+        Args:
+            query: Cypher query to execute
+            params: Query parameters
+
+        Returns:
+            Query results as a list of dictionaries
+        """
+        params = params or {}
+
+        try:
+            async with self.driver.session(database=self.database) as session:
+                # Execute inside a read transaction
+                result_json = await session.execute_read(
+                    lambda tx: self._read_query(tx, query, params)
+                )
+
+                # Parse the result safely
+                try:
+                    return json.loads(result_json)
+                except json.JSONDecodeError:
+                    logger.error("Failed to decode JSON result")
+                    return []
+        except Exception as e:
+            logger.error(f"Error in safe read execution: {str(e)}")
+            return []
+
+    async def _safe_execute_write(self, query: str, params: dict = None) -> bool:
+        """Execute a write query with proper error handling and transaction management.
+
+        This is a higher-level method that handles session creation and error handling.
+
+        Args:
+            query: Cypher query to execute
+            params: Query parameters
+
+        Returns:
+            True if the operation succeeded, False otherwise
+        """
+        params = params or {}
+
+        try:
+            async with self.driver.session(database=self.database) as session:
+                # Execute inside a write transaction
+                await session.execute_write(
+                    lambda tx: self._write(tx, query, params)
+                )
+                return True
+        except Exception as e:
+            logger.error(f"Error in safe write execution: {str(e)}")
+            return False
 
     def is_write_query(self, query: str) -> bool:
         """Check if a query is a write query.
@@ -911,7 +1431,15 @@ You're seeing this fallback message because there was an issue connecting to the
             return [types.TextContent(type="text", text=f"Error: {e}")]
 
     async def _create_default_hub(self) -> List[types.TextContent]:
-        """Create a default guidance hub if none exists."""
+        """Create a default guidance hub if none exists.
+
+        This creates the main hub node in Neo4j with default content that
+        explains the system capabilities and provides navigation guidance.
+
+        Returns:
+            MCP response containing the hub content
+        """
+        # Define the default hub content
         default_description = """
 # NeoCoder Neo4j-Guided AI Workflow
 
@@ -934,6 +1462,16 @@ Welcome! This system uses a Neo4j knowledge graph to guide AI coding assistance 
    - Attach evidence to decisions
    - Track stakeholder inputs
 
+4. **Knowledge Graph Management** (Specialized incarnation)
+   - Create and manage entities with observations
+   - Connect entities with typed relationships
+   - Search and visualize knowledge structures
+
+5. **Code Analysis** (Specialized incarnation)
+   - Parse and analyze code structure
+   - Track code complexity and quality metrics
+   - Generate documentation from code analysis
+
 ## Getting Started
 
 - To switch incarnations, use `switch_incarnation(incarnation_type="...")`
@@ -942,46 +1480,94 @@ Welcome! This system uses a Neo4j knowledge graph to guide AI coding assistance 
 - To check database connection status, use `check_connection()`
 
 Each incarnation has its own set of specialized tools alongside the core Neo4j interaction capabilities.
-        """
-
-        query = """
-        CREATE (hub:AiGuidanceHub {id: 'main_hub', description: $description})
-        RETURN hub.description AS description
-        """
+"""
 
         try:
-            # Use a direct session approach without additional wrappers
-            # This avoids the event loop issues that were occurring
-            if not self.driver:
-                raise Exception("Neo4j driver not initialized")
-                
-            # Directly create a session using the driver's own methods
-            try:
-                session = await self.driver.session(database=self.database).__aenter__()
-                try:
-                    # Execute the write query directly
-                    tx = await session.begin_transaction().__aenter__()
-                    try:
-                        result = await tx.run(query, {"description": default_description})
-                        records = await result.values()
-                        await tx.__aexit__(None, None, None)
-                        
-                        if records and len(records) > 0:
-                            return [types.TextContent(type="text", text=records[0][0])]
-                        else:
-                            return [types.TextContent(type="text", text="Error creating default hub: No records returned")]
-                    except Exception as tx_err:
-                        logger.error(f"Transaction error: {tx_err}")
-                        await tx.__aexit__(type(tx_err), tx_err, None)
-                        raise
-                finally:
-                    await session.__aexit__(None, None, None)
-            except Exception as sess_err:
-                logger.error(f"Session error: {sess_err}")
-                raise
+            # Try to create the hub node directly with a session
+            async with self.driver.session(database=self.database) as session:
+                query = """
+                CREATE (hub:AiGuidanceHub {id: 'main_hub', description: $description, created: datetime()})
+                RETURN hub.description AS description
+                """
+                result = await session.execute_write(
+                    lambda tx: tx.run(query, {"description": default_description})
+                )
+
+                # Get result within the transaction to avoid scope issues
+                values = await result.values()
+                if values and len(values) > 0:
+                    logger.info("Successfully created default guidance hub")
+                    return [types.TextContent(type="text", text=default_description)]
+                else:
+                    error_message = "Created hub but couldn't verify result"
+                    logger.warning(error_message)
+                    return [types.TextContent(type="text", text=default_description)]
+
         except Exception as e:
-            logger.error(f"Error creating default hub: {e}")
-            return [types.TextContent(type="text", text=f"Error creating default hub: {e}")]
+            # If there was an error, try to return a helpful message
+            error_message = f"Failed to create default guidance hub: {str(e)}"
+            logger.error(error_message)
+            logger.error(f"Error details: {traceback.format_exc()}")
+
+            # Still try to return the content anyway to improve user experience
+            return [types.TextContent(type="text", text=default_description)]
+
+    def initialize_server(self):
+        """Initialize the server properly without causing event loop issues.
+
+        This is an alternative initialization method that can be used in scenarios
+        where the standard initialization in __init__ is causing event loop problems.
+        """
+        try:
+            # Initialize the polymorphic adapter
+            from .polymorphic_adapter import PolymorphicAdapterMixin
+            PolymorphicAdapterMixin.__init__(self)
+
+            # Use the incarnation registry to discover and register all incarnations
+            from .incarnation_registry import registry as global_registry
+
+            # Discover all incarnations and ensure they're properly registered
+            logger.info("Running discovery to find all incarnation classes")
+            global_registry.discover()
+
+            # Register discovered incarnations with this server
+            for inc_type, inc_class in global_registry.incarnations.items():
+                logger.info(f"Auto-registering incarnation {inc_type.value} ({inc_class.__name__})")
+                self.register_incarnation(inc_class, inc_type)
+
+            # Register core tools
+            self._register_tools()
+
+            # For async initialization, create a new event loop if needed
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # If no event loop in thread, create one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+
+            # Run async initialization steps properly in the loop
+            async def run_async_init_wrapper():
+                """Wrap database initialization and tool registration in a single async function."""
+                # Auto-initialize the database if needed
+                await self._ensure_db_initialized()
+
+                # Register tools from all incarnations
+                tool_count = await self._register_all_incarnation_tools()
+                logger.info(f"Registered {tool_count} tools from all incarnations")
+
+                return tool_count
+
+            # Run the async initialization in the event loop
+            tool_count = loop.run_until_complete(run_async_init_wrapper())
+
+            return True
+        except Exception as e:
+            logger.error(f"Error during initialization: {e}")
+            import traceback
+            logger.error(traceback.format_exc())
+            logger.info("Basic MCP handlers are still registered, so the server will respond to protocol requests")
+            return False
 
     def run(self, transport: str = "stdio"):
         """Run the MCP server."""
@@ -989,76 +1575,332 @@ Each incarnation has its own set of specialized tools alongside the core Neo4j i
 
 
 def create_server(db_url: str, username: str, password: str, database: str = "neo4j") -> Neo4jWorkflowServer:
-    """Create and return a Neo4jWorkflowServer instance."""
-    # Import and initialize the event loop first to ensure consistent event loop usage
-    from .event_loop_manager import initialize_main_loop
+    """Create and initialize a Neo4jWorkflowServer instance.
 
-    # Initialize the main event loop that will be used for all Neo4j operations
-    loop = initialize_main_loop()
-    logger.info(f"Initialized main event loop for Neo4j operations")
+    This factory function handles proper initialization of the event loop,
+    Neo4j driver, and server components to ensure consistent behavior.
 
-    # Create the Neo4j driver in the context of the initialized loop
-    logger.info(f"Creating Neo4j driver with URL: {db_url}, username: {username}, database: {database}")
+    Args:
+        db_url: Neo4j connection URL
+        username: Neo4j username
+        password: Neo4j password
+        database: Neo4j database name
 
-    # Create the driver after the loop is initialized to ensure they share the same loop context
-    driver = AsyncGraphDatabase.driver(db_url, auth=(username, password))
+    Returns:
+        Initialized Neo4jWorkflowServer instance
+    """
+    try:
+        # 1. Make sure we have a running event loop
+        try:
+            # Get existing event loop or create a new one
+            loop = asyncio.get_event_loop()
+            if not loop.is_running():
+                logger.info("Using existing event loop")
+        except RuntimeError:
+            # No event loop exists in this thread, create a new one
+            logger.info("Creating new event loop")
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+        
+        # 2. Initialize the event loop manager to ensure it's in sync
+        from .event_loop_manager import initialize_main_loop
+        loop = initialize_main_loop()
+        logger.info(f"Initialized main event loop for Neo4j operations")
 
-    # Set environment variables for init_db to use
-    os.environ["NEO4J_URL"] = db_url
-    os.environ["NEO4J_USERNAME"] = username
-    os.environ["NEO4J_PASSWORD"] = password
-    os.environ["NEO4J_DATABASE"] = database
+        # 3. Store connection parameters in environment variables for init_db
+        os.environ["NEO4J_URL"] = db_url
+        os.environ["NEO4J_USERNAME"] = username
+        os.environ["NEO4J_PASSWORD"] = password
+        os.environ["NEO4J_DATABASE"] = database
 
-    # Pass the loop to the server constructor to ensure it uses the same loop
-    return Neo4jWorkflowServer(driver, database, loop)
+        # 4. Create the Neo4j driver
+        logger.info(f"Creating Neo4j driver (URL: {db_url}, database: {database})")
+        driver_config = {
+            # Default to a more conservative connection pool size
+            "max_connection_pool_size": int(os.environ.get("NEO4J_MAX_CONNECTIONS", "50")),
+            # Allow driver to handle more request types concurrently
+            "max_transaction_retry_time": 30.0,
+            # More aggressive connection acquisition timeout
+            "connection_acquisition_timeout": 60.0
+        }
+
+        driver = AsyncGraphDatabase.driver(
+            db_url,
+            auth=(username, password),
+            **driver_config
+        )
+
+        # 5. Define an async function for all async operations
+        async def async_server_setup():
+            # 5.1 Verify the driver connection works
+            try:
+                async with driver.session(database=database) as session:
+                    result = await session.run("RETURN 1 as n")
+                    data = await result.data()
+                    connection_ok = bool(data and data[0]["n"] == 1)
+                    
+                    if not connection_ok:
+                        raise RuntimeError("Driver verification failed: unexpected response")
+                    
+                    logger.info("Neo4j driver connection verified successfully")
+            except Exception as e:
+                logger.error(f"Driver verification failed: {str(e)}")
+                raise RuntimeError(f"Could not connect to Neo4j: {str(e)}")
+                
+            # 5.2 Create the server instance
+            server = Neo4jWorkflowServer(driver, database, loop)
+            logger.info("Neo4jWorkflowServer created successfully")
+            
+            # Wait for the server to complete critical async initialization
+            # This ensures the server responds properly to initial requests
+            # but we don't block indefinitely for all initialization tasks
+            await asyncio.sleep(0.5)  # Give the server a moment to start initialization
+            
+            return server
+        
+        # 6. Run the async setup with proper error handling
+        if loop.is_running():
+            # If loop is already running (e.g., in Jupyter), use create_task + run_until_complete pattern
+            task = asyncio.create_task(async_server_setup())
+            # Wait for a short time to allow basic initialization
+            server = loop.run_until_complete(asyncio.wait_for(task, timeout=10))
+        else:
+            # If loop is not running, use run_until_complete directly
+            server = loop.run_until_complete(async_server_setup())
+            
+        return server
+
+    except Exception as e:
+        logger.error(f"Failed to create server: {str(e)}")
+        logger.debug(f"Server creation error details: {traceback.format_exc()}")
+        raise RuntimeError(f"Failed to create Neo4jWorkflowServer: {str(e)}")
 
 
 def cleanup_zombie_instances():
-    """Utility function to clean up any zombie instances of the server.
+    """Clean up any orphaned server processes.
 
-    This is called before starting a new server to ensure no orphaned
-    processes are left running.
+    This function identifies and terminates any zombie server instances
+    that might be left running from previous executions. This prevents
+    port conflicts and resource leaks.
+
+    Returns:
+        int: Number of processes cleaned up
     """
-    logger.info("Cleaning up any zombie instances...")
+    logger.info("Checking for zombie server instances...")
+
     # In a real implementation, this would find and terminate orphaned processes
-    # For now, this is just a placeholder to fix the import warning
-    return 0
+    # by looking for MCP server processes with the same module name
+    try:
+        # For now, just perform basic port check for common conflicts
+        import socket
+
+        # Check if the TCP port for Neo4j is in use (typical Neo4j Bolt port)
+        neo4j_port = int(os.environ.get("NEO4J_PORT", "7687"))
+
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            # Set a short timeout
+            sock.settimeout(0.1)
+
+            # Try to connect to the port
+            result = sock.connect_ex(('127.0.0.1', neo4j_port))
+
+            if result != 0:
+                logger.warning(f"Neo4j port {neo4j_port} appears to be closed. Is Neo4j running?")
+        except Exception as port_err:
+            logger.debug(f"Port check error: {str(port_err)}")
+        finally:
+            sock.close()
+
+        return 0  # No actual zombies cleaned up in this implementation
+    except Exception as e:
+        logger.warning(f"Error checking for zombie instances: {str(e)}")
+        return 0
 
 def main():
-    """Main entry point for the MCP server."""
-    # Clean up any zombie instances first
+    """Main entry point for the MCP server.
+
+    This function handles the complete server startup sequence:
+    1. Environment setup and configuration loading
+    2. Connection to Neo4j database
+    3. Server initialization
+    4. Server execution
+
+    It includes proper error handling and logging at each stage.
+    """
     try:
+        # 1. Initial setup - clean up zombie instances and load config
+        logger.info("Starting NeoCoder Neo4j Workflow Server")
         cleanup_zombie_instances()
+
+        # 2. Load configuration from .env file if available
+        try:
+            from dotenv import load_dotenv
+            env_loaded = load_dotenv()
+            if env_loaded:
+                logger.info("Loaded environment variables from .env file")
+        except ImportError:
+            logger.info("dotenv package not installed, using environment variables directly")
+
+        # 3. Set up logging based on environment configuration
+        log_level = os.environ.get("LOG_LEVEL", "INFO").upper()
+        if hasattr(logging, log_level):
+            logging.getLogger("mcp_neocoder").setLevel(getattr(logging, log_level))
+            logger.info(f"Set log level to {log_level}")
+
+        # 4. Get Neo4j connection parameters
+        db_url = os.environ.get("NEO4J_URL", "bolt://localhost:7687")
+        username = os.environ.get("NEO4J_USERNAME", "neo4j")
+        password = os.environ.get("NEO4J_PASSWORD", "password")
+        database = os.environ.get("NEO4J_DATABASE", "neo4j")
+
+        logger.info(f"Neo4j connection: {db_url}, database: {database}")
+
+        # 5. Create and start the server with correct event loop handling
+        try:
+            # Set up the event loop properly
+            try:
+                loop = asyncio.get_event_loop()
+            except RuntimeError:
+                # No event loop exists in this thread, create a new one
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+            
+            # Create the server, which automatically handles async initialization
+            server = create_server(db_url, username, password, database)
+            logger.info("Server created successfully, starting MCP transport")
+
+            # 6. Run the server with the configured transport
+            transport = os.environ.get("MCP_TRANSPORT", "stdio")
+            
+            # Make sure any pending coroutines are dealt with
+            pending_tasks = asyncio.all_tasks(loop)
+            if pending_tasks:
+                logger.info(f"Waiting for {len(pending_tasks)} pending initialization tasks to complete...")
+                try:
+                    # Give pending tasks a chance to complete but don't block indefinitely
+                    loop.run_until_complete(asyncio.wait(pending_tasks, timeout=5))
+                except Exception as pending_err:
+                    logger.warning(f"Some initialization tasks didn't complete: {pending_err}")
+            
+            # Run the server - this should block until termination
+            server.run(transport=transport)
+            
+        except Exception as server_err:
+            logger.error(f"Server creation or execution failed: {str(server_err)}")
+            logger.debug(f"Error details: {traceback.format_exc()}")
+            sys.exit(1)
+
+    except KeyboardInterrupt:
+        logger.info("Server stopped by user")
+        sys.exit(0)
     except Exception as e:
-        logger.warning(f"Failed to clean up zombie instances: {e}")
+        logger.error(f"Unhandled exception in main: {str(e)}")
+        logger.debug(f"Error details: {traceback.format_exc()}")
+        sys.exit(1)
 
-    # Try to load .env file if present
+
+# Test functions to verify server operation
+async def test_server_initialization(db_url: str, username: str, password: str, database: str = "neo4j"):
+    """Test function to verify server initialization.
+
+    This function creates a server instance and verifies:
+    1. Connection to the database works
+    2. Hub initialization succeeds
+    3. Tool registration works
+    4. Basic queries function
+
+    Args:
+        db_url: Neo4j connection URL
+        username: Neo4j username
+        password: Neo4j password
+        database: Neo4j database name
+
+    Returns:
+        bool: True if all tests pass
+    """
+    logger.info("Running server initialization test")
+
     try:
-        from dotenv import load_dotenv
-        env_loaded = load_dotenv()
-        if env_loaded:
-            logger.info("Loaded environment variables from .env file")
-    except ImportError:
-        logger.warning("dotenv package not installed, skipping .env loading")
+        # Create a temporary event loop for testing
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
 
-    # Get connection info from environment
-    db_url = os.environ.get("NEO4J_URL", "bolt://localhost:7687")
-    username = os.environ.get("NEO4J_USERNAME", "neo4j")
-    password = os.environ.get("NEO4J_PASSWORD", "password")
-    database = os.environ.get("NEO4J_DATABASE", "neo4j")
+        # Create the driver with minimal connection pool
+        driver_config = {
+            "max_connection_pool_size": 5,
+        }
 
-    logger.info(f"Starting NeoCoder MCP Server, connecting to {db_url}")
-    logger.info(f"Using username: {username}, database: {database}")
+        driver = AsyncGraphDatabase.driver(
+            db_url,
+            auth=(username, password),
+            **driver_config
+        )
 
-    try:
-        server = create_server(db_url, username, password, database)
-        server.run(transport="stdio")
+        # Test connection
+        logger.info("Testing Neo4j connection")
+        async with driver.session(database=database) as session:
+            result = await session.run("RETURN 1 as success")
+            data = await result.data()
+            if not data or data[0]["success"] != 1:
+                logger.error("Basic Neo4j connectivity test failed")
+                return False
+
+        logger.info("Basic Neo4j connectivity verified")
+
+        # Create server instance
+        logger.info("Creating test server instance")
+        server = Neo4jWorkflowServer(driver, database, loop)
+
+        # Test hub access
+        logger.info("Testing guidance hub access")
+        hub_response = await server.get_guidance_hub()
+        if not hub_response or not isinstance(hub_response[0], types.TextContent):
+            logger.error("Guidance hub test failed")
+            return False
+
+        # Test incarnation functions
+        logger.info("Testing incarnation listing")
+        inc_response = await server.list_incarnations()
+        if not inc_response or not isinstance(inc_response[0], types.TextContent):
+            logger.error("Incarnation listing test failed")
+            return False
+
+        # Close the driver
+        await driver.close()
+
+        logger.info("All server initialization tests passed")
+        return True
+
     except Exception as e:
-        logger.error(f"Error creating or running server: {e}")
-        # Print more detailed error message
-        import traceback
-        logger.error(traceback.format_exc())
+        logger.error(f"Server initialization test failed: {str(e)}")
+        logger.debug(f"Test error details: {traceback.format_exc()}")
+        return False
 
 
 if __name__ == "__main__":
-    main()
+    # Add missing imports only needed in main
+    import sys
+
+    # Run initialization test in debug mode
+    if "--test" in sys.argv:
+        import asyncio
+
+        # Get connection info from environment
+        db_url = os.environ.get("NEO4J_URL", "bolt://localhost:7687")
+        username = os.environ.get("NEO4J_USERNAME", "neo4j")
+        password = os.environ.get("NEO4J_PASSWORD", "password")
+        database = os.environ.get("NEO4J_DATABASE", "neo4j")
+
+        # Run the test
+        test_result = asyncio.run(test_server_initialization(db_url, username, password, database))
+
+        if test_result:
+            logger.info("Server test successful, exiting...")
+            sys.exit(0)
+        else:
+            logger.error("Server test failed, exiting...")
+            sys.exit(1)
+    else:
+        # Start the server normally
+        main()

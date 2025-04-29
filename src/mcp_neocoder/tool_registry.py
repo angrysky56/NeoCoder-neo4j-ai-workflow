@@ -149,6 +149,9 @@ class ToolRegistry:
                 
         return count
     
+    # Track registered tools at the class level using a set
+    _mcp_registered_tools = set()
+    
     def register_tools_with_server(self, server) -> int:
         """Register all tools with an MCP server.
         
@@ -164,12 +167,18 @@ class ToolRegistry:
         
         for tool_name, tool_func in self.tools.items():
             try:
+                # Generate a unique key for this tool function
+                registration_key = f"{tool_func.__module__}.{tool_func.__qualname__}"
+                
                 # Check if tool has already been registered to avoid duplicates
-                if not hasattr(tool_func, '_registered_to_mcp'):
+                if registration_key not in self._mcp_registered_tools:
                     server.mcp.add_tool(tool_func)
-                    setattr(tool_func, '_registered_to_mcp', True)
+                    # Add to our registry's class-level set instead of trying to set attribute on method
+                    self._mcp_registered_tools.add(registration_key)
                     logger.info(f"Added tool '{tool_name}' to MCP server")
                     count += 1
+                else:
+                    logger.info(f"Tool '{tool_name}' already registered, skipping")
             except Exception as e:
                 logger.error(f"Error adding tool '{tool_name}' to MCP server: {e}")
         
@@ -190,7 +199,7 @@ class ToolRegistry:
             return 0
             
         # Get the incarnation category
-        category = incarnation_instance.incarnation_type.value
+        category = incarnation_instance.name
         logger.info(f"Registering tools from {category} incarnation")
         
         # Register tools from the incarnation
@@ -229,11 +238,15 @@ class ToolRegistry:
         for tool_name in tools_in_category:
             if tool_name in self.tools:
                 tool_func = self.tools[tool_name]
+                # Generate a unique key for this tool function
+                registration_key = f"{tool_func.__module__}.{tool_func.__qualname__}"
+                
                 # Only add tools that haven't been registered yet
-                if not hasattr(tool_func, '_registered_to_mcp'):
+                if registration_key not in self._mcp_registered_tools:
                     try:
                         server.mcp.add_tool(tool_func)
-                        setattr(tool_func, '_registered_to_mcp', True)
+                        # Add to our registry's set
+                        self._mcp_registered_tools.add(registration_key)
                         logger.info(f"Added tool '{tool_name}' from {category} to MCP server")
                         added_count += 1
                     except Exception as e:

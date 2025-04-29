@@ -17,52 +17,41 @@ from neo4j import AsyncGraphDatabase, AsyncDriver
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("mcp_neocoder_init")
 
-from enum import Enum
+# No hardcoded types - they're discovered dynamically
 
-# Import and use the IncarnationType enum from the incarnations package
-from .incarnations.base_incarnation import IncarnationType
-
-# List of incarnation type values for validation
-INCARNATION_TYPES = [t.value for t in IncarnationType]
-
-# Dynamically discover available incarnation types
+# Dynamically discover available incarnation names
 def discover_incarnation_types():
-    """Discover available incarnation types from the filesystem."""
+    """Discover available incarnation names from the filesystem."""
     import os
-    import importlib.util
+    from pathlib import Path
 
-    incarnation_types = []
+    incarnation_names = []
     current_dir = os.path.dirname(os.path.abspath(__file__))
     incarnations_dir = os.path.join(current_dir, "incarnations")
 
     if not os.path.exists(incarnations_dir):
         logger.warning(f"Incarnations directory not found: {incarnations_dir}")
-        return INCARNATION_TYPES  # Fall back to the predefined list
+        return []  # Return empty list if directory doesn't exist
 
-    # Match module filenames to incarnation types
+    # Simple discovery approach: scan for *_incarnation.py files
     for entry in os.listdir(incarnations_dir):
-        if entry.startswith("__") or not entry.endswith(".py"):
+        if not entry.endswith('_incarnation.py') or entry.startswith('__'):
             continue
-
-        module_name = entry[:-3]  # Remove .py extension
-
-        # Skip base modules and adapters
-        if module_name in ("base_incarnation", "polymorphic_adapter"):
+            
+        # Skip base incarnation
+        if entry == 'base_incarnation.py':
             continue
+            
+        # Extract name from filename (e.g., "data_analysis" from "data_analysis_incarnation.py")
+        incarnation_name = entry[:-14]  # Remove "_incarnation.py" (14 chars)
+        if incarnation_name:
+            # Make sure there's no trailing underscore
+            if incarnation_name.endswith('_'):
+                incarnation_name = incarnation_name[:-1]
+            incarnation_names.append(incarnation_name)
+            logger.info(f"Discovered incarnation name: {incarnation_name} from {entry}")
 
-        # Try to match filename to incarnation type
-        if module_name.endswith("_incarnation"):
-            # Extract the type from the filename (e.g., research_incarnation.py -> research)
-            incarnation_name = module_name.replace("_incarnation", "")
-
-            # Add to discovered types
-            for inc_type in IncarnationType:
-                if inc_type.value.startswith(incarnation_name):
-                    incarnation_types.append(inc_type.value)
-                    logger.info(f"Discovered incarnation type: {inc_type.value} from {module_name}")
-                    break
-
-    return incarnation_types if incarnation_types else INCARNATION_TYPES
+    return incarnation_names
 
 
 async def init_neo4j_connection(uri: str, user: str, password: str) -> AsyncDriver:
@@ -388,46 +377,67 @@ async def init_db(incarnations: Optional[List[str]] = None):
     incarnations = incarnations or available_incarnations
 
     # Connect to Neo4j
-    driver = await init_neo4j_connection(neo4j_uri, neo4j_user, neo4j_password)
+    try:
+        driver = await init_neo4j_connection(neo4j_uri, neo4j_user, neo4j_password)
+    except Exception as e:
+        logger.error(f"Failed to connect to Neo4j: {e}")
+        # Return instead of sys.exit to allow recovery
+        return
 
+    success = False
     try:
         # Initialize base schema
         await init_base_schema(driver, neo4j_database)
 
         # Initialize incarnation-specific schemas
-        if "research_orchestration" in incarnations:
+        if "research_orchestration" in incarnations or "research" in incarnations:
             await init_research_schema(driver, neo4j_database)
 
-        if "decision_support" in incarnations:
+        if "decision_support" in incarnations or "decision" in incarnations:
             await init_decision_schema(driver, neo4j_database)
 
-        if "continuous_learning" in incarnations:
+        if "continuous_learning" in incarnations or "learning" in incarnations:
             await init_learning_schema(driver, neo4j_database)
 
-        if "complex_system" in incarnations:
+        if "complex_system" in incarnations or "simulation" in incarnations:
             await init_simulation_schema(driver, neo4j_database)
 
         # Create incarnation-specific schemas for other discovered incarnations
-        # This is just a placeholder and should be implemented properly
         for inc_type in incarnations:
-            if inc_type not in ["research_orchestration", "decision_support", "continuous_learning", "complex_system"]:
-                logger.info(f"Creating basic schema for incarnation: {inc_type}")
-                hub_id = f"{inc_type}_hub"
-                hub_description = f"This is the {inc_type} incarnation of the NeoCoder framework."
+            # Skip already handled incarnations
+            if inc_type in ["research_orchestration", "research", "decision_support", 
+                           "decision", "continuous_learning", "learning", 
+                           "complex_system", "simulation"]:
+                continue
+                
+            logger.info(f"Creating basic schema for incarnation: {inc_type}")
+            hub_id = f"{inc_type}_hub"
+            
+            # Create a more informative hub description based on the incarnation type
+            if inc_type == "knowledge_graph":
+                hub_description = "Knowledge Graph Management - Create and analyze semantic knowledge graphs with entities, observations, and relationships."
+            elif inc_type == "code_analysis":
+                hub_description = "Code Analysis - Parse, analyze, and document code structure, patterns, and metrics."
+            elif inc_type == "data_analysis":
+                hub_description = "Data Analysis - Analyze datasets, create visualizations, and extract insights from data."
+            else:
+                # Generic description for any other incarnation
+                hub_description = f"This is the {inc_type.replace('_', ' ').title()} incarnation of the NeoCoder framework."
 
-                try:
-                    # Create a basic hub for this incarnation
-                    hub_query = f"""
-                    MERGE (hub:AiGuidanceHub {{id: '{hub_id}'}})
-                    ON CREATE SET hub.description = '{hub_description}'
-                    RETURN hub
-                    """
+            try:
+                # Use parameterized query for safety and to avoid quoting issues
+                hub_query = """
+                MERGE (hub:AiGuidanceHub {id: $hub_id})
+                ON CREATE SET hub.description = $hub_description
+                RETURN hub
+                """
 
-                    async with driver.session(database=neo4j_database) as session:
-                        await session.run(hub_query)
+                async with driver.session(database=neo4j_database) as session:
+                    await session.run(hub_query, {"hub_id": hub_id, "hub_description": hub_description})
+                    logger.info(f"Created hub for {inc_type}")
 
-                except Exception as e:
-                    logger.error(f"Error creating hub for {inc_type}: {e}")
+            except Exception as e:
+                logger.error(f"Error creating hub for {inc_type}: {e}")
 
         # Create main guidance hub
         await create_main_guidance_hub(driver, neo4j_database)
@@ -436,11 +446,18 @@ async def init_db(incarnations: Optional[List[str]] = None):
         await create_dynamic_links_between_hubs(driver, neo4j_database, incarnations)
 
         logger.info("Database initialization complete!")
+        success = True
     except Exception as e:
         logger.error(f"Error during database initialization: {e}")
-        sys.exit(1)
+        import traceback
+        logger.error(f"Initialization stack trace: {traceback.format_exc()}")
     finally:
-        await driver.close()
+        # Only close the driver if it was successfully created
+        if 'driver' in locals():
+            await driver.close()
+        
+        # Return success status instead of exiting
+        return success
 
 
 def main():
@@ -448,12 +465,15 @@ def main():
     # Get incarnations to initialize from command line arguments
     incarnations_to_init = sys.argv[1:] if len(sys.argv) > 1 else None
 
-    if incarnations_to_init:
-        # Validate incarnation types
+    # Discover available incarnation types for validation
+    available_types = discover_incarnation_types()
+
+    if incarnations_to_init and available_types:
+        # Validate incarnation types against discovered types
         for inc in incarnations_to_init:
-            if inc not in INCARNATION_TYPES:
+            if inc not in available_types:
                 logger.error(f"Invalid incarnation type: {inc}")
-                logger.error(f"Valid types are: {', '.join(INCARNATION_TYPES)}")
+                logger.error(f"Valid types are: {', '.join(available_types)}")
                 sys.exit(1)
 
     # Run the initialization

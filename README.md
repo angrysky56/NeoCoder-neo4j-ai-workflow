@@ -19,8 +19,8 @@ NeoCoder implements a system where:
 - **Python 3.10+**: For running the MCP server
 - **uv**: The Python package manager for MCP servers
 - **Claude Desktop**: For using with Claude AI
-- [MCP-Desktop-Commander](https://github.com/wonderwhy-er/DesktopCommanderMCP):For cli and filesystem operations
-
+- [MCP-Desktop-Commander](https://github.com/wonderwhy-er/DesktopCommanderMCP): Invaluable For cli and filesystem operations
+- [For the Code Analysis Incarnation: AST/ASG](https://github.com/angrysky56/ast-mcp-server)
 ## The MCP server runs the Python code, bridging the gap between the Neo4j graph and the AI assistant ( e.g. Claude)
 
 ![alt text](image-3.png)

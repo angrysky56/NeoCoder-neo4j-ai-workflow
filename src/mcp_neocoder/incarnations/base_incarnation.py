@@ -3,6 +3,9 @@ Base Incarnation Module for NeoCoder Framework
 
 This module defines the base class for all incarnations, with common functionality
 and required interface methods that must be implemented by each incarnation.
+
+The design follows a plugin architecture where different incarnations can be dynamically
+discovered and loaded without requiring central registration of types.
 """
 
 import json
@@ -10,7 +13,6 @@ import logging
 import uuid
 import os
 from typing import Dict, Any, List, Optional, Type, Union
-from enum import Enum, auto
 
 import mcp.types as types
 from pydantic import Field
@@ -18,46 +20,13 @@ from neo4j import AsyncDriver, AsyncTransaction
 
 logger = logging.getLogger("mcp_neocoder.incarnations.base")
 
-# Default incarnation types
-class IncarnationType(str, Enum):
-    """Supported incarnation types for the NeoCoder framework.
-    
-    This enum will be extended dynamically based on discovered incarnation modules.
-    """
-    DATA_ANALYSIS = "data_analysis"        # Data analysis incarnation
-    CODING = "coding"                      # Original coding workflow
-    RESEARCH = "research_orchestration"    # Research lab notebook
-    DECISION = "decision_support"          # Decision-making system
-    LEARNING = "continuous_learning"       # Learning environment
-    SIMULATION = "complex_system"          # Complex system simulator
-    KNOWLEDGE_GRAPH = "knowledge_graph"    # Knowledge graph management
-    CODE_ANALYSIS = "code_analysis"        # Code analysis with AST/ASG
-    
-    @classmethod
-    def extend(cls, new_types: Dict[str, str]):
-        """Extend the enum with new incarnation types.
-        
-        Args:
-            new_types: Dictionary mapping identifiers to string values
-        
-        Returns:
-            The updated enum class
-        """
-        # Create a new enum class with the original values plus new ones
-        extended_items = {name: member.value for name, member in cls.__members__.items()}
-        extended_items.update(new_types)
-        
-        # Create a new Enum class with the extended values
-        return Enum(cls.__name__, extended_items, type=str)
-
 
 class BaseIncarnation:
     """Base class for all incarnation implementations."""
 
-    # These should be overridden by each incarnation
-    incarnation_type: IncarnationType
-    description: str
-    version: str
+    # This should be overridden by each incarnation
+    name = "base"  # String identifier, should be unique
+    description = "Base incarnation class"
 
     # Optional schema creation scripts, format: List of Cypher queries to execute
     schema_queries: List[str] = []
@@ -69,7 +38,7 @@ class BaseIncarnation:
 Welcome to this incarnation of the NeoCoder framework.
 This is a default hub that should be overridden by each incarnation.
     """
-    
+
     # Optional list of tool method names - can be defined by subclasses
     # to explicitly declare which methods should be registered as tools
     # Format: list[str] with method names to be registered as tools
@@ -93,20 +62,20 @@ This is a default hub that should be overridden by each incarnation.
                 # Create guidance hub if needed
                 await self.ensure_hub_exists()
 
-                logger.info(f"{self.incarnation_type} incarnation schema initialized")
+                logger.info(f"{self.name} incarnation schema initialized")
             except Exception as e:
-                logger.error(f"Error initializing schema for {self.incarnation_type}: {e}")
+                logger.error(f"Error initializing schema for {self.name}: {e}")
                 raise
         else:
             # No schema queries defined
-            logger.warning(f"No schema queries defined for {self.incarnation_type}")
+            logger.warning(f"No schema queries defined for {self.name}")
 
             # Still create the hub
             await self.ensure_hub_exists()
 
     async def ensure_hub_exists(self):
         """Create the guidance hub for this incarnation if it doesn't exist."""
-        hub_id = f"{self.incarnation_type.value}_hub"
+        hub_id = f"{self.name}_hub"
 
         query = """
         MERGE (hub:AiGuidanceHub {id: $hub_id})
@@ -122,14 +91,14 @@ This is a default hub that should be overridden by each incarnation.
         try:
             async with self.driver.session(database=self.database) as session:
                 await session.execute_write(lambda tx: tx.run(query, params))
-                logger.info(f"Ensured hub exists for {self.incarnation_type}")
+                logger.info(f"Ensured hub exists for {self.name}")
         except Exception as e:
-            logger.error(f"Error creating hub for {self.incarnation_type}: {e}")
+            logger.error(f"Error creating hub for {self.name}: {e}")
             raise
 
     async def get_guidance_hub(self) -> List[types.TextContent]:
         """Get the guidance hub content for this incarnation."""
-        hub_id = f"{self.incarnation_type.value}_hub"
+        hub_id = f"{self.name}_hub"
 
         query = f"""
         MATCH (hub:AiGuidanceHub {{id: $hub_id}})
@@ -149,7 +118,7 @@ This is a default hub that should be overridden by each incarnation.
                     # Try again
                     return await self.get_guidance_hub()
         except Exception as e:
-            logger.error(f"Error retrieving guidance hub for {self.incarnation_type}: {e}")
+            logger.error(f"Error retrieving guidance hub for {self.name}: {e}")
             return [types.TextContent(type="text", text=f"Error: {e}")]
 
     def list_tool_methods(self):
@@ -165,7 +134,7 @@ This is a default hub that should be overridden by each incarnation.
 
         logger.debug(f"Checking methods in {self.__class__.__name__}")
 
-        # First, check if there's a hardcoded list of tools
+        # First, check if there's a hardcoded base list of tools
         if hasattr(self, '_tool_methods') and isinstance(self._tool_methods, list):
             logger.info(f"Using predefined tool list for {self.__class__.__name__}: {self._tool_methods}")
             for name in self._tool_methods:
@@ -228,13 +197,20 @@ This is a default hub that should be overridden by each incarnation.
         logger.info(f"Found {len(tool_methods)} tool methods in {self.__class__.__name__} via inspection: {tool_methods}")
         return tool_methods
 
+    # Track registered tools at the class level - using a class variable
+    _registered_tool_methods = set()
+
     async def register_tools(self, server):
         """Register incarnation-specific tools with the server.
         Uses direct registration to ensure tools are properly connected.
         """
+        # Ensure the class has the _registered_tool_methods set
+        if not hasattr(self.__class__, '_registered_tool_methods'):
+            self.__class__._registered_tool_methods = set()
+
         # Get all tool methods from this incarnation
         tool_methods = self.list_tool_methods()
-        logger.info(f"Tool methods in {self.incarnation_type.value}: {tool_methods}")
+        logger.info(f"Tool methods in {self.name}: {tool_methods}")
 
         # Register each tool directly with the MCP server
         registered_count = 0
@@ -243,21 +219,30 @@ This is a default hub that should be overridden by each incarnation.
                 # Get the method
                 method = getattr(self, method_name)
 
-                # Check if it's already registered
-                if not hasattr(method, '_registered_to_mcp'):
-                    # Register directly with MCP
-                    server.mcp.add_tool(method)
-                    setattr(method, '_registered_to_mcp', True)
-                    registered_count += 1
-                    logger.info(f"Directly registered tool {method_name} from {self.incarnation_type.value}")
+                # Use the method's name and class name as a unique key for tracking registration
+                registration_key = f"{self.__class__.__name__}.{method_name}"
+
+                # Check if it's already registered using our safer tracking mechanism
+                if registration_key not in self.__class__._registered_tool_methods:
+                    try:
+                        # Register directly with MCP
+                        server.mcp.add_tool(method)
+                        # Track registration in our class-level set (safer than setting attributes on methods)
+                        self.__class__._registered_tool_methods.add(registration_key)
+                        registered_count += 1
+                        logger.info(f"Directly registered tool {method_name} from {self.name}")
+                    except Exception as reg_err:
+                        logger.error(f"Failed to register tool {method_name}: {reg_err}")
+                else:
+                    logger.info(f"Tool {method_name} already registered, skipping")
             except Exception as e:
-                logger.error(f"Error registering tool {method_name}: {e}")
+                logger.error(f"Error getting tool method {method_name}: {e}")
 
         # Also register with tool registry for tracking/listing
         from ..tool_registry import registry
-        registry.register_class_tools(self, self.incarnation_type.value)
+        registry.register_class_tools(self, self.name)
 
-        logger.info(f"{self.incarnation_type} incarnation: {registered_count} tools registered directly with server")
+        logger.info(f"{self.name} incarnation: {registered_count} tools registered directly with server")
         return registered_count
 
     async def _read_query(self, tx: AsyncTransaction, query: str, params: dict) -> str:
@@ -273,19 +258,4 @@ This is a default hub that should be overridden by each incarnation.
         return summary
 
 
-def get_incarnation_type_from_filename(filename: str) -> Optional[str]:
-    """Extract an incarnation type value from a filename.
-    
-    Args:
-        filename: The filename to extract from (e.g., 'data_analysis_incarnation.py')
-        
-    Returns:
-        The extracted value or None if no match
-    """
-    if not filename.endswith('_incarnation.py'):
-        return None
-        
-    # Remove '.py' extension and '_incarnation' suffix
-    name = filename[:-3].replace('_incarnation', '')
-    
-    return name
+# End of base incarnation module

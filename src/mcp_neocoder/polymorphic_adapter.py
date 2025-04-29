@@ -18,10 +18,28 @@ import mcp.types as types
 from pydantic import Field
 from neo4j import AsyncTransaction
 
-# Import the BaseIncarnation and related types from incarnations.base_incarnation
-from .incarnations.base_incarnation import BaseIncarnation, IncarnationType, get_incarnation_type_from_filename
+# Import the BaseIncarnation from incarnations.base_incarnation
+from .incarnations.base_incarnation import BaseIncarnation
 
 logger = logging.getLogger("mcp_neocoder.polymorphic_adapter")
+
+
+def get_incarnation_type_from_filename(filename: str) -> Optional[str]:
+    """Extract an incarnation type value from a filename.
+
+    Args:
+        filename: The filename to extract from (e.g., 'data_analysis_incarnation.py')
+
+    Returns:
+        The extracted value or None if no match
+    """
+    if not filename.endswith('_incarnation.py'):
+        return None
+
+    # Remove '.py' extension and '_incarnation' suffix
+    name = filename[:-3].replace('_incarnation', '')
+
+    return name
 
 
 class PolymorphicAdapterMixin:
@@ -33,23 +51,34 @@ class PolymorphicAdapterMixin:
         self.current_incarnation = None
         super().__init__(*args, **kwargs)
 
-    def register_incarnation(self, incarnation_class: Type[BaseIncarnation], incarnation_type: IncarnationType):
-        """Register a new incarnation type."""
-        self.incarnation_registry[incarnation_type] = incarnation_class
+    def register_incarnation(self, incarnation_class: Type[BaseIncarnation], incarnation_id: str = None):
+        """Register a new incarnation.
+        
+        Args:
+            incarnation_class: The incarnation class to register
+            incarnation_id: Optional identifier override (uses class.name by default)
+        """
+        # Use provided id or get it from the class
+        incarnation_id = incarnation_id or incarnation_class.name
+        self.incarnation_registry[incarnation_id] = incarnation_class
 
-    async def set_incarnation(self, incarnation_type: IncarnationType):
-        """Set the current incarnation type."""
-        if incarnation_type not in self.incarnation_registry:
-            raise ValueError(f"Unknown incarnation type: {incarnation_type}")
+    async def set_incarnation(self, incarnation_type_id: str):
+        """Set the current incarnation type using its string identifier.
+        
+        Args:
+            incarnation_type_id: String identifier for the incarnation type
+        """
+        if incarnation_type_id not in self.incarnation_registry:
+            raise ValueError(f"Unknown incarnation type: {incarnation_type_id}")
 
         # Get instance from incarnation registry if available
         from mcp_neocoder.incarnation_registry import registry as global_registry
 
-        incarnation_instance = global_registry.get_instance(incarnation_type, self.driver, self.database)
+        incarnation_instance = global_registry.get_instance(incarnation_type_id, self.driver, self.database)
 
         # If not available in global registry, create it directly
         if not incarnation_instance:
-            incarnation_class = self.incarnation_registry[incarnation_type]
+            incarnation_class = self.incarnation_registry[incarnation_type_id]
             incarnation_instance = incarnation_class(self.driver, self.database)
 
         self.current_incarnation = incarnation_instance
@@ -58,27 +87,27 @@ class PolymorphicAdapterMixin:
         await self.current_incarnation.initialize_schema()
 
         # Register incarnation-specific tools with explicit logging
-        logger.info(f"Registering tools for incarnation: {incarnation_type.value}")
+        logger.info(f"Registering tools for incarnation: {incarnation_type_id}")
         tool_count = await self.current_incarnation.register_tools(self)
-        logger.info(f"Registered {tool_count} tools for {incarnation_type.value}")
+        logger.info(f"Registered {tool_count} tools for {incarnation_type_id}")
 
-        logger.info(f"Switched to incarnation: {incarnation_type.value}")
+        logger.info(f"Switched to incarnation: {incarnation_type_id}")
         return self.current_incarnation
 
-    async def get_current_incarnation_type(self) -> Optional[IncarnationType]:
-        """Get the currently active incarnation type."""
+    async def get_current_incarnation_type(self) -> Optional[str]:
+        """Get the currently active incarnation identifier."""
         if not self.current_incarnation:
             return None
-        return self.current_incarnation.incarnation_type
+        return self.current_incarnation.name
 
     async def list_available_incarnations(self) -> List[Dict[str, Any]]:
         """List all available incarnations with metadata."""
         return [
             {
-                "type": inc_type.value,
-                "description": inc_class.__doc__ or "No description available",
+                "type": inc_type_id,
+                "description": getattr(inc_class, 'description', inc_class.__doc__ or "No description available"),
             }
-            for inc_type, inc_class in self.incarnation_registry.items()
+            for inc_type_id, inc_class in self.incarnation_registry.items()
         ]
 
 
@@ -119,80 +148,68 @@ async def _switch_incarnation_async(
     server,
     incarnation_type: str
 ) -> List[types.TextContent]:
-    """Async implementation of switch_incarnation."""
+    """Async implementation of switch_incarnation using simple string matching.
+    
+    Uses direct string matching - no enums.
+    """
+    # Simple approach: just use the string directly
     try:
-        # First, ensure that incarnation types are up to date by extending with any new types
-        from .incarnation_registry import registry
-        registry.extend_incarnation_types()
-
-        # Import the updated enum
-        from .incarnations.base_incarnation import IncarnationType
-
-        logger.info(f"Trying to switch to incarnation type: {incarnation_type}")
-
-        # Log available types for debugging
-        available_types = [t.value for t in IncarnationType]
-        logger.info(f"Available incarnation types: {available_types}")
-
-        # First try exact match
-        target_type = None
-        for inc_type in IncarnationType:
-            if inc_type.value.lower() == incarnation_type.lower() or inc_type.name.lower() == incarnation_type.lower():
-                target_type = inc_type
-                logger.info(f"Exact match found for incarnation type: {inc_type.value}")
-                break
-
-        # If no exact match, try a fuzzy match
-        if not target_type:
-            for inc_type in IncarnationType:
-                if (incarnation_type.lower() in inc_type.value.lower() or
-                    incarnation_type.lower() in inc_type.name.lower()):
-                    target_type = inc_type
-                    logger.info(f"Fuzzy match found for incarnation type: {incarnation_type} -> {inc_type.value}")
-                    break
-
-        # If still no match, check common aliases
-        if not target_type:
-            aliases = {
-                "research": IncarnationType.RESEARCH,
-                "decision": IncarnationType.DECISION,
-                "learning": IncarnationType.LEARNING,
-                "complex": IncarnationType.SIMULATION,
-                "simulation": IncarnationType.SIMULATION,
-                "knowledge": IncarnationType.KNOWLEDGE_GRAPH,
-                "graph": IncarnationType.KNOWLEDGE_GRAPH,
-                "data": IncarnationType.DATA_ANALYSIS,
-                "analysis": IncarnationType.DATA_ANALYSIS,
-                "coding": IncarnationType.CODING,
-                "neocoder": IncarnationType.CODING,
-                "code": IncarnationType.CODING
-            }
-
-            for alias, inc_type in aliases.items():
-                if alias.lower() in incarnation_type.lower():
-                    target_type = inc_type
-                    logger.info(f"Alias match found: {alias} -> {inc_type.value}")
-                    break
-
-        if not target_type:
-            available_types_str = ", ".join(available_types)
-            return [types.TextContent(
-                type="text",
-                text=f"Unknown incarnation type: '{incarnation_type}'. Available types: {available_types_str}"
-            )]
-
+        logger.info(f"Switching to incarnation type: {incarnation_type}")
+        
+        # Look first for exact match
+        if incarnation_type in server.incarnation_registry:
+            target_type = incarnation_type
+        else:
+            # Try case-insensitive match
+            lower_type = incarnation_type.lower()
+            available_types = list(server.incarnation_registry.keys())
+            
+            matches = []
+            for type_id in available_types:
+                # Try both exact match and first-segment match for multi-part names
+                if type_id.lower() == lower_type:
+                    matches.append((type_id, 100))  # Perfect match, highest score
+                elif type_id.lower().startswith(lower_type):
+                    matches.append((type_id, 80))   # Prefix match, high score
+                elif lower_type.startswith(type_id.lower()):
+                    matches.append((type_id, 70))   # Substring match, lower score
+                # Check for first segment match in multi-part names
+                elif '_' in type_id and type_id.split('_')[0].lower() == lower_type:
+                    matches.append((type_id, 90))   # First segment match, very high score
+                # Match on class name (remove 'Incarnation' suffix if present)
+                else:
+                    inc_class = server.incarnation_registry[type_id]
+                    if hasattr(inc_class, '__name__'):
+                        class_name = inc_class.__name__.lower()
+                        if class_name.endswith('incarnation'):
+                            class_name = class_name[:-11]  # Remove 'incarnation'
+                        if class_name == lower_type:
+                            matches.append((type_id, 85))  # Class name match, high score
+            
+            # No matches found
+            if not matches:
+                available_types_str = ", ".join(available_types)
+                return [types.TextContent(
+                    type="text",
+                    text=f"Unknown incarnation type: '{incarnation_type}'. Available types: {available_types_str}"
+                )]
+            
+            # Sort by score (highest first) and use the best match
+            matches.sort(key=lambda x: x[1], reverse=True)
+            target_type = matches[0][0]
+            logger.info(f"Found matching incarnation: {target_type}")
+        
+        # Switch to the matched incarnation
         try:
-            logger.info(f"Setting incarnation to: {target_type.value}")
             await server.set_incarnation(target_type)
-            logger.info(f"Successfully switched to incarnation: {target_type.value}")
             return [types.TextContent(
                 type="text",
-                text=f"Successfully switched to '{target_type.value}' incarnation"
+                text=f"Successfully switched to '{target_type}' incarnation"
             )]
-        except Exception as set_err:
-            logger.error(f"Error in set_incarnation: {set_err}")
-            return [types.TextContent(type="text", text=f"Error setting incarnation: {set_err}")]
-
+        except Exception as e:
+            logger.error(f"Error setting incarnation: {e}")
+            return [types.TextContent(type="text", text=f"Error setting incarnation: {e}")]
+            
     except Exception as e:
         logger.error(f"Error switching incarnation: {e}")
         import traceback
@@ -230,18 +247,18 @@ def get_current_incarnation(server) -> List[types.TextContent]:
         return [types.TextContent(type="text", text=f"Error getting current incarnation: {e}")]
 
 async def _get_current_incarnation_async(server) -> List[types.TextContent]:
-    """Async implementation of get_current_incarnation."""
+    """Get the currently active incarnation type using string identifiers."""
     try:
         current = await server.get_current_incarnation_type()
         if current:
             return [types.TextContent(
-                type="text",
-                text=f"Currently using '{current.value}' incarnation"
+                type="text", 
+                text=f"Currently using '{current}' incarnation"
             )]
         else:
             return [types.TextContent(
                 type="text",
-                text="No incarnation is currently active"
+                text="No incarnation is currently active. Use `switch_incarnation()` to set one."
             )]
     except Exception as e:
         logger.error(f"Error getting current incarnation: {e}")
@@ -278,26 +295,48 @@ def list_incarnations(server) -> List[types.TextContent]:
         return [types.TextContent(type="text", text=f"Error listing incarnations: {e}")]
 
 async def _list_incarnations_async(server) -> List[types.TextContent]:
-    """Async implementation of list_incarnations."""
+    """List all available incarnations with simple string identifiers."""
     try:
-        # First, ensure that incarnation types are up to date by extending with any new types
-        from .incarnation_registry import registry
-        registry.extend_incarnation_types()
-
-        # Get incarnations from server
-        incarnations = await server.list_available_incarnations()
-
+        # Just get the direct list with no enum translations
+        incarnations = []
+        
+        for type_id, inc_class in server.incarnation_registry.items():
+            # Get description from class if available or use docstring
+            description = getattr(inc_class, 'description', None)
+            if not description and inc_class.__doc__:
+                description = inc_class.__doc__.strip().split('\n')[0]
+            if not description:
+                description = "No description available"
+                
+            # Get a nice display name
+            display_name = type_id
+            if '_' in type_id:
+                display_name = type_id.split('_')[0]
+                
+            incarnations.append({
+                "id": type_id,
+                "display_name": display_name,
+                "description": description
+            })
+        
+        # Format the output
         if incarnations:
+            # Sort by display name
+            incarnations.sort(key=lambda x: x["display_name"])
+            
             text = "# Available Incarnations\n\n"
             text += "| Type | Description |\n"
             text += "| ---- | ----------- |\n"
 
             for inc in incarnations:
-                text += f"| {inc['type']} | {inc['description']} |\n"
+                text += f"| {inc['display_name']} | {inc['description']} |\n"
 
+            # Show current incarnation
             current = await server.get_current_incarnation_type()
             if current:
-                text += f"\nCurrently using: **{current.value}**"
+                text += f"\nCurrently using: **{current}** incarnation"
+            else:
+                text += "\nNo incarnation is currently active. Use `switch_incarnation()` to activate one."
 
             return [types.TextContent(type="text", text=text)]
         else:
