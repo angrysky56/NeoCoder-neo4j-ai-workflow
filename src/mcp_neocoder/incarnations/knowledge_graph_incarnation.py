@@ -571,89 +571,59 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
     async def read_graph(self) -> List[types.TextContent]:
         """Read the entire knowledge graph"""
         try:
-            # Define the entity section template
-            entity_section_template = """
-## {name} ({type})
-
-{observations_section}
-{relations_section}
-"""
-
-            # Query to get all entities
-            entity_query = """
+            # Query to get all entities with their observations and relations
+            query = """
             MATCH (e:Entity)
-            WITH e ORDER BY e.name
-            RETURN e.name as name, e.entityType as type
+            OPTIONAL MATCH (e)-[:HAS_OBSERVATION]->(o:Observation)
+            OPTIONAL MATCH (e)-[r:RELATES_TO]->(related:Entity)
+            RETURN e.name as name, e.entityType as type, 
+                   collect(DISTINCT o.content) as observations,
+                   collect(DISTINCT {type: r.type, target: related.name}) as relations
+            ORDER BY e.name
             """
 
             async with self.driver.session(database=self.database) as session:
-                # Get all entities using the safe read method
-                entities_data = await self._safe_read_query(session, entity_query)
-
-                if not entities_data:
-                    return [types.TextContent(type="text", text="The knowledge graph is empty.")]
-
-                # Process each entity to build the complete graph view
-                formatted_entities = []
-
-                for entity in entities_data:
-                    entity_name = entity.get("name", "")
-                    entity_type = entity.get("type", "Unknown")
-
-                    # Get observations for this entity
-                    obs_query = """
-                    MATCH (e:Entity {name: $name})-[:HAS_OBSERVATION]->(o:Observation)
-                    RETURN o.content as content
-                    """
-
-                    obs_data = await self._safe_read_query(session, obs_query, {"name": entity_name})
-
-                    observations = []
-                    if obs_data:
-                        observations = [o.get("content", "") for o in obs_data if "content" in o]
-
-                    # Get relations for this entity
-                    rel_query = """
-                    MATCH (e:Entity {name: $name})-[r:RELATES_TO]->(related:Entity)
-                    RETURN r.type as type, related.name as target
-                    """
-
-                    rel_data = await self._safe_read_query(session, rel_query, {"name": entity_name})
-
-                    relations = []
-                    if rel_data:
-                        relations = [{"type": r.get("type", ""), "target": r.get("target", "")}
-                                    for r in rel_data if "type" in r and "target" in r]
-
-                    # Format sections for display
-                    observations_section = ""
-                    if observations:
-                        observations_section = "### Observations:\n"
-                        for obs in observations:
-                            observations_section += f"- {obs}\n"
-
-                    relations_section = ""
-                    if relations:
-                        relations_section = "### Relations:\n"
-                        for rel in relations:
-                            relations_section += f"- {rel['type']} -> {rel['target']}\n"
-
-                    # Format the complete entity section
-                    entity_section = entity_section_template.format(
-                        name=entity_name,
-                        type=entity_type,
-                        observations_section=observations_section,
-                        relations_section=relations_section
-                    )
-
-                    formatted_entities.append(entity_section)
-
-                # Combine all entity sections
-                all_entities = "\n".join(formatted_entities)
-
-                # Create the final response
-                response = f"# Knowledge Graph\n\nFound {len(entities_data)} entities in the knowledge graph.\n\n{all_entities}"
-
+                # Use a direct transaction to avoid scope issues
+                async def execute_query(tx):
+                    result = await tx.run(query)
+                    records = await result.records()
+                    entities = []
+                    
+                    for record in records:
+                        entity = {
+                            "name": record.get("name"),
+                            "type": record.get("type", "Unknown"),
+                            "observations": [obs for obs in record.get("observations", []) if obs is not None],
+                            "relations": [rel for rel in record.get("relations", []) 
+                                         if rel is not None and rel.get("type") is not None and rel.get("target") is not None]
+                        }
+                        entities.append(entity)
+                    
+                    return entities
+                
+                entities = await session.execute_read(execute_query)
+                
+                if not entities:
+                    return [types.TextContent(type="text", text="# Knowledge Graph\n\nThe knowledge graph is empty.")]
+                
+                # Format the response for each entity
+                response = f"# Knowledge Graph\n\nFound {len(entities)} entities in the knowledge graph.\n\n"
+                
+                for entity in entities:
+                    response += f"## {entity['name']} ({entity['type']})\n\n"
+                    
+                    if entity['observations']:
+                        response += "### Observations:\n"
+                        for obs in entity['observations']:
+                            response += f"- {obs}\n"
+                        response += "\n"
+                    
+                    if entity['relations']:
+                        response += "### Relations:\n"
+                        for rel in entity['relations']:
+                            response += f"- {rel['type']} -> {rel['target']}\n"
+                        response += "\n"
+                
                 return [types.TextContent(type="text", text=response)]
 
         except Exception as e:
@@ -670,7 +640,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                 return [types.TextContent(type="text", text="Error: Search query must be at least 2 characters")]
 
             # Simplified query that works without fulltext search
-            simple_query = """
+            cypher_query = """
             MATCH (e:Entity)
             WHERE e.name CONTAINS $query OR e.entityType CONTAINS $query
             WITH e
@@ -689,9 +659,24 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             """
 
             async with self.driver.session(database=self.database) as session:
-                # Use the safe read method
-                result_data = await self._safe_read_query(session, simple_query, {"query": query})
-
+                # Use a direct transaction to avoid scope issues
+                async def execute_query(tx):
+                    result = await tx.run(cypher_query, {"query": query})
+                    records = await result.records()
+                    result_data = []
+                    
+                    for record in records:
+                        entity = {
+                            "entityName": record.get("entityName"),
+                            "entityType": record.get("entityType", "Unknown"),
+                            "observations": [obs for obs in record.get("observations", []) if obs is not None]
+                        }
+                        result_data.append(entity)
+                    
+                    return result_data
+                
+                result_data = await session.execute_read(execute_query)
+                
                 # Process and format the results
                 if not result_data:
                     return [types.TextContent(type="text", text=f"No entities found matching '{query}'.")]
@@ -746,71 +731,47 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             if not names:
                 return [types.TextContent(type="text", text="Error: No entity names provided")]
 
-            # Build a more efficient unified query that works for multiple entities
-            entity_query = """
+            # Use a single comprehensive query to get all needed information
+            query = """
             UNWIND $names AS name
             MATCH (e:Entity {name: name})
-            RETURN e.name AS name, e.entityType AS type
+            OPTIONAL MATCH (e)-[:HAS_OBSERVATION]->(o:Observation)
+            OPTIONAL MATCH (e)-[outRel:RELATES_TO]->(target:Entity)
+            OPTIONAL MATCH (source:Entity)-[inRel:RELATES_TO]->(e)
+            RETURN 
+                e.name AS name, 
+                e.entityType AS type,
+                collect(DISTINCT o.content) AS observations,
+                collect(DISTINCT {type: outRel.type, target: target.name}) AS outRelations,
+                collect(DISTINCT {type: inRel.type, source: source.name}) AS inRelations
             """
 
             async with self.driver.session(database=self.database) as session:
-                # Get basic entity data
-                entities_data = await self._safe_read_query(session, entity_query, {"names": names})
-
-                if not entities_data:
+                # Use a direct transaction to avoid scope issues
+                async def execute_query(tx):
+                    result = await tx.run(query, {"names": names})
+                    records = await result.records()
+                    entity_details = []
+                    
+                    for record in records:
+                        entity = {
+                            "name": record.get("name"),
+                            "type": record.get("type", "Unknown"),
+                            "observations": [obs for obs in record.get("observations", []) if obs is not None],
+                            "outRelations": [rel for rel in record.get("outRelations", []) 
+                                           if rel is not None and rel.get("type") is not None and rel.get("target") is not None],
+                            "inRelations": [rel for rel in record.get("inRelations", []) 
+                                          if rel is not None and rel.get("type") is not None and rel.get("source") is not None]
+                        }
+                        entity_details.append(entity)
+                    
+                    return entity_details
+                
+                entity_details = await session.execute_read(execute_query)
+                
+                if not entity_details:
                     return [types.TextContent(type="text", text=f"No entities found with the specified names.")]
-
-                # Process each entity
-                entity_details = []
-
-                for entity in entities_data:
-                    entity_name = entity.get("name", "")
-                    entity_type = entity.get("type", "Unknown")
-
-                    # Get observations in a separate query
-                    obs_query = """
-                    MATCH (e:Entity {name: $name})-[:HAS_OBSERVATION]->(o:Observation)
-                    RETURN o.content as content
-                    """
-
-                    observations_data = await self._safe_read_query(session, obs_query, {"name": entity_name})
-                    observations = []
-                    if observations_data:
-                        observations = [o.get("content", "") for o in observations_data if "content" in o]
-
-                    # Get outgoing relations
-                    out_rel_query = """
-                    MATCH (e:Entity {name: $name})-[r:RELATES_TO]->(related:Entity)
-                    RETURN r.type as type, related.name as target
-                    """
-
-                    out_rel_data = await self._safe_read_query(session, out_rel_query, {"name": entity_name})
-                    out_relations = []
-                    if out_rel_data:
-                        out_relations = [{"type": r.get("type", ""), "target": r.get("target", "")}
-                                      for r in out_rel_data if "type" in r and "target" in r]
-
-                    # Get incoming relations
-                    in_rel_query = """
-                    MATCH (other:Entity)-[r:RELATES_TO]->(e:Entity {name: $name})
-                    RETURN r.type as type, other.name as source
-                    """
-
-                    in_rel_data = await self._safe_read_query(session, in_rel_query, {"name": entity_name})
-                    in_relations = []
-                    if in_rel_data:
-                        in_relations = [{"type": r.get("type", ""), "source": r.get("source", "")}
-                                     for r in in_rel_data if "type" in r and "source" in r]
-
-                    # Add processed entity to the results
-                    entity_details.append({
-                        "name": entity_name,
-                        "type": entity_type,
-                        "observations": observations,
-                        "outRelations": out_relations,
-                        "inRelations": in_relations
-                    })
-
+                
                 # Format the response
                 response = "# Entity Details\n\n"
 
