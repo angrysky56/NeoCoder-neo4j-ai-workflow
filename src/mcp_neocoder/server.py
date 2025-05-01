@@ -336,42 +336,42 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
         from .incarnation_registry import registry as global_registry
         import importlib
         import inspect
-        
+
         # Force a re-discovery to ensure we get all classes
         logger.info("Discovering available incarnation classes")
         global_registry.discover()
-        
+
         # If incarnations is empty, try alternative discovery methods
         if not global_registry.incarnations:
             logger.warning("No incarnations found via standard discovery. Trying alternative discovery methods.")
-            
+
             # Try to find incarnations directly from files
             direct_incarnations = global_registry.discover_incarnations()
             if direct_incarnations:
                 logger.info(f"Found {len(direct_incarnations)} incarnations through filesystem scan")
-                
+
                 # Manually load each incarnation file
                 for inc_type in direct_incarnations:
                     try:
                         logger.info(f"Manually loading incarnation module: {inc_type}")
                         module_name = f"{inc_type}_incarnation"
                         full_module_path = f"mcp_neocoder.incarnations.{module_name}"
-                        
+
                         # Force import of the module
                         try:
                             module = importlib.import_module(full_module_path)
-                            
+
                             # Find incarnation class in the module
                             for name, obj in inspect.getmembers(module):
-                                if (inspect.isclass(obj) and 
+                                if (inspect.isclass(obj) and
                                     obj.__module__ == full_module_path and
                                     name.endswith('Incarnation')):
-                                    
+
                                     # Set the name attribute if not present
                                     if not hasattr(obj, 'name'):
                                         logger.info(f"Setting name attribute for {name} to {inc_type}")
                                         obj.name = inc_type
-                                    
+
                                     # Register the class
                                     global_registry.register(obj)
                                     logger.info(f"Manually registered incarnation: {inc_type} ({name})")
@@ -380,11 +380,11 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
                     except Exception as e:
                         logger.error(f"Error manually loading {inc_type} incarnation: {e}")
                         logger.error(traceback.format_exc())
-        
+
         # Register discovered incarnations with this server
         incarnation_count = 0
         logger.info(f"Registering {len(global_registry.incarnations)} incarnations with server")
-        
+
         for name, inc_class in list(global_registry.incarnations.items()):
             try:
                 # Handle both string and enum names
@@ -392,24 +392,24 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
                     name_str = name.value
                 else:
                     name_str = str(name)
-                    
+
                 logger.info(f"Attempting to register incarnation: {name_str} ({inc_class.__name__})")
                 self.register_incarnation(inc_class, name_str)
                 logger.info(f"Registered incarnation: {name_str} ({inc_class.__name__})")
                 incarnation_count += 1
-                
+
                 # Preload an instance immediately to make its tools available
                 try:
                     instance = inc_class(self.driver, self.database)
                     logger.info(f"Created instance of {inc_class.__name__}")
-                    
+
                     # Store in the registry for later use
                     global_registry.instances[name_str] = instance
-                    
+
                     # Try to immediately register its tools
                     tool_methods = instance.list_tool_methods()
                     logger.info(f"Found {len(tool_methods)} tool methods in {name_str}")
-                    
+
                     # Directly register tools with MCP
                     for method_name in tool_methods:
                         if hasattr(instance, method_name) and callable(getattr(instance, method_name)):
@@ -419,15 +419,15 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
                                 logger.info(f"Directly registered tool {method_name} from {name_str}")
                             except Exception as tool_err:
                                 logger.error(f"Error registering tool {method_name}: {tool_err}")
-                    
+
                 except Exception as inst_err:
                     logger.error(f"Failed to create instance of {inc_class.__name__}: {inst_err}")
             except Exception as e:
                 logger.error(f"Failed to register incarnation {name}: {str(e)}")
                 logger.error(traceback.format_exc())
-        
+
         logger.info(f"Loaded {incarnation_count} incarnations successfully")
-        
+
         # If no incarnations were loaded, log a clear error
         if incarnation_count == 0:
             logger.error("NO INCARNATIONS WERE LOADED. This is a critical failure.")
@@ -653,8 +653,13 @@ Please wait a moment for full initialization to complete or check connection sta
         try:
             incarnations = []
             for inc_type, inc_class in self.incarnation_registry.items():
+                # Get the type value - handle both string and enum cases
+                type_value = inc_type
+                if hasattr(inc_type, 'value'):
+                    type_value = inc_type.value
+
                 incarnations.append({
-                    "type": inc_type.value,
+                    "type": type_value,
                     "description": inc_class.description if hasattr(inc_class, 'description') else "No description available",
                 })
 
@@ -895,8 +900,7 @@ Welcome! This system uses a Neo4j knowledge graph to guide AI coding assistance 
 - `switch_incarnation(incarnation_type="...")` - Change operational mode
 - `get_action_template(keyword="...")` - Get workflow instructions
 
-If you're seeing this message, the system may be having trouble connecting to the database.
-Please use `check_connection()` to verify database status.
+This is the default guidance hub. Use the commands above to explore the system's capabilities.
 """
 
         # 1. Try to get incarnation-specific hub if an incarnation is active
@@ -1056,7 +1060,7 @@ Please use `check_connection()` to verify database status.
             "write_access": False,
             "neo4j_url": os.environ.get("NEO4J_URL", "bolt://localhost:7687"),
             "neo4j_username": os.environ.get("NEO4J_USERNAME", "neo4j"),
-            "neo4j_password": "***",
+            "neo4j_password": os.environ.get("NEO4J_PASSWORD", "********"),
             "neo4j_database": os.environ.get("NEO4J_DATABASE", "neo4j"),
             "server_info": "Unknown",
             "current_incarnation": "Unknown",
@@ -1601,7 +1605,7 @@ def create_server(db_url: str, username: str, password: str, database: str = "ne
             logger.info("Creating new event loop")
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-        
+
         # 2. Initialize the event loop manager to ensure it's in sync
         from .event_loop_manager import initialize_main_loop
         loop = initialize_main_loop()
@@ -1638,26 +1642,26 @@ def create_server(db_url: str, username: str, password: str, database: str = "ne
                     result = await session.run("RETURN 1 as n")
                     data = await result.data()
                     connection_ok = bool(data and data[0]["n"] == 1)
-                    
+
                     if not connection_ok:
                         raise RuntimeError("Driver verification failed: unexpected response")
-                    
+
                     logger.info("Neo4j driver connection verified successfully")
             except Exception as e:
                 logger.error(f"Driver verification failed: {str(e)}")
                 raise RuntimeError(f"Could not connect to Neo4j: {str(e)}")
-                
+
             # 5.2 Create the server instance
             server = Neo4jWorkflowServer(driver, database, loop)
             logger.info("Neo4jWorkflowServer created successfully")
-            
+
             # Wait for the server to complete critical async initialization
             # This ensures the server responds properly to initial requests
             # but we don't block indefinitely for all initialization tasks
             await asyncio.sleep(0.5)  # Give the server a moment to start initialization
-            
+
             return server
-        
+
         # 6. Run the async setup with proper error handling
         if loop.is_running():
             # If loop is already running (e.g., in Jupyter), use create_task + run_until_complete pattern
@@ -1667,7 +1671,7 @@ def create_server(db_url: str, username: str, password: str, database: str = "ne
         else:
             # If loop is not running, use run_until_complete directly
             server = loop.run_until_complete(async_server_setup())
-            
+
         return server
 
     except Exception as e:
@@ -1765,14 +1769,14 @@ def main():
                 # No event loop exists in this thread, create a new one
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-            
+
             # Create the server, which automatically handles async initialization
             server = create_server(db_url, username, password, database)
             logger.info("Server created successfully, starting MCP transport")
 
             # 6. Run the server with the configured transport
             transport = os.environ.get("MCP_TRANSPORT", "stdio")
-            
+
             # Make sure any pending coroutines are dealt with
             pending_tasks = asyncio.all_tasks(loop)
             if pending_tasks:
@@ -1782,10 +1786,10 @@ def main():
                     loop.run_until_complete(asyncio.wait(pending_tasks, timeout=5))
                 except Exception as pending_err:
                     logger.warning(f"Some initialization tasks didn't complete: {pending_err}")
-            
+
             # Run the server - this should block until termination
             server.run(transport=transport)
-            
+
         except Exception as server_err:
             logger.error(f"Server creation or execution failed: {str(server_err)}")
             logger.debug(f"Error details: {traceback.format_exc()}")

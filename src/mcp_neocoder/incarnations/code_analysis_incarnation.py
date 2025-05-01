@@ -11,7 +11,6 @@ import uuid
 import os
 import asyncio
 from typing import Dict, Any, List, Optional, Union, Tuple
-
 import mcp.types as types
 from pydantic import Field
 from neo4j import AsyncTransaction
@@ -154,9 +153,8 @@ Welcome to the Code Analysis System powered by the NeoCoder framework. This syst
 
 ## Getting Started
 
-1. **Switch to Code Analysis Mode**
-   - Use `switch_incarnation(incarnation_type=\"code_analysis\")`
-   - This activates all the specialized code analysis tools
+1. **Switched to Code Analysis Mode**
+   - Specialized code analysis tools active
 
 2. **Select Analysis Scope**
    - Single file analysis for focused inspection
@@ -290,11 +288,8 @@ Analysis results are stored in Neo4j with the following structure:
 
 Welcome to the Code Analysis System powered by the NeoCoder framework. This system helps you analyze and understand codebases using Abstract Syntax Trees (AST) and Abstract Semantic Graphs (ASG).
 
-## Getting Started
-
-1. **Switch to Code Analysis Mode**
-   - Use `switch_incarnation(incarnation_type=\"code_analysis\")`
-   - This activates all the specialized code analysis tools
+1. **Switched to code_analysis Mode**
+   - This activates the specialized code analysis tools
 
 2. **Select Analysis Scope**
    - Single file analysis for focused inspection
@@ -630,7 +625,7 @@ The analysis would be stored in Neo4j for future reference and exploration.
                     code_content = f.read()
             except Exception as e:
                 return [types.TextContent(type="text", text=f"Error reading file: {e}")]
-            
+
             # Determine language based on file extension
             ext = os.path.splitext(file_path)[1].lower()
             language_map = {
@@ -653,24 +648,24 @@ The analysis would be stored in Neo4j for future reference and exploration.
                 '.rs': 'rust'
             }
             language = language_map.get(ext)
-            
+
             if not language:
                 return [types.TextContent(type="text", text=f"Unsupported file extension: {ext}. Please specify language manually.")]
-            
+
             # Store analysis results
             results = {}
-            
+
             # Perform AST analysis
             if analysis_type in ["ast", "both"]:
                 try:
                     # Use the existing parse_to_ast tool
                     from mcp.tools import invoke_tool
                     ast_result = await invoke_tool("parse_to_ast", {"code": code_content, "language": language})
-                    
+
                     # Process and store AST data in Neo4j
                     processed_ast = await self._process_ast_data(ast_result)
                     success, analysis_id = await self._store_ast_in_neo4j(file_path, processed_ast)
-                    
+
                     if success:
                         results["ast"] = {
                             "analysis_id": analysis_id,
@@ -681,14 +676,14 @@ The analysis would be stored in Neo4j for future reference and exploration.
                         results["ast"] = {"error": "Failed to store AST in Neo4j"}
                 except Exception as e:
                     results["ast"] = {"error": f"AST analysis failed: {str(e)}"}
-            
+
             # Perform ASG analysis
             if analysis_type in ["asg", "both"]:
                 try:
                     # Use the existing generate_asg tool
                     from mcp.tools import invoke_tool
                     asg_result = await invoke_tool("generate_asg", {"code": code_content, "language": language})
-                    
+
                     # Store ASG data (similar processing as AST)
                     results["asg"] = {
                         "node_count": len(asg_result.get("nodes", [])),
@@ -696,14 +691,14 @@ The analysis would be stored in Neo4j for future reference and exploration.
                     }
                 except Exception as e:
                     results["asg"] = {"error": f"ASG analysis failed: {str(e)}"}
-            
+
             # Include code metrics if requested
             if include_metrics:
                 try:
                     # Use the existing analyze_code tool
                     from mcp.tools import invoke_tool
                     metrics_result = await invoke_tool("analyze_code", {"code": code_content, "language": language})
-                    
+
                     # Extract and store metrics
                     results["metrics"] = {
                         "code_length": metrics_result.get("code_length", 0),
@@ -713,7 +708,7 @@ The analysis would be stored in Neo4j for future reference and exploration.
                     }
                 except Exception as e:
                     results["metrics"] = {"error": f"Metrics analysis failed: {str(e)}"}
-            
+
             # Generate summary report
             summary = f"""
 # Code Analysis: {os.path.basename(file_path)}
@@ -726,7 +721,7 @@ The analysis would be stored in Neo4j for future reference and exploration.
 
 ## Analysis Results
 """
-            
+
             # Add AST section if performed
             if "ast" in results:
                 ast_data = results["ast"]
@@ -744,7 +739,7 @@ The analysis would be stored in Neo4j for future reference and exploration.
 - **Node Count:** {ast_data["node_count"]}
 - **Root Node Type:** {ast_data["root_type"]}
 """
-            
+
             # Add ASG section if performed
             if "asg" in results:
                 asg_data = results["asg"]
@@ -761,7 +756,7 @@ The analysis would be stored in Neo4j for future reference and exploration.
 - **Node Count:** {asg_data["node_count"]}
 - **Edge Count:** {asg_data["edge_count"]}
 """
-            
+
             # Add metrics section if performed
             if "metrics" in results:
                 metrics_data = results["metrics"]
@@ -782,7 +777,7 @@ The analysis would be stored in Neo4j for future reference and exploration.
 - **Max Nesting Level:** {complexity.get("max_nesting_level", "N/A")}
 - **Total Nodes:** {complexity.get("total_nodes", "N/A")}
 """
-            
+
             # Add storage information
             summary += """
 ## Storage Information
@@ -790,9 +785,9 @@ The analysis results have been stored in Neo4j and can be explored using:
 - `explore_code_structure(target="{file_path}")` - To visualize the code structure
 - `find_code_smells(target="{file_path}")` - To identify potential issues
 """
-            
+
             return [types.TextContent(type="text", text=summary)]
-            
+
         except Exception as e:
             return [types.TextContent(type="text", text=f"Error analyzing file: {str(e)}")]
 
@@ -862,7 +857,7 @@ The comparison would highlight structural and semantic changes between versions.
         try:
             # Check if target is a file path or analysis ID
             is_file = os.path.exists(target)
-            
+
             # If it's a file path, analyze it first
             if is_file:
                 # Read the file content
@@ -871,7 +866,7 @@ The comparison would highlight structural and semantic changes between versions.
                         code_content = f.read()
                 except Exception as e:
                     return [types.TextContent(type="text", text=f"Error reading file: {e}")]
-                
+
                 # Determine language based on file extension
                 ext = os.path.splitext(target)[1].lower()
                 language_map = {
@@ -894,19 +889,19 @@ The comparison would highlight structural and semantic changes between versions.
                     '.rs': 'rust'
                 }
                 language = language_map.get(ext)
-                
+
                 if not language:
                     return [types.TextContent(type="text", text=f"Unsupported file extension: {ext}. Please specify language manually.")]
-                
+
                 # Use existing AST and code analysis tools
                 from mcp.tools import invoke_tool
-                
+
                 # Get AST data
                 ast_result = await invoke_tool("parse_to_ast", {"code": code_content, "language": language})
-                
+
                 # Get code metrics
                 metrics_result = await invoke_tool("analyze_code", {"code": code_content, "language": language})
-                
+
                 # Get ASG data for more context
                 asg_result = await invoke_tool("generate_asg", {"code": code_content, "language": language})
             else:
@@ -918,44 +913,44 @@ The comparison would highlight structural and semantic changes between versions.
                     RETURN a, f.language as language, f.path as file_path
                     """
                     result = await self._safe_read_query(session, query, {"id": target})
-                    
+
                     if not result or len(result) == 0:
                         return [types.TextContent(type="text", text=f"No analysis found with ID: {target}")]
-                    
+
                     # We have the analysis, but we'll still need to get the code content for accurate analysis
                     analysis = result[0]
                     language = analysis.get("language", "unknown")
                     file_path = analysis.get("file_path")
-                    
+
                     if not file_path or not os.path.exists(file_path):
                         return [types.TextContent(type="text", text=f"Cannot find original file for analysis: {target}")]
-                    
+
                     # Read the file content
                     try:
                         with open(file_path, 'r') as f:
                             code_content = f.read()
                     except Exception as e:
                         return [types.TextContent(type="text", text=f"Error reading file: {e}")]
-                    
+
                     # Use existing tools for fresh analysis
                     from mcp.tools import invoke_tool
-                    
+
                     # Get AST data
                     ast_result = await invoke_tool("parse_to_ast", {"code": code_content, "language": language})
-                    
+
                     # Get code metrics
                     metrics_result = await invoke_tool("analyze_code", {"code": code_content, "language": language})
-                    
+
                     # Get ASG data for more context
                     asg_result = await invoke_tool("generate_asg", {"code": code_content, "language": language})
-            
+
             # Define code smell detection functions
             def detect_complex_functions(ast_data, metrics_data, threshold_level):
                 """Detect overly complex functions based on nesting and complexity."""
                 smells = []
                 threshold_map = {"low": 3, "medium": 5, "high": 8}
                 complexity_threshold = threshold_map.get(threshold_level, 5)
-                
+
                 functions = metrics_data.get("functions", [])
                 for func in functions:
                     # Use metrics data to detect complexity
@@ -964,7 +959,7 @@ The comparison would highlight structural and semantic changes between versions.
                     start_line = location.get("start_line", 0)
                     end_line = location.get("end_line", 0)
                     line_count = end_line - start_line + 1
-                    
+
                     # Check for overly long functions
                     if line_count > complexity_threshold * 5:
                         smells.append({
@@ -975,19 +970,19 @@ The comparison would highlight structural and semantic changes between versions.
                             "description": f"Function '{func_name}' is {line_count} lines long, which may indicate it's doing too much.",
                             "suggestion": "Consider breaking it down into smaller, focused functions."
                         })
-                
+
                 return smells
-            
+
             def detect_unused_imports(ast_data, language):
                 """Detect unused imports in the code."""
                 smells = []
-                
+
                 # This is a simplified implementation; a real one would trace usage through the AST
                 if language == "python":
                     # Find all import nodes and declared identifiers
                     imported_modules = []
                     imported_names = []
-                    
+
                     # Extract imports from AST
                     for node in ast_data.get("ast", {}).get("children", []):
                         if node.get("type") in ["import_statement", "import_from_statement"]:
@@ -997,7 +992,7 @@ The comparison would highlight structural and semantic changes between versions.
                                     if module_name:
                                         imported_modules.append(module_name)
                                         imported_names.append(module_name)
-                    
+
                     # Simple check: if 'logging' is imported but not used
                     if "logging" in imported_modules and "logging" not in code_content[100:]:
                         smells.append({
@@ -1007,20 +1002,20 @@ The comparison would highlight structural and semantic changes between versions.
                             "description": "The 'logging' module appears to be imported but not used.",
                             "suggestion": "Remove unused imports to improve code clarity and execution time."
                         })
-                
+
                 return smells
-            
+
             def detect_magic_numbers(ast_data):
                 """Detect magic numbers in the code."""
                 smells = []
-                
+
                 # Find all integer literals outside of variable declarations
                 for node_id, node in ast_data.items():
                     if node.get("type") == "integer" and node.get("text") not in ["0", "1", "-1"]:
                         # Check if within variable declaration
                         in_declaration = False
                         # Simple heuristic - in a real implementation we'd traverse the AST properly
-                        
+
                         if not in_declaration:
                             smells.append({
                                 "type": "magic_number",
@@ -1030,32 +1025,32 @@ The comparison would highlight structural and semantic changes between versions.
                                 "description": f"Magic number {node.get('text', '')} found in code.",
                                 "suggestion": "Consider replacing with a named constant for better readability."
                             })
-                
+
                 return smells
-            
+
             # Collect all detected code smells
             all_smells = []
-            
+
             # Apply appropriate detectors based on requested categories
             if not smell_categories or "complexity" in smell_categories:
                 all_smells.extend(detect_complex_functions(ast_result, metrics_result, threshold))
-            
+
             if not smell_categories or "unused" in smell_categories:
                 all_smells.extend(detect_unused_imports(ast_result, language))
-            
+
             if not smell_categories or "magic_numbers" in smell_categories:
                 all_smells.extend(detect_magic_numbers(ast_result))
-            
+
             # Filter smells based on threshold
             threshold_levels = {"low": 0, "medium": 1, "high": 2}
             severity_levels = {"low": 0, "medium": 1, "high": 2}
             threshold_value = threshold_levels.get(threshold, 1)
-            
+
             filtered_smells = [
-                smell for smell in all_smells 
+                smell for smell in all_smells
                 if severity_levels.get(smell.get("severity", "medium"), 1) >= threshold_value
             ]
-            
+
             # Generate report
             report = f"""
 # Code Smell Analysis
@@ -1073,7 +1068,7 @@ The comparison would highlight structural and semantic changes between versions.
 
 ## Detected Issues
 """
-            
+
             if filtered_smells:
                 for i, smell in enumerate(filtered_smells, 1):
                     report += f"""
@@ -1095,7 +1090,7 @@ This could mean:
 - The threshold is set too high for the kinds of issues present
 - The specific categories of smells are not present
 """
-            
+
             report += """
 ## Next Steps
 
@@ -1104,9 +1099,9 @@ This could mean:
 3. Consider using `compare_versions()` after making changes to verify improvements
 4. Use `generate_documentation()` to document any complex sections properly
 """
-            
+
             return [types.TextContent(type="text", text=report)]
-            
+
         except Exception as e:
             return [types.TextContent(type="text", text=f"Error analyzing code smells: {str(e)}")]
 

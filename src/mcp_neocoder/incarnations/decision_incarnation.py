@@ -98,8 +98,8 @@ class DecisionIncarnation(BaseIncarnation):
         description = """
 # Decision Support System
 
-Welcome to the Decision Support System powered by the NeoCoder framework.
-This system helps you make better decisions with the following capabilities:
+Welcome to the decision_incarnation powered by the NeoCoder framework.
+This Decision Support System helps you make better decisions with the following capabilities:
 
 ## Key Features
 
