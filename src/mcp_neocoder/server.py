@@ -66,6 +66,9 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
         # Initialize the base attributes
         self.incarnation_registry = {}
         self.current_incarnation = None
+        
+        # Add initialization event for synchronization
+        self.initialized_event = asyncio.Event()
 
         # Register basic protocol handlers first to ensure responsiveness
         self._register_basic_handlers()
@@ -102,6 +105,8 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
             tool_count = await self._register_all_incarnation_tools()
             logger.info(f"Registered {tool_count} tools from all incarnations")
 
+            # Set the initialized event to signal completion
+            self.initialized_event.set()
             logger.info("Server initialization completed successfully")
         except Exception as e:
             logger.error(f"Error during initialization: {str(e)}")
@@ -490,63 +495,26 @@ Please wait a moment for full initialization to complete or check connection sta
                 else:
                     logger.warning("Could not register basic handlers via decorators")
 
-            # Try to register the error suppression handler if available
-            try:
-                self._register_error_suppression_handler()
-            except Exception as e:
-                # Log error but continue with basic handlers
-                logger.warning(f"Could not register error suppression handler: {e}")
+            # Error suppression handler has been removed as part of refactoring
+            # We now handle Neo4j transaction scope issues properly in query methods
 
         except Exception as e:
             # Last resort error handling
             logger.error(f"Failed to register basic handlers: {e}")
             logger.info("Server will continue but may have reduced functionality")
 
-    def _register_error_suppression_handler(self):
-        """Register a handler to suppress specific error messages in responses."""
-        try:
-            # We need to use the proper method name based on what's available in FastMCP
-            # Let's check if handle_function_response is available
-            if hasattr(self.mcp, 'handle_function_response'):
-                # Store the original function response handler
-                original_handler = self.mcp.handle_function_response
-
-                # Create a wrapper that filters error messages
-                def filtered_handler(function_name, response_id, result):
-                    # Check if this is an error response
-                    if isinstance(result, Exception) or (hasattr(result, 'name') and result.name == "Error"):
-                        # Check if it's the transaction scope error
-                        error_message = str(result)
-                        if "The result is out of scope. The associated transaction has been closed." in error_message:
-                            # Replace with a success message
-                            from mcp.types import TextContent
-                            return [TextContent(type="text", text="Operation completed successfully.")]
-
-                    # Otherwise, let the original handler process it
-                    return original_handler(function_name, response_id, result)
-
-                # Replace the original method with our wrapper
-                self.mcp.handle_function_response = filtered_handler
-                logger.info("Registered error suppression handler for Neo4j transaction scope errors")
-            else:
-                # FastMCP API might have changed, log a warning but don't block startup
-                logger.warning("Cannot register error suppression handler: FastMCP API has changed")
-        except Exception as e:
-            # Log error but allow server to start
-            logger.error(f"Error setting up error suppression handler: {e}")
-            logger.info("Continuing server startup without error suppression")
+    # Error suppression handler removed
+    # We now process results properly within transaction scope to avoid errors
 
     async def _register_all_incarnation_tools(self):
-        """Register tools from all incarnations with the MCP server."""
-        logger.info("Registering tools from all incarnations")
+        """Populate ToolRegistry from all incarnations, then register all with MCP."""
+        logger.info("Registering tools from all incarnations by populating ToolRegistry...")
 
-        # If there are no incarnations, this is a no-op
         if not self.incarnation_registry:
             logger.warning("No incarnations registered, skipping tool registration")
             return 0
 
-        registered_count = 0
-
+        total_tools_identified = 0
         # Import the global registry
         from .incarnation_registry import registry as global_registry
         from .tool_registry import registry as tool_registry
@@ -561,7 +529,7 @@ Please wait a moment for full initialization to complete or check connection sta
         logger.info(f"Processing {len(self.incarnation_registry)} incarnation types")
         for incarnation_type, incarnation_class in list(self.incarnation_registry.items()):
             try:
-                logger.info(f"Processing incarnation: {incarnation_type}")
+                logger.info(f"Processing incarnation for ToolRegistry: {incarnation_type}")
 
                 # Get or create an instance of the incarnation
                 instance = global_registry.get_instance(incarnation_type, self.driver, self.database)
@@ -577,58 +545,29 @@ Please wait a moment for full initialization to complete or check connection sta
                         logger.error(traceback.format_exc())
                         continue
 
-                # Register tools from the incarnation
-                logger.info(f"Registering tools from {incarnation_type} incarnation")
-
-                # Try both methods for tool registration for more robustness
-                total_count = 0
-
-                # First try direct method
-                try:
-                    tool_count = await instance.register_tools(self)
-                    total_count += tool_count
-                    logger.info(f"Registered {tool_count} tools directly from {incarnation_type}")
-                except Exception as direct_err:
-                    logger.error(f"Error in direct tool registration for {incarnation_type}: {direct_err}")
-                    tool_count = 0
-
-                # Then try registry method
-                try:
-                    tool_registry_count = tool_registry.register_incarnation_tools(instance, self)
-                    total_count += tool_registry_count
-                    logger.info(f"Registered {tool_registry_count} tools via registry from {incarnation_type}")
-                except Exception as registry_err:
-                    logger.error(f"Error in registry tool registration for {incarnation_type}: {registry_err}")
-                    tool_registry_count = 0
-
-                registered_count += total_count
-
-                # Check if any tools were registered, and if not, try more aggressive method
-                if total_count == 0:
-                    logger.warning(f"No tools registered for {incarnation_type}, trying fallback method")
-                    try:
-                        # List tool methods and try to register them directly
-                        tools = instance.list_tool_methods()
-                        logger.info(f"Found {len(tools)} potential tools via list_tool_methods: {tools}")
-
-                        for tool_name in tools:
-                            if hasattr(instance, tool_name) and callable(getattr(instance, tool_name)):
-                                tool_method = getattr(instance, tool_name)
-                                try:
-                                    self.mcp.add_tool(tool_method)
-                                    logger.info(f"Directly registered tool {tool_name} from {incarnation_type}")
-                                    registered_count += 1
-                                except Exception as tool_err:
-                                    logger.error(f"Error registering {tool_name}: {tool_err}")
-                    except Exception as fallback_err:
-                        logger.error(f"Error in fallback tool registration: {fallback_err}")
+                # Populate the ToolRegistry via the instance's register_tools method
+                # This method no longer calls server.mcp.add_tool directly
+                if instance:
+                    count = await instance.register_tools(self)
+                    total_tools_identified += count
+                    logger.info(f"Added {count} tools from {incarnation_type} to ToolRegistry")
+                else:
+                    logger.error(f"Failed to get instance for {incarnation_type}")
 
             except Exception as e:
-                logger.error(f"Error processing incarnation {incarnation_type}: {e}")
+                logger.error(f"Error processing incarnation {incarnation_type} for ToolRegistry: {e}")
                 import traceback
                 logger.error(traceback.format_exc())
 
-        return registered_count
+        # After iterating through all incarnations and populating the registry:
+        logger.info(f"ToolRegistry population complete. Found {len(tool_registry.tools)} unique tools.")
+        logger.info("Registering all collected tools with MCP server...")
+
+        # Perform the actual registration with the MCP server using the central registry method
+        final_mcp_registered_count = tool_registry.register_tools_with_server(self)
+
+        logger.info(f"Successfully registered {final_mcp_registered_count} unique tools with MCP server.")
+        return final_mcp_registered_count
 
     async def get_current_incarnation(self) -> List[types.TextContent]:
         """Get the currently active incarnation type."""
@@ -1655,10 +1594,14 @@ def create_server(db_url: str, username: str, password: str, database: str = "ne
             server = Neo4jWorkflowServer(driver, database, loop)
             logger.info("Neo4jWorkflowServer created successfully")
 
-            # Wait for the server to complete critical async initialization
-            # This ensures the server responds properly to initial requests
-            # but we don't block indefinitely for all initialization tasks
-            await asyncio.sleep(0.5)  # Give the server a moment to start initialization
+            # Wait for server to complete initialization
+            logger.info("Waiting for server initialization to complete...")
+            try:
+                await asyncio.wait_for(server.initialized_event.wait(), timeout=60.0)
+                logger.info("Server initialization complete")
+            except asyncio.TimeoutError:
+                logger.error("Server initialization timed out after 60 seconds")
+                logger.warning("Continuing with potentially incomplete initialization")
 
             return server
 

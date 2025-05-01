@@ -201,49 +201,22 @@ This is a default hub that should be overridden by each incarnation.
     _registered_tool_methods = set()
 
     async def register_tools(self, server):
-        """Register incarnation-specific tools with the server.
-        Uses direct registration to ensure tools are properly connected.
-        """
-        # Ensure the class has the _registered_tool_methods set
-        if not hasattr(self.__class__, '_registered_tool_methods'):
-            self.__class__._registered_tool_methods = set()
-
+        """Identify tool methods and register them with the central ToolRegistry."""
         # Get all tool methods from this incarnation
         tool_methods = self.list_tool_methods()
-        logger.info(f"Tool methods in {self.name}: {tool_methods}")
+        logger.info(f"Identified tool methods in {self.name}: {tool_methods}")
 
-        # Register each tool directly with the MCP server
-        registered_count = 0
-        for method_name in tool_methods:
-            try:
-                # Get the method
-                method = getattr(self, method_name)
+        # Register these tools with the central tool registry for tracking/listing
+        from ..tool_registry import registry as tool_registry
 
-                # Use the method's name and class name as a unique key for tracking registration
-                registration_key = f"{self.__class__.__name__}.{method_name}"
+        # Let register_class_tools handle adding to the registry's internal structures
+        tools_added_to_registry_count = tool_registry.register_class_tools(self, self.name)
 
-                # Check if it's already registered using our safer tracking mechanism
-                if registration_key not in self.__class__._registered_tool_methods:
-                    try:
-                        # Register directly with MCP
-                        server.mcp.add_tool(method)
-                        # Track registration in our class-level set (safer than setting attributes on methods)
-                        self.__class__._registered_tool_methods.add(registration_key)
-                        registered_count += 1
-                        logger.info(f"Directly registered tool {method_name} from {self.name}")
-                    except Exception as reg_err:
-                        logger.error(f"Failed to register tool {method_name}: {reg_err}")
-                else:
-                    logger.info(f"Tool {method_name} already registered, skipping")
-            except Exception as e:
-                logger.error(f"Error getting tool method {method_name}: {e}")
+        # Log based on tools found and added to the registry
+        logger.info(f"{self.name} incarnation: {tools_added_to_registry_count} tools added to ToolRegistry")
 
-        # Also register with tool registry for tracking/listing
-        from ..tool_registry import registry
-        registry.register_class_tools(self, self.name)
-
-        logger.info(f"{self.name} incarnation: {registered_count} tools registered directly with server")
-        return registered_count
+        # Return the count of tools identified/added to registry
+        return len(tool_methods)
 
     async def _read_query(self, tx: AsyncTransaction, query: str, params: dict) -> str:
         """Execute a read query and return results as JSON string."""
