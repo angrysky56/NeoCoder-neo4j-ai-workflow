@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/angrysky56-neocoder-neo4j-ai-workflow-badge.png)](https://mseep.ai/app/angrysky56-neocoder-neo4j-ai-workflow)
+
 # NeoCoder: Neo4j-Guided AI Coding Workflow
 
 An MCP server implementation that enables AI assistants like Claude to use a Neo4j knowledge graph as their primary, dynamic "instruction manual" and project memory for standardized coding workflows.
