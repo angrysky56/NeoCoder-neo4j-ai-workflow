@@ -12,7 +12,7 @@ from typing import Dict, Any, List, Optional
 
 import mcp.types as types
 from pydantic import Field
-from neo4j import AsyncDriver, AsyncTransaction
+from neo4j import AsyncDriver, AsyncTransaction, AsyncManagedTransaction
 
 from .base_incarnation import BaseIncarnation
 
@@ -48,13 +48,15 @@ class DecisionIncarnation(BaseIncarnation):
         # Call base class __init__ which will register tools
         super().__init__(driver, database)
 
-    async def _read_query(self, tx: AsyncTransaction, query: str, params: dict) -> str:
+    from typing import LiteralString
+
+    async def _read_query(self, tx: "AsyncTransaction | AsyncManagedTransaction", query: "LiteralString", params: dict) -> str:
         """Execute a read query and return results as JSON string."""
         raw_results = await tx.run(query, params)
         eager_results = await raw_results.to_eager_result()
         return json.dumps([r.data() for r in eager_results.records], default=str)
 
-    async def _write(self, tx: AsyncTransaction, query: str, params: dict):
+    async def _write(self, tx, query: "LiteralString", params: dict):
         """Execute a write query and return results as JSON string."""
         result = await tx.run(query, params or {})
         summary = await result.consume()
@@ -139,7 +141,7 @@ Each decision maintains a complete audit trail of all inputs, evidence, and reas
         async with self.driver.session(database=self.database) as session:
             await session.execute_write(lambda tx: tx.run(query, params))
 
-    async def register_tools(self, server):
+    async def register_tools(self, server) -> int:
         """Register decision incarnation-specific tools with the server."""
         server.mcp.add_tool(self.create_decision)
         server.mcp.add_tool(self.list_decisions)
@@ -149,6 +151,7 @@ Each decision maintains a complete audit trail of all inputs, evidence, and reas
         server.mcp.add_tool(self.add_evidence)
 
         logger.info("Decision support tools registered")
+        return 0
 
     async def get_guidance_hub(self):
         """Get the guidance hub for decision incarnation."""
@@ -159,8 +162,10 @@ Each decision maintains a complete audit trail of all inputs, evidence, and reas
 
         try:
             async with self.driver.session(database=self.database) as session:
-                results_json = await session.execute_read(self._read_query, query, {})
-                results = json.loads(results_json)
+                async def run_query(tx):
+                    result = await tx.run(query, {})
+                    return await result.data()
+                results = await session.execute_read(run_query)
 
                 if results and len(results) > 0:
                     return [types.TextContent(type="text", text=results[0]["description"])]
@@ -172,7 +177,6 @@ Each decision maintains a complete audit trail of all inputs, evidence, and reas
         except Exception as e:
             logger.error(f"Error retrieving decision guidance hub: {e}")
             return [types.TextContent(type="text", text=f"Error: {e}")]
-
     async def create_decision(
         self,
         title: str = Field(..., description="Title of the decision to be made"),
@@ -219,14 +223,14 @@ Each decision maintains a complete audit trail of all inputs, evidence, and reas
 
         try:
             async with self.driver.session(database=self.database) as session:
-                results_json = await session.execute_write(self._read_query, query, params)
+                results_json = await session.execute_write(lambda tx: self._read_query(tx, query, params))
                 results = json.loads(results_json)
 
                 if results and len(results) > 0:
                     text_response = "# Decision Created\n\n"
                     text_response += f"**ID:** {decision_id}\n"
                     text_response += f"**Title:** {title}\n"
-                    text_response += f"**Status:** Open\n\n"
+                    text_response += "**Status:** Open\n\n"
                     text_response += f"**Description:** {description}\n\n"
 
                     if deadline:
@@ -259,7 +263,7 @@ Each decision maintains a complete audit trail of all inputs, evidence, and reas
         WHERE 1=1
         """
 
-        params = {"limit": limit}
+        params: Dict[str, Any] = {"limit": limit}
 
         if status:
             query += " AND d.status = $status"
@@ -286,7 +290,7 @@ Each decision maintains a complete audit trail of all inputs, evidence, and reas
 
         try:
             async with self.driver.session(database=self.database) as session:
-                results_json = await session.execute_read(self._read_query, query, params)
+                results_json = await session.execute_read(lambda tx: self._read_query(tx, query, params))
                 results = json.loads(results_json)
 
                 if results and len(results) > 0:
@@ -376,7 +380,7 @@ Each decision maintains a complete audit trail of all inputs, evidence, and reas
 
                     text_response += f"\n## Description\n\n{d.get('description', 'No description')}\n\n"
 
-                    text_response += f"## Summary\n\n"
+                    text_response += "## Summary\n\n"
                     text_response += f"This decision has {d.get('alternative_count', 0)} alternatives "
                     text_response += f"and {d.get('metric_count', 0)} evaluation metrics.\n\n"
 
@@ -596,7 +600,7 @@ Each decision maintains a complete audit trail of all inputs, evidence, and reas
 
         if strength is not None:
             query = query.replace("created_at: datetime()", "created_at: datetime(), strength: $strength")
-            params["strength"] = strength
+            params["strength"] = str(strength)
 
         if source:
             query = query.replace("created_at: datetime()", "created_at: datetime(), source: $source")

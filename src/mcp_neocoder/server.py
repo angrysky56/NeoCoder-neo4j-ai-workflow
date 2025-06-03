@@ -18,18 +18,18 @@ import logging
 import os
 import sys
 import traceback
-from datetime import datetime
-from typing import Any, Dict, List, Optional, Union, Callable, TypeVar, Awaitable
+from typing import Any, Dict, List, Optional, TypeVar, Awaitable
 
 import mcp.types as types
 from mcp.server.fastmcp import FastMCP
 from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncTransaction
+import neo4j
 from pydantic import Field
 
 # Import mixins and core functionality
 from .action_templates import ActionTemplateMixin
 from .cypher_snippets import CypherSnippetMixin
-from .event_loop_manager import get_main_loop, initialize_main_loop, safe_neo4j_session
+from .event_loop_manager import initialize_main_loop
 from .init_db import init_db
 from .polymorphic_adapter import PolymorphicAdapterMixin
 from .tool_proposals import ToolProposalMixin
@@ -66,12 +66,12 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
         # Initialize the base attributes
         self.incarnation_registry = {}
         self.current_incarnation = None
-        
+
         # Add initialization event for synchronization
         self.initialized_event = asyncio.Event()
 
         # Register basic protocol handlers first to ensure responsiveness
-        self._register_basic_handlers()
+        asyncio.create_task(self._register_basic_handlers())
         logger.info("Basic protocol handlers registered")
 
         # Start full initialization in a separate task to avoid blocking
@@ -226,7 +226,8 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
         Returns:
             bool: Query result
         """
-        result = await tx.run(query, params)
+        from typing import cast, LiteralString
+        result = await tx.run(cast(LiteralString, query), params)
         records = await result.values()
 
         if not records or not records[0]:
@@ -393,10 +394,7 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
         for name, inc_class in list(global_registry.incarnations.items()):
             try:
                 # Handle both string and enum names
-                if hasattr(name, 'value'):
-                    name_str = name.value
-                else:
-                    name_str = str(name)
+                name_str = name.value if hasattr(name, 'value') and not isinstance(name, str) else str(name)
 
                 logger.info(f"Attempting to register incarnation: {name_str} ({inc_class.__name__})")
                 self.register_incarnation(inc_class, name_str)
@@ -437,8 +435,7 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
         if incarnation_count == 0:
             logger.error("NO INCARNATIONS WERE LOADED. This is a critical failure.")
             logger.error("Check the incarnations directory and make sure incarnation classes are properly defined.")
-
-    def _register_basic_handlers(self):
+    async def _register_basic_handlers(self):
         """Register handlers for basic MCP protocol requests to prevent timeouts."""
         # Define the basic handlers
         async def empty_list_handler():
@@ -465,8 +462,15 @@ Please wait a moment for full initialization to complete or check connection sta
             # First try to set handlers with attribute assignment
             try:
                 # Set basic handlers for list endpoints
-                self.mcp.prompts_list_handler = empty_list_handler
-                self.mcp.resources_list_handler = empty_list_handler
+                if hasattr(self.mcp, 'list_prompts'):
+                    async def list_prompts_handler():
+                        return []
+                    self.mcp.add_tool(list_prompts_handler, "list_prompts")
+
+                if hasattr(self.mcp, 'list_resources'):
+                    async def list_resources_handler():
+                        return []
+                    self.mcp.add_tool(list_resources_handler, "list_resources")
 
                 # Also register a default guidance hub handler as a fallback
                 if hasattr(self.mcp, 'add_tool'):
@@ -483,28 +487,99 @@ Please wait a moment for full initialization to complete or check connection sta
 
                 # Try alternative method - using the decorator interface if available
                 if hasattr(self.mcp, 'list_prompts'):
-                    @self.mcp.list_prompts
                     async def list_prompts_handler():
                         return []
+                    self.mcp.add_tool(list_prompts_handler, "list_prompts")
 
-                    @self.mcp.list_resources
                     async def list_resources_handler():
                         return []
+                    self.mcp.add_tool(list_resources_handler, "list_resources")
 
-                    logger.info("Registered basic protocol handlers via decorators")
+                    logger.info("Registered basic protocol handlers via add_tool")
                 else:
-                    logger.warning("Could not register basic handlers via decorators")
+                    logger.warning("Could not register basic handlers via add_tool")
 
             # Error suppression handler has been removed as part of refactoring
             # We now handle Neo4j transaction scope issues properly in query methods
 
         except Exception as e:
             # Last resort error handling
-            logger.error(f"Failed to register basic handlers: {e}")
-            logger.info("Server will continue but may have reduced functionality")
+                logger.error(f"Failed to register basic handlers: {e}")
+                logger.info("Server will continue but may have reduced functionality")
 
-    # Error suppression handler removed
-    # We now process results properly within transaction scope to avoid errors
+        async def _register_basic_handlers(self):
+            """Register handlers for basic MCP protocol requests to prevent timeouts."""
+            # Define the basic handlers
+            async def empty_list_handler():
+                """Return empty list for protocol handlers."""
+                return []
+
+            async def default_guidance_hub_handler():
+                """Return basic guidance hub content in case database is not available."""
+                content = """
+    # NeoCoder Neo4j-Guided AI Workflow
+
+    Welcome! This system is still initializing. Basic commands available:
+
+    - `check_connection()` - Verify database connection
+    - `list_incarnations()` - List available operational modes
+    - `switch_incarnation(incarnation_type="...")` - Change operational mode
+
+    Please wait a moment for full initialization to complete or check connection status.
+    """
+                return [types.TextContent(type="text", text=content)]
+
+            # Try to set the handlers with several fallback mechanisms
+            try:
+                # First try to set handlers with attribute assignment
+                try:
+                    # Set basic handlers for list endpoints
+                    if hasattr(self.mcp, 'list_prompts'):
+                        async def list_prompts_handler():
+                            return []
+                        self.mcp.add_tool(list_prompts_handler, "list_prompts")
+
+                    if hasattr(self.mcp, 'list_resources'):
+                        async def list_resources_handler():
+                            return []
+                        self.mcp.add_tool(list_resources_handler, "list_resources")
+
+                    # Also register a default guidance hub handler as a fallback
+                    if hasattr(self.mcp, 'add_tool'):
+                        # Create a wrapper function that matches the tool signature
+                        async def guidance_hub_wrapper():
+                            return await default_guidance_hub_handler()
+
+                        # Only add this if get_guidance_hub isn't working yet
+                        self.mcp.add_tool(guidance_hub_wrapper, "get_guidance_hub_initializing")
+
+                    logger.info("Registered basic protocol handlers via direct attribute assignment")
+                except Exception as attr_err:
+                    logger.warning(f"Could not set handlers via attributes: {attr_err}")
+
+                    # Try alternative method - using the decorator interface if available
+                    if hasattr(self.mcp, 'list_prompts'):
+                        async def list_prompts_handler():
+                            return []
+                        self.mcp.add_tool(list_prompts_handler, "list_prompts")
+
+                        async def list_resources_handler():
+                            return []
+                        self.mcp.add_tool(list_resources_handler, "list_resources")
+
+                        logger.info("Registered basic protocol handlers via add_tool")
+                    else:
+                        logger.warning("Could not register basic handlers via add_tool")
+
+                # Error suppression handler has been removed as part of refactoring
+                # We now handle Neo4j transaction scope issues properly in query methods
+
+            except Exception as e:
+                # Last resort error handling
+                logger.error(f"Failed to register basic handlers: {e}")
+                logger.info("Server will continue but may have reduced functionality")
+        # Error suppression handler removed
+        # We now process results properly within transaction scope to avoid errors
 
     async def _register_all_incarnation_tools(self):
         """Populate ToolRegistry from all incarnations, then register all with MCP."""
@@ -846,7 +921,7 @@ This is the default guidance hub. Use the commands above to explore the system's
         if hasattr(self, 'current_incarnation') and self.current_incarnation:
             try:
                 logger.info(f"Getting guidance hub from active incarnation: {self.current_incarnation.name}")
-                result = await self.current_incarnation.get_guidance_hub()
+                result = self.current_incarnation.get_guidance_hub()
                 if result and isinstance(result, list) and len(result) > 0:
                     return result
                 logger.warning("Empty result from incarnation hub, falling back to main hub")
@@ -1178,7 +1253,8 @@ This is the default guidance hub. Use the commands above to explore the system's
             JSON string representing the query results
         """
         try:
-            raw_results = await tx.run(query, params or {})
+            from typing import cast, LiteralString
+            raw_results = await tx.run(cast(LiteralString, query), params or {})
             eager_results = await raw_results.to_eager_result()
             return json.dumps([r.data() for r in eager_results.records], default=str)
         except Exception as e:
@@ -1199,7 +1275,8 @@ This is the default guidance hub. Use the commands above to explore the system's
             Neo4j result summary
         """
         try:
-            result = await tx.run(query, params or {})
+            from typing import cast, LiteralString
+            result = await tx.run(cast(LiteralString, query), params or {})
             return await result.consume()
         except Exception as e:
             logger.error(f"Error executing write query: {str(e)}")
@@ -1207,7 +1284,7 @@ This is the default guidance hub. Use the commands above to explore the system's
             logger.debug(f"Parameters: {params}")
             raise
 
-    async def _safe_execute_read(self, query: str, params: dict = None) -> List[Dict[str, Any]]:
+    async def _safe_execute_read(self, query: str, params: Optional[dict] = None) -> List[Dict[str, Any]]:
         """Execute a read query with proper error handling and transaction management.
 
         This is a higher-level method that handles session creation and error handling.
@@ -1225,7 +1302,7 @@ This is the default guidance hub. Use the commands above to explore the system's
             async with self.driver.session(database=self.database) as session:
                 # Execute inside a read transaction
                 result_json = await session.execute_read(
-                    lambda tx: self._read_query(tx, query, params)
+                    lambda tx: self._read_query(tx, query, params)  # type: ignore
                 )
 
                 # Parse the result safely
@@ -1238,7 +1315,7 @@ This is the default guidance hub. Use the commands above to explore the system's
             logger.error(f"Error in safe read execution: {str(e)}")
             return []
 
-    async def _safe_execute_write(self, query: str, params: dict = None) -> bool:
+    async def _safe_execute_write(self, query: str, params: Optional[dict] = None) -> bool:
         """Execute a write query with proper error handling and transaction management.
 
         This is a higher-level method that handles session creation and error handling.
@@ -1255,8 +1332,9 @@ This is the default guidance hub. Use the commands above to explore the system's
         try:
             async with self.driver.session(database=self.database) as session:
                 # Execute inside a write transaction
+                from typing import Callable
                 await session.execute_write(
-                    lambda tx: self._write(tx, query, params)
+                    Callable[[neo4j.AsyncTransaction], Awaitable[Any]](lambda tx: self._write(tx, query, params)) # type: ignore
                 )
                 return True
         except Exception as e:
@@ -1330,7 +1408,10 @@ This is the default guidance hub. Use the commands above to explore the system's
 
         try:
             async with self.driver.session(database=self.database) as session:
-                results_json = await session.execute_read(self._read_query, query, params)
+                from typing import Callable
+                results_json = await session.execute_read(
+                    Callable[[neo4j.AsyncTransaction], Awaitable[Any]](lambda tx: self._read_query(tx, query, params)) # type: ignore
+                )
                 return [types.TextContent(type="text", text=results_json)]
         except Exception as e:
             logger.error(f"Error executing custom query: {e}")
@@ -1358,10 +1439,13 @@ This is the default guidance hub. Use the commands above to explore the system's
 
         try:
             async with self.driver.session(database=self.database) as session:
-                result = await session.execute_write(self._write, query, params)
+                from typing import Callable
+                result = await session.execute_write(
+                    Callable[[neo4j.AsyncManagedTransaction], Awaitable[Any]](lambda tx: self._write(tx, query, params)) # type: ignore
+                )
 
                 # Format a summary of what happened
-                response = f"Query executed successfully.\n\n"
+                response = "Query executed successfully.\n\n"
                 response += f"Nodes created: {result.counters.nodes_created}\n"
                 response += f"Relationships created: {result.counters.relationships_created}\n"
                 response += f"Properties set: {result.counters.properties_set}\n"
@@ -1372,7 +1456,6 @@ This is the default guidance hub. Use the commands above to explore the system's
         except Exception as e:
             logger.error(f"Error executing write query: {e}")
             return [types.TextContent(type="text", text=f"Error: {e}")]
-
     async def _create_default_hub(self) -> List[types.TextContent]:
         """Create a default guidance hub if none exists.
 
@@ -1475,11 +1558,11 @@ Each incarnation has its own set of specialized tools alongside the core Neo4j i
 
             # Register discovered incarnations with this server
             for inc_type, inc_class in global_registry.incarnations.items():
-                logger.info(f"Auto-registering incarnation {inc_type.value} ({inc_class.__name__})")
+                logger.info(f"Auto-registering incarnation {inc_type} ({inc_class.__name__})")
                 self.register_incarnation(inc_class, inc_type)
 
             # Register core tools
-            self._register_tools()
+            self._register_core_tools()
 
             # For async initialization, create a new event loop if needed
             try:
@@ -1493,7 +1576,7 @@ Each incarnation has its own set of specialized tools alongside the core Neo4j i
             async def run_async_init_wrapper():
                 """Wrap database initialization and tool registration in a single async function."""
                 # Auto-initialize the database if needed
-                await self._ensure_db_initialized()
+                await self._initialize_database()
 
                 # Register tools from all incarnations
                 tool_count = await self._register_all_incarnation_tools()
@@ -1502,7 +1585,7 @@ Each incarnation has its own set of specialized tools alongside the core Neo4j i
                 return tool_count
 
             # Run the async initialization in the event loop
-            tool_count = loop.run_until_complete(run_async_init_wrapper())
+            loop.run_until_complete(run_async_init_wrapper())
 
             return True
         except Exception as e:
@@ -1514,7 +1597,8 @@ Each incarnation has its own set of specialized tools alongside the core Neo4j i
 
     def run(self, transport: str = "stdio"):
         """Run the MCP server."""
-        self.mcp.run(transport=transport)
+        from typing import cast, Literal
+        self.mcp.run(transport=cast(Literal["stdio", "sse"], transport))
 
 
 def create_server(db_url: str, username: str, password: str, database: str = "neo4j") -> Neo4jWorkflowServer:
@@ -1548,7 +1632,7 @@ def create_server(db_url: str, username: str, password: str, database: str = "ne
         # 2. Initialize the event loop manager to ensure it's in sync
         from .event_loop_manager import initialize_main_loop
         loop = initialize_main_loop()
-        logger.info(f"Initialized main event loop for Neo4j operations")
+        logger.info("Initialized main event loop for Neo4j operations")
 
         # 3. Store connection parameters in environment variables for init_db
         os.environ["NEO4J_URL"] = db_url
@@ -1567,10 +1651,13 @@ def create_server(db_url: str, username: str, password: str, database: str = "ne
             "connection_acquisition_timeout": 60.0
         }
 
+        # Only pass supported arguments to the driver
         driver = AsyncGraphDatabase.driver(
             db_url,
             auth=(username, password),
-            **driver_config
+            max_connection_pool_size=driver_config["max_connection_pool_size"],
+            max_transaction_retry_time=driver_config["max_transaction_retry_time"],
+            connection_acquisition_timeout=driver_config["connection_acquisition_timeout"]
         )
 
         # 5. Define an async function for all async operations
@@ -1781,7 +1868,7 @@ async def test_server_initialization(db_url: str, username: str, password: str, 
         driver = AsyncGraphDatabase.driver(
             db_url,
             auth=(username, password),
-            **driver_config
+            max_connection_pool_size=driver_config["max_connection_pool_size"]
         )
 
         # Test connection

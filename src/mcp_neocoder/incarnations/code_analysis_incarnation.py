@@ -14,7 +14,6 @@ from typing import Dict, Any, List, Optional, Union, Tuple
 import mcp.types as types
 from pydantic import Field
 from neo4j import AsyncTransaction
-
 from .base_incarnation import BaseIncarnation
 
 logger = logging.getLogger("mcp_neocoder.incarnations.code_analysis")
@@ -265,7 +264,9 @@ Analysis results are stored in Neo4j with the following structure:
             async with self.driver.session(database=self.database) as session:
                 # Execute each constraint/index query individually
                 for query in self.schema_queries:
-                    await session.execute_write(lambda tx: tx.run(query))
+                    async def run_query(tx, query: str):
+                        return await tx.run(query)
+                    await session.execute_write(run_query, query)
 
                 # Create base guidance hub for this incarnation if it doesn't exist
                 await self.ensure_hub_exists()
@@ -420,7 +421,7 @@ Analysis results are stored in Neo4j with the following structure:
 
         return processed_data
 
-    def _extract_nodes(self, node: Dict[str, Any], nodes: List[Dict[str, Any]], parent_id: str = None):
+    def _extract_nodes(self, node: Dict[str, Any], nodes: List[Dict[str, Any]], parent_id: Optional[str] = None):
         """Extract nodes from AST for Neo4j storage."""
         if not node or not isinstance(node, dict):
             return
@@ -537,7 +538,7 @@ Analysis results are stored in Neo4j with the following structure:
                     )
 
                     if not batch_success:
-                        logger.error(f"Failed to store batch of AST nodes")
+                        logger.error("Failed to store batch of AST nodes")
                         return False, ""
 
                 if success1 and success2:
@@ -768,14 +769,20 @@ The analysis would be stored in Neo4j for future reference and exploration.
 """
                 else:
                     complexity = metrics_data.get("complexity", {})
+                    if isinstance(complexity, dict):
+                        max_nesting_level = complexity.get("max_nesting_level", "N/A")
+                        total_nodes = complexity.get("total_nodes", "N/A")
+                    else:
+                        max_nesting_level = "N/A"
+                        total_nodes = "N/A"
                     summary += f"""
 ### Code Metrics
 - **Status:** Success
 - **Code Length:** {metrics_data["code_length"]} bytes
 - **Function Count:** {metrics_data["function_count"]}
 - **Class Count:** {metrics_data["class_count"]}
-- **Max Nesting Level:** {complexity.get("max_nesting_level", "N/A")}
-- **Total Nodes:** {complexity.get("total_nodes", "N/A")}
+- **Max Nesting Level:** {max_nesting_level}
+- **Total Nodes:** {total_nodes}
 """
 
             # Add storage information

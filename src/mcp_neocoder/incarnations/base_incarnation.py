@@ -10,12 +10,9 @@ discovered and loaded without requiring central registration of types.
 
 import json
 import logging
-import uuid
-import os
-from typing import Dict, Any, List, Optional, Type, Union
+from typing import List
 
 import mcp.types as types
-from pydantic import Field
 from neo4j import AsyncDriver, AsyncTransaction
 
 logger = logging.getLogger("mcp_neocoder.incarnations.base")
@@ -57,7 +54,7 @@ This is a default hub that should be overridden by each incarnation.
                 async with self.driver.session(database=self.database) as session:
                     # Execute each constraint/index query individually
                     for query in self.schema_queries:
-                        await session.execute_write(lambda tx: tx.run(query))
+                        await session.execute_write(lambda tx: tx.run(query))  # type: ignore
 
                 # Create guidance hub if needed
                 await self.ensure_hub_exists()
@@ -100,14 +97,14 @@ This is a default hub that should be overridden by each incarnation.
         """Get the guidance hub content for this incarnation."""
         hub_id = f"{self.name}_hub"
 
-        query = f"""
+        query = """
         MATCH (hub:AiGuidanceHub {{id: $hub_id}})
         RETURN hub.description AS description
         """
 
         try:
             async with self.driver.session(database=self.database) as session:
-                results_json = await session.execute_read(self._read_query, query, {"hub_id": hub_id})
+                results_json = await session.execute_read(lambda tx: self._read_query(tx, query, {"hub_id": hub_id}))  # type: ignore
                 results = json.loads(results_json)
 
                 if results and len(results) > 0:
@@ -177,7 +174,7 @@ This is a default hub that should be overridden by each incarnation.
                     # Check for List[types.TextContent] return type
                     if return_type and (
                         return_type == List[types.TextContent] or
-                        getattr(return_type, '__origin__', None) == list and
+                        getattr(return_type, '__origin__', None) is list and
                         getattr(return_type, '__args__', [None])[0] == types.TextContent
                     ):
                         is_tool = True
@@ -218,13 +215,15 @@ This is a default hub that should be overridden by each incarnation.
         # Return the count of tools identified/added to registry
         return len(tool_methods)
 
-    async def _read_query(self, tx: AsyncTransaction, query: str, params: dict) -> str:
+    import typing
+
+    async def _read_query(self, tx: AsyncTransaction, query: typing.LiteralString, params: dict) -> str:
         """Execute a read query and return results as JSON string."""
         raw_results = await tx.run(query, params)
         eager_results = await raw_results.to_eager_result()
         return json.dumps([r.data() for r in eager_results.records], default=str)
 
-    async def _write(self, tx: AsyncTransaction, query: str, params: dict):
+    async def _write(self, tx: AsyncTransaction, query: typing.LiteralString, params: dict):
         """Execute a write query and return results as JSON string."""
         result = await tx.run(query, params or {})
         summary = await result.consume()

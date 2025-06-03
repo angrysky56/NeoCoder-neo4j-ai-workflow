@@ -19,11 +19,15 @@ logger = logging.getLogger("mcp_neocoder.cypher_snippets")
 class CypherSnippetMixin:
     """Mixin class providing Cypher snippet functionality for the Neo4jWorkflowServer."""
 
+    def __init__(self, database: str, driver):
+        self.database = database
+        self.driver = driver
+
     async def _read_query(
         self,
         tx: AsyncTransaction,
         query: str,
-        params: dict
+        params: dict[str, object]
     ) -> str:
         """Execute a read query and return results as JSON string."""
         raise NotImplementedError(
@@ -70,7 +74,7 @@ class CypherSnippetMixin:
         WHERE 1=1
         """
 
-        params = {"limit": limit, "offset": offset}
+        params: dict[str, object] = {"limit": limit, "offset": offset}
 
         # Add optional filters
         if tag:
@@ -498,7 +502,7 @@ class CypherSnippetMixin:
 
         if since is not None:
             set_clauses.append("c.since = $since")
-            params["since"] = since
+            params["since"] = str(since)
 
         # Build the query
         query = f"""
@@ -517,7 +521,7 @@ class CypherSnippetMixin:
               MERGE (t:Tag {name: tag})
               MERGE (c)-[:TAGGED_AS]->(t)
             """
-            params["tags"] = tags
+            params["tags"] = json.dumps(tags)
 
         query += """
         RETURN c.id AS id, c.name AS name

@@ -20,6 +20,9 @@ logger = logging.getLogger("mcp_neocoder.tool_proposals")
 class ToolProposalMixin:
     """Mixin class providing tool proposal functionality for the Neo4jWorkflowServer."""
 
+    database: str  # Define the database attribute
+    driver: Any
+
     async def _read_query(self, tx: AsyncTransaction, query: str, params: dict) -> str:
         """Execute a read query and return results as JSON string."""
         raise NotImplementedError("_read_query must be implemented by the parent class")
@@ -198,7 +201,7 @@ class ToolProposalMixin:
                     if proposal.get("parameters"):
                         try:
                             parameters = json.loads(proposal["parameters"])
-                        except:
+                        except json.JSONDecodeError:
                             parameters = [{"error": "Could not parse parameters"}]
 
                     text = f"# Tool Proposal: {proposal.get('name', 'Unnamed')}\n\n"
@@ -209,7 +212,7 @@ class ToolProposalMixin:
                     text += f"## Description\n\n{proposal.get('description', 'No description')}\n\n"
                     text += f"## Rationale\n\n{proposal.get('rationale', 'No rationale provided')}\n\n"
 
-                    text += f"## Parameters\n\n"
+                    text += "## Parameters\n\n"
                     if parameters:
                         for i, param in enumerate(parameters, 1):
                             text += f"### {i}. {param.get('name', 'Unnamed parameter')}\n"
@@ -259,7 +262,7 @@ class ToolProposalMixin:
                 if results and len(results) > 0:
                     request = results[0]
 
-                    text = f"# Tool Request\n\n"
+                    text = "# Tool Request\n\n"
                     text += f"**ID:** {request.get('id', id)}\n"
                     text += f"**Status:** {request.get('status', 'Unknown')}\n"
                     text += f"**Priority:** {request.get('priority', 'MEDIUM')}\n"
@@ -272,7 +275,7 @@ class ToolProposalMixin:
                     text += f"## Use Case\n\n{request.get('useCase', 'No use case provided')}\n\n"
 
                     if request.get("proposalId"):
-                        text += f"## Implementation\n\n"
+                        text += "## Implementation\n\n"
                         text += f"This request has been implemented as the tool proposal '{request.get('proposalName', 'Unnamed')}'.\n"
                         text += f"You can view the full proposal with `get_tool_proposal(id=\"{request['proposalId']}\")`\n"
 
@@ -294,7 +297,7 @@ class ToolProposalMixin:
         WHERE 1=1
         """
 
-        params = {"limit": limit}
+        params: Dict[str, Any] = {"limit": limit}
 
         if status:
             query += " AND p.status = $status"
@@ -347,7 +350,7 @@ class ToolProposalMixin:
         WHERE 1=1
         """
 
-        params = {"limit": limit}
+        params: Dict[str, Any] = {"limit": limit}
 
         if status:
             query += " AND r.status = $status"

@@ -6,7 +6,6 @@ It creates the base nodes and relationships needed for the system to function pr
 """
 
 import asyncio
-import json
 import logging
 import os
 import sys
@@ -23,7 +22,6 @@ logger = logging.getLogger("mcp_neocoder_init")
 def discover_incarnation_types():
     """Discover available incarnation names from the filesystem."""
     import os
-    from pathlib import Path
 
     incarnation_names = []
     current_dir = os.path.dirname(os.path.abspath(__file__))
@@ -37,11 +35,11 @@ def discover_incarnation_types():
     for entry in os.listdir(incarnations_dir):
         if not entry.endswith('_incarnation.py') or entry.startswith('__'):
             continue
-            
+
         # Skip base incarnation
         if entry == 'base_incarnation.py':
             continue
-            
+
         # Extract name from filename (e.g., "data_analysis" from "data_analysis_incarnation.py")
         incarnation_name = entry[:-14]  # Remove "_incarnation.py" (14 chars)
         if incarnation_name:
@@ -95,7 +93,7 @@ async def init_base_schema(driver: AsyncDriver, database: str = "neo4j"):
     try:
         async with driver.session(database=database) as session:
             for query in base_schema_queries:
-                await session.run(query)
+                await session.run(query)  # type: ignore[arg-type]
         logger.info("Base schema initialized successfully")
     except Exception as e:
         logger.error(f"Error initializing base schema: {e}")
@@ -131,7 +129,7 @@ async def init_research_schema(driver: AsyncDriver, database: str = "neo4j"):
     try:
         async with driver.session(database=database) as session:
             for query in research_schema_queries:
-                await session.run(query)
+                await session.run(query)  # type: ignore[arg-type]
         logger.info("Research schema initialized successfully")
     except Exception as e:
         logger.error(f"Error initializing research schema: {e}")
@@ -165,7 +163,7 @@ async def init_decision_schema(driver: AsyncDriver, database: str = "neo4j"):
     try:
         async with driver.session(database=database) as session:
             for query in decision_schema_queries:
-                await session.run(query)
+                await session.run(query)  # type: ignore[arg-type]
         logger.info("Decision schema initialized successfully")
     except Exception as e:
         logger.error(f"Error initializing decision schema: {e}")
@@ -199,8 +197,9 @@ async def init_learning_schema(driver: AsyncDriver, database: str = "neo4j"):
 
     try:
         async with driver.session(database=database) as session:
+            from typing import cast, LiteralString
             for query in learning_schema_queries:
-                await session.run(query)
+                await session.run(cast(LiteralString, query))
         logger.info("Learning schema initialized successfully")
     except Exception as e:
         logger.error(f"Error initializing learning schema: {e}")
@@ -235,7 +234,8 @@ async def init_simulation_schema(driver: AsyncDriver, database: str = "neo4j"):
     try:
         async with driver.session(database=database) as session:
             for query in simulation_schema_queries:
-                await session.run(query)
+                from typing import cast, LiteralString
+                await session.run(cast(LiteralString, query))
         logger.info("Simulation schema initialized successfully")
     except Exception as e:
         logger.error(f"Error initializing simulation schema: {e}")
@@ -281,8 +281,7 @@ Each incarnation provides its own set of specialized tools while maintaining cor
         logger.error(f"Error creating main guidance hub: {e}")
         raise
 
-
-async def create_dynamic_links_between_hubs(driver: AsyncDriver, database: str = "neo4j", incarnations: List[str] = None):
+async def create_dynamic_links_between_hubs(driver: AsyncDriver, database: str = "neo4j", incarnations: Optional[List[str]] = None):
     """Create relationships between the main hub and all incarnation-specific hubs."""
     logger.info("Creating dynamic links between hubs...")
 
@@ -405,14 +404,14 @@ async def init_db(incarnations: Optional[List[str]] = None):
         # Create incarnation-specific schemas for other discovered incarnations
         for inc_type in incarnations:
             # Skip already handled incarnations
-            if inc_type in ["research_orchestration", "research", "decision_support", 
-                           "decision", "continuous_learning", "learning", 
+            if inc_type in ["research_orchestration", "research", "decision_support",
+                           "decision", "continuous_learning", "learning",
                            "complex_system", "simulation"]:
                 continue
-                
+
             logger.info(f"Creating basic schema for incarnation: {inc_type}")
             hub_id = f"{inc_type}_hub"
-            
+
             # Create a more informative hub description based on the incarnation type
             if inc_type == "knowledge_graph":
                 hub_description = "Knowledge Graph Management - Create and analyze semantic knowledge graphs with entities, observations, and relationships."
@@ -455,7 +454,7 @@ async def init_db(incarnations: Optional[List[str]] = None):
         # Only close the driver if it was successfully created
         if 'driver' in locals():
             await driver.close()
-        
+
         # Return success status instead of exiting
         return success
 

@@ -6,12 +6,10 @@ Manage and analyze knowledge graphs
 
 import json
 import logging
-import uuid
-from typing import Dict, Any, List, Optional, Union
+from typing import Dict, Any, List
 
 import mcp.types as types
 from pydantic import Field
-from neo4j import AsyncTransaction
 
 from .base_incarnation import BaseIncarnation
 
@@ -128,44 +126,6 @@ class KnowledgeGraphIncarnation(BaseIncarnation):
             logger.error(f"Error executing read query: {e}")
             return []
 
-    async def get_guidance_hub(self):
-        """Get the guidance hub for this incarnation."""
-        hub_description = """
-# Knowledge Graph Management System
-
-Welcome to the Knowledge Graph Management System powered by the NeoCoder framework.
-This system helps you create, manage, and analyze knowledge graphs with the following capabilities:
-
-## Key Features
-
-1. **Entity Management**
-   - Create and store entities with observations
-   - Each entity has a type and related metadata
-   - Add observations to track attributes and changes
-
-2. **Relationship Management**
-   - Connect entities with typed relationships
-   - Create semantic networks of related concepts
-   - Model complex dependencies and associations
-
-3. **Knowledge Discovery**
-   - Search entities by name, type, or content
-   - Explore entity connections and relationships
-   - Analyze knowledge structures and patterns
-
-## Getting Started
-
-- Use `create_entities()` to add new entities with observations
-- Connect entities with `create_relations()`
-- Add new observations to existing entities with `add_observations()`
-- Search the knowledge graph with `search_nodes()`
-- View specific entities with `open_nodes()`
-- View the entire graph with `read_graph()`
-
-Each entity and relationship in the system has full tracking capabilities, allowing for robust knowledge management.
-"""
-        # Directly return the guidance hub content to avoid transaction scope issues
-        return [types.TextContent(type="text", text=hub_description)]
 
     async def initialize_schema(self):
         """Initialize the Neo4j schema for Knowledge Graph."""
@@ -184,7 +144,7 @@ Each entity and relationship in the system has full tracking capabilities, allow
             async with self.driver.session(database=self.database) as session:
                 # Execute each constraint/index query individually
                 for query in schema_queries:
-                    await session.execute_write(lambda tx: tx.run(query))
+                    await session.execute_write(lambda tx: tx.run(query))  # type: ignore[arg-type]
 
                 # Create base guidance hub for this incarnation if it doesn't exist
                 await self.ensure_guidance_hub_exists()
@@ -249,7 +209,9 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
 
         try:
             async with self.driver.session(database=self.database) as session:
-                results_json = await session.execute_read(self._read_query, query, {})
+                async def read_query(tx):
+                    return await self._read_query(tx, query, {})
+                results_json = await session.execute_read(read_query)
                 results = json.loads(results_json)
 
                 if results and len(results) > 0:
@@ -576,7 +538,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             MATCH (e:Entity)
             OPTIONAL MATCH (e)-[:HAS_OBSERVATION]->(o:Observation)
             OPTIONAL MATCH (e)-[r:RELATES_TO]->(related:Entity)
-            RETURN e.name as name, e.entityType as type, 
+            RETURN e.name as name, e.entityType as type,
                    collect(DISTINCT o.content) as observations,
                    collect(DISTINCT {type: r.type, target: related.name}) as relations
             ORDER BY e.name
@@ -588,42 +550,42 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                     result = await tx.run(query)
                     records = await result.records()
                     entities = []
-                    
+
                     for record in records:
                         entity = {
                             "name": record.get("name"),
                             "type": record.get("type", "Unknown"),
                             "observations": [obs for obs in record.get("observations", []) if obs is not None],
-                            "relations": [rel for rel in record.get("relations", []) 
+                            "relations": [rel for rel in record.get("relations", [])
                                          if rel is not None and rel.get("type") is not None and rel.get("target") is not None]
                         }
                         entities.append(entity)
-                    
+
                     return entities
-                
+
                 entities = await session.execute_read(execute_query)
-                
+
                 if not entities:
                     return [types.TextContent(type="text", text="# Knowledge Graph\n\nThe knowledge graph is empty.")]
-                
+
                 # Format the response for each entity
                 response = f"# Knowledge Graph\n\nFound {len(entities)} entities in the knowledge graph.\n\n"
-                
+
                 for entity in entities:
                     response += f"## {entity['name']} ({entity['type']})\n\n"
-                    
+
                     if entity['observations']:
                         response += "### Observations:\n"
                         for obs in entity['observations']:
                             response += f"- {obs}\n"
                         response += "\n"
-                    
+
                     if entity['relations']:
                         response += "### Relations:\n"
                         for rel in entity['relations']:
                             response += f"- {rel['type']} -> {rel['target']}\n"
                         response += "\n"
-                
+
                 return [types.TextContent(type="text", text=response)]
 
         except Exception as e:
@@ -664,7 +626,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                     result = await tx.run(cypher_query, {"query": query})
                     records = await result.records()
                     result_data = []
-                    
+
                     for record in records:
                         entity = {
                             "entityName": record.get("entityName"),
@@ -672,11 +634,11 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                             "observations": [obs for obs in record.get("observations", []) if obs is not None]
                         }
                         result_data.append(entity)
-                    
+
                     return result_data
-                
+
                 result_data = await session.execute_read(execute_query)
-                
+
                 # Process and format the results
                 if not result_data:
                     return [types.TextContent(type="text", text=f"No entities found matching '{query}'.")]
@@ -738,8 +700,8 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             OPTIONAL MATCH (e)-[:HAS_OBSERVATION]->(o:Observation)
             OPTIONAL MATCH (e)-[outRel:RELATES_TO]->(target:Entity)
             OPTIONAL MATCH (source:Entity)-[inRel:RELATES_TO]->(e)
-            RETURN 
-                e.name AS name, 
+            RETURN
+                e.name AS name,
                 e.entityType AS type,
                 collect(DISTINCT o.content) AS observations,
                 collect(DISTINCT {type: outRel.type, target: target.name}) AS outRelations,
@@ -752,26 +714,26 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                     result = await tx.run(query, {"names": names})
                     records = await result.records()
                     entity_details = []
-                    
+
                     for record in records:
                         entity = {
                             "name": record.get("name"),
                             "type": record.get("type", "Unknown"),
                             "observations": [obs for obs in record.get("observations", []) if obs is not None],
-                            "outRelations": [rel for rel in record.get("outRelations", []) 
+                            "outRelations": [rel for rel in record.get("outRelations", [])
                                            if rel is not None and rel.get("type") is not None and rel.get("target") is not None],
-                            "inRelations": [rel for rel in record.get("inRelations", []) 
+                            "inRelations": [rel for rel in record.get("inRelations", [])
                                           if rel is not None and rel.get("type") is not None and rel.get("source") is not None]
                         }
                         entity_details.append(entity)
-                    
+
                     return entity_details
-                
+
                 entity_details = await session.execute_read(execute_query)
-                
+
                 if not entity_details:
-                    return [types.TextContent(type="text", text=f"No entities found with the specified names.")]
-                
+                    return [types.TextContent(type="text", text="No entities found with the specified names.")]
+
                 # Format the response
                 response = "# Entity Details\n\n"
 

@@ -22,10 +22,10 @@ def create_incarnation_template(
     tool_names: Optional[List[str]] = Field(None, description="Names of tools to include in the template")
 ) -> List[types.TextContent]:
     """Create a new incarnation template file.
-    
-    This tool creates a Python file for a new incarnation with the necessary structure 
+
+    This tool creates a Python file for a new incarnation with the necessary structure
     and boilerplate code, making it easy to extend the system with custom functionality.
-    
+
     The generated incarnation will be auto-discovered and available for use immediately.
     """
     try:
@@ -33,10 +33,10 @@ def create_incarnation_template(
         name = name.lower().replace(' ', '_').replace('-', '_')
         if name.endswith('_incarnation'):
             name = name[:-12]  # Remove _incarnation suffix if present
-            
+
         # Create the template file
         output_path = incarnation_registry.create_template_incarnation(name)
-        
+
         response = f"""# Incarnation Template Created
 
 A new incarnation template has been created:
@@ -61,7 +61,7 @@ A new incarnation template has been created:
 
 Your incarnation will be automatically discovered thanks to the plugin architecture, without requiring any changes to the core system.
 """
-        
+
         return [types.TextContent(type="text", text=response)]
     except Exception as e:
         logger.error(f"Error creating incarnation template: {e}")
@@ -75,7 +75,7 @@ def create_tool_template(
     parameters: Optional[List[str]] = Field(None, description="Parameter names for the tool (e.g., ['file_path', 'limit'])")
 ) -> List[types.TextContent]:
     """Create a new tool template in an existing incarnation.
-    
+
     This tool adds a new tool method to an existing incarnation file, with the proper structure
     and annotations to ensure it's automatically registered with the system.
     """
@@ -84,17 +84,17 @@ def create_tool_template(
     incarnation = incarnation.lower().replace(' ', '_').replace('-', '_')
     if incarnation.endswith('_incarnation'):
         incarnation = incarnation[:-12]
-        
+
     # Find the incarnation file
     current_dir = os.path.dirname(os.path.abspath(__file__))
     incarnation_file = os.path.join(current_dir, "incarnations", f"{incarnation}_incarnation.py")
-    
+
     if not os.path.exists(incarnation_file):
         return [types.TextContent(
-            type="text", 
+            type="text",
             text=f"Error: Incarnation file not found: {incarnation_file}\n\nPlease create the incarnation first."
         )]
-        
+
     # Generate tool method template
     param_list = parameters or ["param1", "param2"]
     param_definitions = []
@@ -102,7 +102,7 @@ def create_tool_template(
         param_definitions.append(
             f"        {param}: str = Field(..., description=\"Description of {param}\")"
         )
-    
+
     tool_template = f"""
     async def {name}(
         self,
@@ -117,43 +117,43 @@ def create_tool_template(
             logger.error(f"Error in {name}: {{e}}")
             return [types.TextContent(type="text", text=f"Error: {{e}}")]
 """
-    
+
     try:
         # Read the incarnation file
         with open(incarnation_file, 'r') as f:
             content = f.read()
-            
+
         # Find the end of the class
         lines = content.split('\n')
         class_found = False
         tool_methods_list = None
         insert_position = len(lines) - 1
-        
+
         for i, line in enumerate(lines):
             # Check for class definition
-            if line.startswith(f"class ") and "Incarnation" in line and "(" in line:
+            if line.startswith("class ") and "Incarnation" in line and "(" in line:
                 class_found = True
                 continue
-                
+
             # Check for _tool_methods list
             if class_found and "_tool_methods" in line and "[" in line:
                 tool_methods_list = i
-                
+
             # Find a good position to insert the tool
             if class_found and line.startswith("    async def "):
                 if i > insert_position:
                     insert_position = i
-        
+
         # If we didn't find the class or a good insert position, insert at the end
         if not class_found:
             return [types.TextContent(
                 type="text",
                 text=f"Error: Could not find incarnation class in {incarnation_file}"
             )]
-            
+
         # Insert the tool method
         lines.insert(insert_position + 1, tool_template)
-        
+
         # If _tool_methods exists, add this tool to it
         if tool_methods_list is not None:
             tool_methods_line = lines[tool_methods_list]
@@ -168,11 +168,11 @@ def create_tool_template(
                             list_end = lines[j].find("]")
                             lines[j] = lines[j][:list_end] + f', "{name}"' + lines[j][list_end:]
                             break
-        
+
         # Write back to the file
         with open(incarnation_file, 'w') as f:
             f.write('\n'.join(lines))
-            
+
         return [types.TextContent(
             type="text",
             text=f"""# Tool Template Added
