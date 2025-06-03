@@ -84,6 +84,7 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
         try:
             # 1. Initialize polymorphic adapter (parent class setup)
             PolymorphicAdapterMixin.__init__(self)
+            CypherSnippetMixin.__init__(self, database=self.database, driver=self.driver)
             logger.info("Polymorphic adapter initialized")
 
             # 2. Run async database initialization
