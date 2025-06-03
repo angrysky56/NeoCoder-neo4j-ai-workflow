@@ -6,8 +6,7 @@ Analyze and visualize data
 
 import json
 import logging
-import uuid
-from typing import Dict, Any, List, Optional, Union
+from typing import List, Optional
 
 import mcp.types as types
 from pydantic import Field
@@ -50,7 +49,7 @@ class DataAnalysisIncarnation(BaseIncarnation):
             async with self.driver.session(database=self.database) as session:
                 # Execute each constraint/index query individually
                 for query in schema_queries:
-                    await session.execute_write(lambda tx: tx.run(query))
+                    await session.execute_write(lambda tx, q=query: tx.run(q))
 
                 # Create base guidance hub for this incarnation if it doesn't exist
                 await self.ensure_guidance_hub_exists()
@@ -114,8 +113,10 @@ Each entity in the system has full tracking and audit capabilities.
 
         try:
             async with self.driver.session(database=self.database) as session:
-                results_json = await session.execute_read(self._read_query, query, {})
-                results = json.loads(results_json)
+                results_json = await session.execute_read(lambda tx: tx.run(query, {}))
+                records = await results_json.data()
+                results = json.dumps(records)
+                results = json.loads(results)
 
                 if results and len(results) > 0:
                     return [types.TextContent(type="text", text=results[0]["description"])]
@@ -127,7 +128,6 @@ Each entity in the system has full tracking and audit capabilities.
         except Exception as e:
             logger.error(f"Error retrieving data_analysis guidance hub: {e}")
             return [types.TextContent(type="text", text=f"Error: {e}")]
-
     def list_tool_methods(self):
         """List all methods in this class that are tools.
 
@@ -148,6 +148,12 @@ Each entity in the system has full tracking and audit capabilities.
         return tools
 
     # Example tool methods for this incarnation
+
+    async def _read_query(self, tx: AsyncTransaction, query: str, params: dict):
+        """Helper to run a read query and return results as JSON."""
+        result = await tx.run(query, params)  # type: ignore[arg-type]
+        records = await result.data()
+        return json.dumps(records)
 
     async def tool_one(
         self,

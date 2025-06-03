@@ -9,11 +9,7 @@ import importlib
 import inspect
 import logging
 import os
-import pkgutil
-import sys
-import re
-from pathlib import Path
-from typing import Dict, Type, List, Optional, Any, Tuple, Set
+from typing import Dict, Type, List, Optional, Any
 
 from .incarnations.base_incarnation import BaseIncarnation
 
@@ -40,7 +36,7 @@ class IncarnationRegistry:
             incarnation_name = incarnation_class.name
 
             # Convert to string if it's an enum or other object with value attribute
-            if hasattr(incarnation_name, 'value'):
+            if not isinstance(incarnation_name, str) and hasattr(incarnation_name, 'value'):
                 incarnation_name = incarnation_name.value
                 incarnation_class.name = incarnation_name
 
@@ -161,12 +157,12 @@ class IncarnationRegistry:
 
         # Just return the values (actual identifiers) rather than the enum mapping
         identifiers = {value: value for _, value in discovered_types.items()}
-        
+
         if not identifiers:
             # Fallback to direct directory scan if no types were discovered
             current_dir = os.path.dirname(os.path.abspath(__file__))
             incarnations_dir = os.path.join(current_dir, "incarnations")
-            
+
             if os.path.exists(incarnations_dir):
                 for entry in os.listdir(incarnations_dir):
                     if entry.endswith('_incarnation.py') and not entry.startswith('__') and entry != 'base_incarnation.py':
@@ -174,7 +170,7 @@ class IncarnationRegistry:
                         inc_type = entry[:-14]  # Remove "_incarnation.py"
                         identifiers[inc_type] = inc_type
                         logger.info(f"Direct scan found incarnation: {inc_type}")
-        
+
         logger.info(f"Discovered incarnation identifiers: {list(identifiers.keys())}")
         return identifiers
 
@@ -225,11 +221,11 @@ class IncarnationRegistry:
                     if (inspect.isclass(obj) and
                         issubclass(obj, BaseIncarnation) and
                         obj is not BaseIncarnation):
-                        
+
                         # Check if it has either 'incarnation' or 'name' attribute
                         if hasattr(obj, 'incarnation'):
                             # Get incarnation type as string (in case it's still an enum value)
-                            inc_type = obj.incarnation
+                            inc_type = getattr(obj, 'incarnation')
                             if hasattr(inc_type, 'value'):  # Handle case where it might still be an enum
                                 inc_type = inc_type.value
 
@@ -237,21 +233,21 @@ class IncarnationRegistry:
 
                             # Update the incarnation to be a string if it's not already
                             if hasattr(inc_type, 'value'):
-                                obj.incarnation = inc_type
-                                
+                                setattr(obj, 'incarnation', inc_type)
+
                             # Add a name attribute if it doesn't exist
                             if not hasattr(obj, 'name'):
                                 obj.name = inc_type
-                                
+
                             self.register(obj)
                         elif hasattr(obj, 'name'):
                             # Also register classes that have a 'name' but no 'incarnation' attribute
                             logger.info(f"Found incarnation class via 'name' attribute: {name}, name: {obj.name}")
-                            
+
                             # Add an incarnation attribute that matches the name for compatibility
                             if not hasattr(obj, 'incarnation'):
-                                obj.incarnation = obj.name
-                                
+                                setattr(obj, 'incarnation', obj.name)
+
                             self.register(obj)
                         else:
                             logger.warning(f"Skipping class {name} in {module_name}: missing both 'incarnation' and 'name' attributes")

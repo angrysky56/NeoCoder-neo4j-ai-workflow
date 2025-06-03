@@ -4,7 +4,6 @@ Main entry point for NeoCoder package.
 """
 
 import argparse
-import asyncio
 import os
 import logging
 
@@ -20,24 +19,24 @@ def main():
     """Main entry point for the NeoCoder package."""
     import signal
     import sys
-    
+
     # Define signal handlers before anything else
     def signal_handler(sig, frame):
         """Handle termination signals gracefully."""
         logger.info(f"Received signal {sig}, shutting down NeoCoder...")
         sys.exit(0)
-    
+
     # Register signal handlers
     signal.signal(signal.SIGINT, signal_handler)
     signal.signal(signal.SIGTERM, signal_handler)
-    
+
     # Check for existing instances and clean up if needed
     try:
         from .server import cleanup_zombie_instances
         cleanup_zombie_instances()
     except Exception as e:
         logger.warning(f"Failed to clean up zombie instances: {e}")
-    
+
     parser = argparse.ArgumentParser(description="NeoCoder Neo4j-Guided AI Coding Workflow")
 
     # Create subparsers for different commands
@@ -49,7 +48,7 @@ def main():
     server_parser.add_argument("--username", default=None, help="Neo4j username")
     server_parser.add_argument("--password", default=None, help="Neo4j password")
     server_parser.add_argument("--database", default=None, help="Neo4j database name")
-    server_parser.add_argument("--force-clean", action="store_true", 
+    server_parser.add_argument("--force-clean", action="store_true",
                              help="Force clean up of other running instances")
 
     # Init command
@@ -58,7 +57,7 @@ def main():
     init_parser.add_argument("--username", default=None, help="Neo4j username")
     init_parser.add_argument("--password", default=None, help="Neo4j password")
     init_parser.add_argument("--database", default=None, help="Neo4j database name")
-    
+
     # Cleanup command
     cleanup_parser = subparsers.add_parser("cleanup", help="Clean up orphaned server instances")
     cleanup_parser.add_argument("--force", action="store_true", help="Force kill all instances")
@@ -87,7 +86,7 @@ def main():
         if hasattr(args, 'force_clean') and args.force_clean:
             try:
                 from .server import cleanup_zombie_instances
-                cleanup_zombie_instances(force=True)
+                cleanup_zombie_instances()
             except Exception as e:
                 logger.warning(f"Failed to force clean instances: {e}")
         server_main()
@@ -97,7 +96,7 @@ def main():
     elif args.command == "cleanup":
         logger.info("Cleaning up server instances")
         from .server import cleanup_zombie_instances
-        cleanup_zombie_instances(force=args.force)
+        cleanup_zombie_instances()
         logger.info("Cleanup complete")
     else:
         # Default to server if no command provided

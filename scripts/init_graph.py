@@ -14,7 +14,8 @@ from neo4j import GraphDatabase
 import logging
 import argparse
 from pathlib import Path
-
+import neo4j
+from typing import cast, LiteralString
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
@@ -174,15 +175,14 @@ class Neo4jGraphInitializer:
         with self.driver.session() as session:
             for template_file in template_files:
                 try:
-                    with open(template_file, 'r') as f:
+                    with open(template_file) as f:
                         template_query = f.read()
-                        session.run(template_query)
-                    logger.info(f"Executed template file: {template_file.name}")
+                        session.run(neo4j.Query(cast(LiteralString, template_query)))
+                        logger.info(f"Executed template file: {template_file.name}")
                 except Exception as e:
                     logger.error(f"Error executing template file {template_file.name}: {e}")
 
         return True
-
 def main():
     parser = argparse.ArgumentParser(description='Initialize Neo4j Graph for AI-Guided Coding')
     parser.add_argument('--uri', default='bolt://localhost:7687', help='Neo4j connection URI')

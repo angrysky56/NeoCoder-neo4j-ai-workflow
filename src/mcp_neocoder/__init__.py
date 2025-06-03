@@ -8,6 +8,9 @@ The server supports multiple "incarnations" - different operational modes that a
 for specialized use cases while preserving the core Neo4j graph structure.
 """
 
+# Import server components
+from .server import create_server, Neo4jWorkflowServer
+
 # Import base incarnation class
 from .incarnations.base_incarnation import BaseIncarnation
 
@@ -17,9 +20,6 @@ from .tool_registry import registry as tool_registry
 
 # Dynamically discover and load all incarnations - no hardcoding!
 incarnation_registry.discover()
-
-# Import server components
-from .server import create_server, Neo4jWorkflowServer
 
 __version__ = "0.1.0"
 __all__ = [

@@ -20,8 +20,8 @@ import json
 from datetime import datetime
 from neo4j import GraphDatabase
 from pathlib import Path
-import yaml
-import tabulate  # pip install types-tabulate
+from tabulate import tabulate  # pip install types-tabulate
+import yaml  # pip install pyyaml
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -141,7 +141,8 @@ class Neo4jTemplateManager:
             RETURN count(t) AS count
             """, keyword=keyword)
 
-            existing_count = result.single()["count"]
+            record = result.single()
+            existing_count = record["count"] if record else 0
 
             if existing_count > 0:
                 logger.warning(f"Templates with keyword '{keyword}' already exist. Consider updating instead.")
@@ -201,7 +202,8 @@ class Neo4jTemplateManager:
             RETURN count(t) AS count
             """, keyword=keyword, version=new_version)
 
-            if result.single()["count"] > 0:
+            record = result.single()
+            if record and record["count"] > 0:
                 logger.error(f"Template '{keyword}' version '{new_version}' already exists")
                 return False
 
@@ -394,7 +396,12 @@ class Neo4jTemplateManager:
             RETURN count(t) AS count
             """, keyword=keyword)
 
-            count = result.single()["count"]
+            record = result.single()
+            if not record:
+                logger.error(f"No templates found with keyword '{keyword}'")
+                return False
+
+            count = record["count"]
 
             if count == 0:
                 logger.error(f"No templates found with keyword '{keyword}'")
@@ -440,7 +447,12 @@ class Neo4jTemplateManager:
                 RETURN count(t) AS archived
                 """, keyword=keyword)
 
-                archived = result.single()["archived"]
+                record = result.single()
+                if not record:
+                    logger.warning(f"No non-current versions to archive for template '{keyword}'")
+                    return False
+
+                archived = record["archived"]
 
                 if archived > 0:
                     logger.info(f"Archived {archived} non-current versions of template '{keyword}'")
@@ -458,7 +470,8 @@ class Neo4jTemplateManager:
             RETURN count(t) AS count
             """, keyword=keyword, version=version)
 
-            if result.single()["count"] == 0:
+            record = result.single()
+            if not record or record["count"] == 0:
                 logger.error(f"Template '{keyword}' version '{version}' not found")
                 return False
 

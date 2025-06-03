@@ -14,7 +14,7 @@ from typing import Dict, Any, List, Optional, Union, Tuple
 
 import mcp.types as types
 from pydantic import Field
-from neo4j import AsyncGraphDatabase, AsyncDriver, AsyncTransaction
+from neo4j import AsyncDriver, AsyncTransaction, AsyncManagedTransaction
 
 from .base_incarnation import BaseIncarnation
 
@@ -61,18 +61,19 @@ class ResearchIncarnation(BaseIncarnation):
 
     # No need to manually register tools anymore - the tool registry will discover them automatically
 
-    async def _read_query(self, tx: AsyncTransaction, query: str, params: dict) -> str:
+    from typing import LiteralString
+
+    async def _read_query(self, tx: Union["AsyncTransaction", "AsyncManagedTransaction"], query, params: dict) -> str:
         """Execute a read query and return results as JSON string."""
         raw_results = await tx.run(query, params)
         eager_results = await raw_results.to_eager_result()
         return json.dumps([r.data() for r in eager_results.records], default=str)
 
-    async def _write(self, tx: AsyncTransaction, query: str, params: dict):
+    async def _write(self, tx, query: LiteralString, params: dict):
         """Execute a write query and return results as JSON string."""
         result = await tx.run(query, params or {})
         summary = await result.consume()
         return summary
-
     async def initialize_schema(self):
         """Initialize the Neo4j schema for research orchestration."""
         # Define constraints and indexes for research schema
@@ -94,7 +95,7 @@ class ResearchIncarnation(BaseIncarnation):
             async with self.driver.session(database=self.database) as session:
                 # Execute each constraint/index query individually
                 for query in schema_queries:
-                    await session.execute_write(lambda tx: tx.run(query))
+                    await session.execute_write(lambda tx, query: tx.run(query), query)
 
                 # Create base guidance hub for research if it doesn't exist
                 await self.ensure_research_hub_exists()
@@ -164,10 +165,13 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
 
         try:
             async with self.driver.session(database=self.database) as session:
-                results_json = await session.execute_read(self._read_query, query, {})
+                async def read_query(tx):
+                    return await self._read_query(tx, query, {})
+
+                results_json = await session.execute_read(read_query)
                 results = json.loads(results_json)
 
-                if results and len(results) > 0:
+                if results and results[0]:
                     return [types.TextContent(type="text", text=results[0]["description"])]
                 else:
                     # If hub doesn't exist, create it
@@ -221,11 +225,11 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
 
         try:
             async with self.driver.session(database=self.database) as session:
-                results_json = await session.execute_read(self._read_query, query, params)
+                results_json = await session.execute_write(lambda tx: self._read_query(tx, query, params))
                 results = json.loads(results_json)
 
                 if results and len(results) > 0:
-                    text_response = f"# Hypothesis Registered\n\n"
+                    text_response = "# Hypothesis Registered\n\n"
                     text_response += f"**ID:** {hypothesis_id}\n\n"
                     text_response += f"**Statement:** {text}\n\n"
                     text_response += f"**Prior Probability:** {prior_probability}\n\n"
@@ -257,7 +261,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
         WHERE 1=1
         """
 
-        params = {"limit": limit}
+        params: Dict[str, Any] = {"limit": limit}
 
         if status:
             query += " AND h.status = $status"
@@ -366,7 +370,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
                     if h.get("description"):
                         text_response += f"\n## Description\n\n{h.get('description')}\n"
 
-                    text_response += f"\n## Experiments\n\n"
+                    text_response += "\n## Experiments\n\n"
                     text_response += f"This hypothesis has been tested in {h.get('experiment_count', 0)} experiments.\n"
 
                     if h.get('experiment_count', 0) > 0:
@@ -409,11 +413,11 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
 
         if current_probability is not None:
             set_clauses.append("h.current_probability = $current_probability")
-            params["current_probability"] = current_probability
+            params["current_probability"] = str(current_probability)
 
         if tags is not None:
             set_clauses.append("h.tags = $tags")
-            params["tags"] = tags
+            params["tags"] = json.dumps(tags)
 
         if not set_clauses:
             return [types.TextContent(type="text", text="No updates provided.")]
@@ -547,7 +551,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
         LIMIT $limit
         """
 
-        params = {"limit": limit}
+        params: Dict[str, Any] = {"limit": limit}
 
         try:
             async with self.driver.session(database=self.database) as session:
@@ -688,7 +692,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
                     text_response = "# Experiment Created\n\n"
                     text_response += f"**Experiment ID:** {experiment_id}\n"
                     text_response += f"**Name:** {name}\n"
-                    text_response += f"**Status:** Planned\n\n"
+                    text_response += "**Status:** Planned\n\n"
 
                     text_response += f"**Testing Hypothesis:** {result.get('hypothesis_text', 'Unknown')}\n"
                     text_response += f"**Following Protocol:** {result.get('protocol_name', 'Unknown')}\n"
@@ -718,7 +722,8 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
         WHERE 1=1
         """
 
-        params = {"limit": limit}
+
+        params: Dict[str, Any] = {"limit": limit}
 
         if hypothesis_id:
             query += """
@@ -803,6 +808,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
                         return [types.TextContent(type="text", text="No experiments found in the database.")]
         except Exception as e:
             logger.error(f"Error listing experiments: {e}")
+
             return [types.TextContent(type="text", text=f"Error: {e}")]
 
     async def get_experiment(
@@ -922,7 +928,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
         self,
         experiment_id: str = Field(..., description="ID of the experiment"),
         content: str = Field(..., description="The observation content"),
-        supports_hypothesis: bool = Field(None, description="Whether this observation supports the hypothesis"),
+        supports_hypothesis: Optional[bool] = Field(None, description="Whether this observation supports the hypothesis"),
         evidence_strength: Optional[float] = Field(None, description="Strength of evidence (0-1)"),
         metadata: Optional[Dict[str, Any]] = Field(None, description="Additional metadata about the observation")
     ) -> List[types.TextContent]:
@@ -985,9 +991,10 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
 
         try:
             async with self.driver.session(database=self.database) as session:
-                result = await session.execute_write(
-                    lambda tx: tx.run(query, params).to_eager_result()
-                )
+                async def write_query(tx):
+                    raw_result = await tx.run(query, params)
+                    return await raw_result.to_eager_result()
+                result = await session.execute_write(write_query)
 
                 if result.records:
                     record = result.records[0]
@@ -1083,7 +1090,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
                                 for key, value in metadata.items():
                                     text_response += f"- **{key}:** {value}\n"
                                 text_response += "\n"
-                            except:
+                            except Exception:
                                 pass
 
                     return [types.TextContent(type="text", text=text_response)]
@@ -1234,7 +1241,10 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
 
         try:
             async with self.driver.session(database=self.database) as session:
-                result = await session.execute_read(lambda tx: tx.run(exp_query, params).to_eager_result())
+                async def read_query(tx):
+                    raw_result = await tx.run(exp_query, params)
+                    return await raw_result.to_eager_result()
+                result = await session.execute_read(read_query)
 
                 if not result.records:
                     return [types.TextContent(type="text", text=f"Could not find experiment with ID '{experiment_id}'.")]
@@ -1341,66 +1351,10 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
                 neutral = total_observations - supporting - contradicting
 
                 publication += f"A total of {total_observations} observations were recorded. "
-                publication += f"Of these, {supporting} supported the hypothesis, "
-                publication += f"{contradicting} contradicted it, and {neutral} were neutral.\n\n"
 
-                if include_figures:
-                    publication += "### Figures\n\n"
-                    publication += "*[Visualizations would be generated here based on the experimental data]*\n\n"
-
-                # Selected observations
-                if observations:
-                    publication += "### Selected Observations\n\n"
-                    # Include up to 5 most significant observations
-                    sorted_obs = sorted(observations,
-                                      key=lambda o: o.get('evidence_strength', 0) if o.get('evidence_strength') is not None else 0,
-                                      reverse=True)
-                    for i, obs in enumerate(sorted_obs[:5], 1):
-                        publication += f"**Observation {i}:** {obs.get('content')}\n\n"
-
-                # Discussion
-                publication += "## Discussion\n\n"
-
-                # Generate simple discussion based on results
-                prior_prob = record.get('prior_probability')
-                current_prob = record.get('current_probability')
-
-                if prior_prob is not None and current_prob is not None:
-                    publication += f"The prior probability of the hypothesis was {prior_prob}. "
-                    publication += f"After the experiment, the updated probability is {current_prob}. "
-
-                    diff = float(current_prob) - float(prior_prob)
-                    if diff > 0.2:
-                        publication += "This represents a substantial increase in confidence.\n\n"
-                    elif diff < -0.2:
-                        publication += "This represents a substantial decrease in confidence.\n\n"
-                    else:
-                        publication += "This represents a modest change in confidence.\n\n"
-
-                # Limitations
-                publication += "## Limitations\n\n"
-                publication += "*[This section would describe limitations of the study methodology and results]*\n\n"
-
-                # Conclusion
-                publication += "## Conclusion\n\n"
-                if current_prob is not None:
-                    if float(current_prob) > 0.8:
-                        publication += "The evidence strongly supports the hypothesis."
-                    elif float(current_prob) > 0.6:
-                        publication += "The evidence moderately supports the hypothesis."
-                    elif float(current_prob) < 0.2:
-                        publication += "The evidence strongly contradicts the hypothesis."
-                    elif float(current_prob) < 0.4:
-                        publication += "The evidence moderately contradicts the hypothesis."
-                    else:
-                        publication += "The evidence is inconclusive regarding the hypothesis."
-                else:
-                    publication += "*[Insert conclusion based on the experimental results]*"
-
-                publication += "\n\n---\n\n"
-                publication += "*This draft was auto-generated based on experimental data and may require review and editing.*"
+                publication += f"Of these, {supporting} supported the hypothesis, {contradicting} contradicted it, "
+                publication += f"and {neutral} were neutral.\n"
 
                 return [types.TextContent(type="text", text=publication)]
         except Exception as e:
-            logger.error(f"Error creating publication draft: {e}")
-            return [types.TextContent(type="text", text=f"Error creating publication draft: {e}")]
+            return [types.TextContent(type="text", text=f"Error creating publication draft: {str(e)}")]

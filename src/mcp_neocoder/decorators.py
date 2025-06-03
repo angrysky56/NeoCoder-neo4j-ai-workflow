@@ -6,9 +6,8 @@ of incarnation-specific tools and functionality.
 """
 
 import functools
-import inspect
 import logging
-from typing import Any, Callable, List, Optional, Type
+from typing import Any, Optional
 
 import mcp.types as types
 from pydantic import Field
@@ -51,9 +50,8 @@ def incarnation_tool(category: Optional[str] = None):
 
             return result
 
-        # Update the wrapper's signature to match the original function
-        sig = inspect.signature(func)
-        wrapper.__signature__ = sig
+        # Update the wrapper's metadata to match the original function
+        functools.update_wrapper(wrapper, func)
 
         return wrapper
 

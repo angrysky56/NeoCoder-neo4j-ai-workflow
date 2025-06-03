@@ -133,7 +133,8 @@ class Neo4jGraphCleaner:
             RETURN count(w) AS archived
             """, ids=execution_ids, archiveDate=archive_date)
 
-            count = result.single()["archived"]
+            record = result.single()
+            count = record["archived"] if record and "archived" in record else 0
             logger.info(f"Archived {count} workflow executions")
             return count
 
@@ -163,7 +164,8 @@ class Neo4jGraphCleaner:
             RETURN count(f) AS deleted
             """, paths=file_paths)
 
-            count = result.single()["deleted"]
+            record = result.single()
+            count = record["deleted"] if record and "deleted" in record else 0
             logger.info(f"Deleted {count} orphaned file/directory nodes")
             return count
 
@@ -284,7 +286,8 @@ class Neo4jGraphCleaner:
                 RETURN count(f) AS removed
                 """, paths=paths_to_remove, projectId=project_id)
 
-                removed = result.single()["removed"]
+                record = result.single()
+                removed = record["removed"] if record and "removed" in record else 0
                 logger.info(f"Removed {removed} outdated file nodes")
 
             # Add new paths

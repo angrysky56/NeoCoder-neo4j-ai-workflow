@@ -9,7 +9,6 @@ including creating the ToolProposal and ToolRequest nodes and relationships.
 import os
 import logging
 import time
-from pathlib import Path
 from neo4j import GraphDatabase
 
 # Configure logging

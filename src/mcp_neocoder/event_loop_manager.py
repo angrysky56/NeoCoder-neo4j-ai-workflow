@@ -8,7 +8,7 @@ particularly for Neo4j async operations that need to run in the same event loop 
 import asyncio
 import logging
 from contextlib import asynccontextmanager
-from typing import Optional, Any
+from typing import Optional
 from neo4j import AsyncDriver
 
 logger = logging.getLogger("mcp_neocoder")
@@ -19,7 +19,7 @@ _MAIN_LOOP: Optional[asyncio.AbstractEventLoop] = None
 def initialize_main_loop() -> asyncio.AbstractEventLoop:
     """Initialize and store the main event loop for the application."""
     global _MAIN_LOOP
-    
+
     try:
         # Try to get the current event loop
         loop = asyncio.get_event_loop()
@@ -28,12 +28,12 @@ def initialize_main_loop() -> asyncio.AbstractEventLoop:
         logger.info("No event loop found in thread, creating a new one")
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
-    
+
     # Store as main loop if not already set
     if _MAIN_LOOP is None:
         logger.info("Initializing main event loop for Neo4j operations")
         _MAIN_LOOP = loop
-    
+
     return loop
 
 def get_main_loop() -> Optional[asyncio.AbstractEventLoop]:
@@ -45,7 +45,7 @@ def get_main_loop() -> Optional[asyncio.AbstractEventLoop]:
 async def safe_neo4j_session(driver: AsyncDriver, database: str):
     """
     Create a Neo4j session safely, ensuring event loop consistency.
-    
+
     This context manager helps avoid "attached to different loop" errors
     by ensuring consistent event loop usage with Neo4j operations.
     """
@@ -53,14 +53,14 @@ async def safe_neo4j_session(driver: AsyncDriver, database: str):
     try:
         current_loop = asyncio.get_running_loop()
         main_loop = get_main_loop()
-        
+
         if main_loop is not None and current_loop is not main_loop:
             logger.warning(
                 "Event loop mismatch detected! Current operation is running in a "
                 "different event loop than the Neo4j driver was initialized with. "
                 "This may cause 'Future attached to a different loop' errors."
             )
-            
+
             # Instead of just warning, try to handle this properly
             if main_loop.is_running():
                 logger.warning("Detected event loop mismatch - attempting to handle")
@@ -70,7 +70,7 @@ async def safe_neo4j_session(driver: AsyncDriver, database: str):
     except RuntimeError:
         # Not running in an event loop - less likely but possible
         logger.warning("Attempting Neo4j session outside of an event loop context")
-    
+
     # Use driver session in a safer way to avoid event loop issues
     try:
         main_loop = get_main_loop()
@@ -79,11 +79,11 @@ async def safe_neo4j_session(driver: AsyncDriver, database: str):
             current_loop = asyncio.get_running_loop()
         except RuntimeError:
             pass
-        
+
         if main_loop is not None and current_loop is not main_loop:
             # Critical case - session must be created in the same loop as the driver
             logger.info("Creating session in main loop to avoid mismatch")
-            
+
             async def create_session_in_main_loop():
                 """Helper to create session in the main loop"""
                 async with driver.session(database=database) as session:
@@ -92,7 +92,7 @@ async def safe_neo4j_session(driver: AsyncDriver, database: str):
                         # Add any needed properties to access outside this context
                     }
                     return session, session_props
-            
+
             # Get a session created in the main loop
             try:
                 # For simplicity, we'll still use the session in the current loop
@@ -132,7 +132,7 @@ async def safe_neo4j_session(driver: AsyncDriver, database: str):
 async def run_in_main_loop(coro):
     """
     Run a coroutine in the main event loop.
-    
+
     This is useful for operations that must run in the same loop context
     as the Neo4j driver initialization.
     """
@@ -140,7 +140,7 @@ async def run_in_main_loop(coro):
     if main_loop is None:
         # Initialize if not done yet
         main_loop = initialize_main_loop()
-    
+
     current_loop = None
     try:
         current_loop = asyncio.get_running_loop()
@@ -148,7 +148,7 @@ async def run_in_main_loop(coro):
         # Not running in an event loop - create one
         current_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(current_loop)
-    
+
     if current_loop is main_loop:
         # Already in the main loop, just await
         logger.debug("Already in main loop, executing directly")
