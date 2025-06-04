@@ -11,14 +11,14 @@ import logging
 import os
 import sys
 from typing import List, Optional
+from enum import Enum
 
 from neo4j import AsyncGraphDatabase, AsyncDriver
-
+from neo4j import Query
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 logger = logging.getLogger("mcp_neocoder_init")
 
-from enum import Enum
 
 # Incarnation types
 class IncarnationType(str, Enum):
@@ -54,21 +54,21 @@ async def init_base_schema(driver: AsyncDriver, database: str = "neo4j"):
     # Base constraints and indexes
     base_schema_queries = [
         # Guidance Hub
-        "CREATE CONSTRAINT hub_id IF NOT EXISTS FOR (hub:AiGuidanceHub) REQUIRE hub.id IS UNIQUE",
+        Query("""CREATE CONSTRAINT hub_id IF NOT EXISTS FOR (hub:AiGuidanceHub) REQUIRE hub.id IS UNIQUE"""),
 
         # Tool proposals
-        "CREATE CONSTRAINT proposal_id IF NOT EXISTS FOR (p:ToolProposal) REQUIRE p.id IS UNIQUE",
-        "CREATE CONSTRAINT request_id IF NOT EXISTS FOR (r:ToolRequest) REQUIRE r.id IS UNIQUE",
+        Query("""CREATE CONSTRAINT proposal_id IF NOT EXISTS FOR (p:ToolProposal) REQUIRE p.id IS UNIQUE"""),
+        Query("""CREATE CONSTRAINT request_id IF NOT EXISTS FOR (r:ToolRequest) REQUIRE r.id IS UNIQUE"""),
 
         # Cypher snippets
-        "CREATE CONSTRAINT snippet_id IF NOT EXISTS FOR (s:CypherSnippet) REQUIRE s.id IS UNIQUE",
-        "CREATE CONSTRAINT tag_name IF NOT EXISTS FOR (t:Tag) REQUIRE t.name IS UNIQUE",
+        Query("""CREATE CONSTRAINT snippet_id IF NOT EXISTS FOR (s:CypherSnippet) REQUIRE s.id IS UNIQUE"""),
+        Query("""CREATE CONSTRAINT tag_name IF NOT EXISTS FOR (t:Tag) REQUIRE t.name IS UNIQUE"""),
 
         # Indexes
-        "CREATE INDEX hub_type IF NOT EXISTS FOR (hub:AiGuidanceHub) ON (hub.type)",
-        "CREATE INDEX proposal_status IF NOT EXISTS FOR (p:ToolProposal) ON (p.status)",
-        "CREATE INDEX request_status IF NOT EXISTS FOR (r:ToolRequest) ON (r.status)",
-        "CREATE INDEX snippet_name IF NOT EXISTS FOR (s:CypherSnippet) ON (s.name)"
+        Query("""CREATE INDEX hub_type IF NOT EXISTS FOR (hub:AiGuidanceHub) ON (hub.type)"""),
+        Query("""CREATE INDEX proposal_status IF NOT EXISTS FOR (p:ToolProposal) ON (p.status)"""),
+        Query("""CREATE INDEX request_status IF NOT EXISTS FOR (r:ToolRequest) ON (r.status)"""),
+        Query("""CREATE INDEX snippet_name IF NOT EXISTS FOR (s:CypherSnippet) ON (s.name)""")
     ]
 
     try:
@@ -80,7 +80,6 @@ async def init_base_schema(driver: AsyncDriver, database: str = "neo4j"):
         logger.error(f"Error initializing base schema: {e}")
         raise
 
-
 async def init_research_schema(driver: AsyncDriver, database: str = "neo4j"):
     """Initialize the schema for the Research Orchestration Platform incarnation."""
     logger.info("Initializing research schema...")
@@ -88,16 +87,16 @@ async def init_research_schema(driver: AsyncDriver, database: str = "neo4j"):
     # Separate constraints and indexes queries (single-statement each)
     research_schema_queries = [
         # Constraints
-        "CREATE CONSTRAINT research_hypothesis_id IF NOT EXISTS FOR (h:Hypothesis) REQUIRE h.id IS UNIQUE",
-        "CREATE CONSTRAINT research_experiment_id IF NOT EXISTS FOR (e:Experiment) REQUIRE e.id IS UNIQUE",
-        "CREATE CONSTRAINT research_protocol_id IF NOT EXISTS FOR (p:Protocol) REQUIRE p.id IS UNIQUE",
-        "CREATE CONSTRAINT research_observation_id IF NOT EXISTS FOR (o:Observation) REQUIRE o.id IS UNIQUE",
-        "CREATE CONSTRAINT research_run_id IF NOT EXISTS FOR (r:Run) REQUIRE r.id IS UNIQUE",
+        Query("CREATE CONSTRAINT research_hypothesis_id IF NOT EXISTS FOR (h:Hypothesis) REQUIRE h.id IS UNIQUE"),
+        Query("CREATE CONSTRAINT research_experiment_id IF NOT EXISTS FOR (e:Experiment) REQUIRE e.id IS UNIQUE"),
+        Query("CREATE CONSTRAINT research_protocol_id IF NOT EXISTS FOR (p:Protocol) REQUIRE p.id IS UNIQUE"),
+        Query("CREATE CONSTRAINT research_observation_id IF NOT EXISTS FOR (o:Observation) REQUIRE o.id IS UNIQUE"),
+        Query("CREATE CONSTRAINT research_run_id IF NOT EXISTS FOR (r:Run) REQUIRE r.id IS UNIQUE"),
 
         # Indexes
-        "CREATE INDEX research_hypothesis_status IF NOT EXISTS FOR (h:Hypothesis) ON (h.status)",
-        "CREATE INDEX research_experiment_status IF NOT EXISTS FOR (e:Experiment) ON (e.status)",
-        "CREATE INDEX research_protocol_name IF NOT EXISTS FOR (p:Protocol) ON (p.name)"
+        Query("CREATE INDEX research_hypothesis_status IF NOT EXISTS FOR (h:Hypothesis) ON (h.status)"),
+        Query("CREATE INDEX research_experiment_status IF NOT EXISTS FOR (e:Experiment) ON (e.status)"),
+        Query("CREATE INDEX research_protocol_name IF NOT EXISTS FOR (p:Protocol) ON (p.name)")
     ]
 
     # Hub creation query - separate as it has parameters
@@ -106,7 +105,7 @@ async def init_research_schema(driver: AsyncDriver, database: str = "neo4j"):
     ON CREATE SET hub.description = $description
     RETURN hub
     """
-    
+
     research_hub_description = 'Research Orchestration Platform - A system for managing scientific workflows, hypotheses, experiments, and observations.'
 
     try:
@@ -114,10 +113,10 @@ async def init_research_schema(driver: AsyncDriver, database: str = "neo4j"):
             # Run each constraint/index query
             for query in research_schema_queries:
                 await session.run(query)
-                
+
             # Create the research hub with parameters
             await session.run(research_hub_query, {"description": research_hub_description})
-            
+
         logger.info("Research schema initialized successfully")
     except Exception as e:
         logger.error(f"Error initializing research schema: {e}")
@@ -131,14 +130,14 @@ async def init_decision_schema(driver: AsyncDriver, database: str = "neo4j"):
     # Separate constraints and indexes queries
     decision_schema_queries = [
         # Constraints
-        "CREATE CONSTRAINT decision_id IF NOT EXISTS FOR (d:Decision) REQUIRE d.id IS UNIQUE",
-        "CREATE CONSTRAINT alternative_id IF NOT EXISTS FOR (a:Alternative) REQUIRE a.id IS UNIQUE",
-        "CREATE CONSTRAINT metric_id IF NOT EXISTS FOR (m:Metric) REQUIRE m.id IS UNIQUE",
-        "CREATE CONSTRAINT evidence_id IF NOT EXISTS FOR (e:Evidence) REQUIRE e.id IS UNIQUE",
+        Query("CREATE CONSTRAINT decision_id IF NOT EXISTS FOR (d:Decision) REQUIRE d.id IS UNIQUE"),
+        Query("CREATE CONSTRAINT alternative_id IF NOT EXISTS FOR (a:Alternative) REQUIRE a.id IS UNIQUE"),
+        Query("CREATE CONSTRAINT metric_id IF NOT EXISTS FOR (m:Metric) REQUIRE m.id IS UNIQUE"),
+        Query("CREATE CONSTRAINT evidence_id IF NOT EXISTS FOR (e:Evidence) REQUIRE e.id IS UNIQUE"),
 
         # Indexes
-        "CREATE INDEX decision_status IF NOT EXISTS FOR (d:Decision) ON (d.status)",
-        "CREATE INDEX alternative_name IF NOT EXISTS FOR (a:Alternative) ON (a.name)"
+        Query("CREATE INDEX decision_status IF NOT EXISTS FOR (d:Decision) ON (d.status)"),
+        Query("CREATE INDEX alternative_name IF NOT EXISTS FOR (a:Alternative) ON (a.name)")
     ]
 
     # Hub creation query - separate with parameters
@@ -147,7 +146,7 @@ async def init_decision_schema(driver: AsyncDriver, database: str = "neo4j"):
     ON CREATE SET hub.description = $description
     RETURN hub
     """
-    
+
     decision_hub_description = 'Decision Support System - A system for tracking decisions, alternatives, metrics, and evidence to support transparent, data-driven decision-making.'
 
     try:
@@ -155,10 +154,10 @@ async def init_decision_schema(driver: AsyncDriver, database: str = "neo4j"):
             # Run each constraint/index query
             for query in decision_schema_queries:
                 await session.run(query)
-                
+
             # Create the decision hub with parameters
             await session.run(decision_hub_query, {"description": decision_hub_description})
-            
+
         logger.info("Decision schema initialized successfully")
     except Exception as e:
         logger.error(f"Error initializing decision schema: {e}")
@@ -172,15 +171,15 @@ async def init_learning_schema(driver: AsyncDriver, database: str = "neo4j"):
     # Separate constraints and indexes queries
     learning_schema_queries = [
         # Constraints
-        "CREATE CONSTRAINT learning_user_id IF NOT EXISTS FOR (u:User) REQUIRE u.id IS UNIQUE",
-        "CREATE CONSTRAINT learning_concept_id IF NOT EXISTS FOR (c:Concept) REQUIRE c.id IS UNIQUE",
-        "CREATE CONSTRAINT learning_problem_id IF NOT EXISTS FOR (p:Problem) REQUIRE p.id IS UNIQUE",
-        "CREATE CONSTRAINT learning_attempt_id IF NOT EXISTS FOR (a:Attempt) REQUIRE a.id IS UNIQUE",
+        Query("CREATE CONSTRAINT learning_user_id IF NOT EXISTS FOR (u:User) REQUIRE u.id IS UNIQUE"),
+        Query("CREATE CONSTRAINT learning_concept_id IF NOT EXISTS FOR (c:Concept) REQUIRE c.id IS UNIQUE"),
+        Query("CREATE CONSTRAINT learning_problem_id IF NOT EXISTS FOR (p:Problem) REQUIRE p.id IS UNIQUE"),
+        Query("CREATE CONSTRAINT learning_attempt_id IF NOT EXISTS FOR (a:Attempt) REQUIRE a.id IS UNIQUE"),
 
         # Indexes
-        "CREATE INDEX learning_user_name IF NOT EXISTS FOR (u:User) ON (u.name)",
-        "CREATE INDEX learning_concept_name IF NOT EXISTS FOR (c:Concept) ON (c.name)",
-        "CREATE INDEX learning_problem_difficulty IF NOT EXISTS FOR (p:Problem) ON (p.difficulty)"
+        Query("CREATE INDEX learning_user_name IF NOT EXISTS FOR (u:User) ON (u.name)"),
+        Query("CREATE INDEX learning_concept_name IF NOT EXISTS FOR (c:Concept) ON (c.name)"),
+        Query("CREATE INDEX learning_problem_difficulty IF NOT EXISTS FOR (p:Problem) ON (p.difficulty)")
     ]
 
     # Hub creation query - separate with parameters
@@ -189,7 +188,7 @@ async def init_learning_schema(driver: AsyncDriver, database: str = "neo4j"):
     ON CREATE SET hub.description = $description
     RETURN hub
     """
-    
+
     learning_hub_description = 'Continuous Learning Environment - A system for adaptive learning and personalized content delivery based on knowledge spaces and mastery tracking.'
 
     try:
@@ -197,10 +196,10 @@ async def init_learning_schema(driver: AsyncDriver, database: str = "neo4j"):
             # Run each constraint/index query
             for query in learning_schema_queries:
                 await session.run(query)
-                
+
             # Create the learning hub with parameters
             await session.run(learning_hub_query, {"description": learning_hub_description})
-            
+
         logger.info("Learning schema initialized successfully")
     except Exception as e:
         logger.error(f"Error initializing learning schema: {e}")
@@ -214,15 +213,15 @@ async def init_simulation_schema(driver: AsyncDriver, database: str = "neo4j"):
     # Separate constraints and indexes queries
     simulation_schema_queries = [
         # Constraints
-        "CREATE CONSTRAINT simulation_entity_id IF NOT EXISTS FOR (e:Entity) REQUIRE e.id IS UNIQUE",
-        "CREATE CONSTRAINT simulation_model_id IF NOT EXISTS FOR (m:Model) REQUIRE m.id IS UNIQUE",
-        "CREATE CONSTRAINT simulation_run_id IF NOT EXISTS FOR (r:SimulationRun) REQUIRE r.id IS UNIQUE",
-        "CREATE CONSTRAINT simulation_state_id IF NOT EXISTS FOR (s:State) REQUIRE s.id IS UNIQUE",
+        Query("CREATE CONSTRAINT simulation_entity_id IF NOT EXISTS FOR (e:Entity) REQUIRE e.id IS UNIQUE"),
+        Query("CREATE CONSTRAINT simulation_model_id IF NOT EXISTS FOR (m:Model) REQUIRE m.id IS UNIQUE"),
+        Query("CREATE CONSTRAINT simulation_run_id IF NOT EXISTS FOR (r:SimulationRun) REQUIRE r.id IS UNIQUE"),
+        Query("CREATE CONSTRAINT simulation_state_id IF NOT EXISTS FOR (s:State) REQUIRE s.id IS UNIQUE"),
 
         # Indexes
-        "CREATE INDEX simulation_entity_type IF NOT EXISTS FOR (e:Entity) ON (e.type)",
-        "CREATE INDEX simulation_model_name IF NOT EXISTS FOR (m:Model) ON (m.name)",
-        "CREATE INDEX simulation_run_timestamp IF NOT EXISTS FOR (r:SimulationRun) ON (r.timestamp)"
+        Query("CREATE INDEX simulation_entity_type IF NOT EXISTS FOR (e:Entity) ON (e.type)"),
+        Query("CREATE INDEX simulation_model_name IF NOT EXISTS FOR (m:Model) ON (m.name)"),
+        Query("CREATE INDEX simulation_run_timestamp IF NOT EXISTS FOR (r:SimulationRun) ON (r.timestamp)")
     ]
 
     # Hub creation query - separate with parameters
@@ -231,7 +230,7 @@ async def init_simulation_schema(driver: AsyncDriver, database: str = "neo4j"):
     ON CREATE SET hub.description = $description
     RETURN hub
     """
-    
+
     simulation_hub_description = 'Complex System Simulation - A system for modeling and simulating complex systems with multiple interacting components and emergent behavior.'
 
     try:
@@ -239,10 +238,10 @@ async def init_simulation_schema(driver: AsyncDriver, database: str = "neo4j"):
             # Run each constraint/index query
             for query in simulation_schema_queries:
                 await session.run(query)
-                
+
             # Create the simulation hub with parameters
             await session.run(simulation_hub_query, {"description": simulation_hub_description})
-            
+
         logger.info("Simulation schema initialized successfully")
     except Exception as e:
         logger.error(f"Error initializing simulation schema: {e}")
@@ -297,56 +296,56 @@ async def create_links_between_hubs(driver: AsyncDriver, database: str = "neo4j"
     # Split the multi-statement query into individual queries
     link_queries = [
         # First check if hubs exist
-        """
+        Query("""
         MATCH (main:AiGuidanceHub {id: 'main_hub'})
         RETURN count(main) > 0 AS main_exists
-        """,
-        """
+        """),
+        Query("""
         MATCH (research:AiGuidanceHub {id: 'research_hub'})
         RETURN count(research) > 0 AS research_exists
-        """,
-        """
+        """),
+        Query("""
         MATCH (decision:AiGuidanceHub {id: 'decision_hub'})
         RETURN count(decision) > 0 AS decision_exists
-        """,
-        """
+        """),
+        Query("""
         MATCH (learning:AiGuidanceHub {id: 'learning_hub'})
         RETURN count(learning) > 0 AS learning_exists
-        """,
-        """
+        """),
+        Query("""
         MATCH (simulation:AiGuidanceHub {id: 'simulation_hub'})
         RETURN count(simulation) > 0 AS simulation_exists
-        """
+        """)
     ]
-    
+
     # Individual link creation queries
-    research_link_query = """
+    research_link_query = Query("""
     MATCH (main:AiGuidanceHub {id: 'main_hub'})
     MATCH (research:AiGuidanceHub {id: 'research_hub'})
     MERGE (main)-[:HAS_INCARNATION {type: 'research'}]->(research)
     RETURN main.id, research.id
-    """
-    
-    decision_link_query = """
+    """)
+
+    decision_link_query = Query("""
     MATCH (main:AiGuidanceHub {id: 'main_hub'})
     MATCH (decision:AiGuidanceHub {id: 'decision_hub'})
     MERGE (main)-[:HAS_INCARNATION {type: 'decision'}]->(decision)
     RETURN main.id, decision.id
-    """
-    
-    learning_link_query = """
+    """)
+
+    learning_link_query = Query("""
     MATCH (main:AiGuidanceHub {id: 'main_hub'})
     MATCH (learning:AiGuidanceHub {id: 'learning_hub'})
     MERGE (main)-[:HAS_INCARNATION {type: 'learning'}]->(learning)
     RETURN main.id, learning.id
-    """
-    
-    simulation_link_query = """
+    """)
+
+    simulation_link_query = Query("""
     MATCH (main:AiGuidanceHub {id: 'main_hub'})
     MATCH (simulation:AiGuidanceHub {id: 'simulation_hub'})
     MERGE (main)-[:HAS_INCARNATION {type: 'simulation'}]->(simulation)
     RETURN main.id, simulation.id
-    """
+    """)
 
     try:
         async with driver.session(database=database) as session:
@@ -354,11 +353,11 @@ async def create_links_between_hubs(driver: AsyncDriver, database: str = "neo4j"
             exists_results = {}
             for query in link_queries:
                 result = await session.run(query)
-                records = await result.records()
-                if records and len(records) > 0:
-                    for key, value in records[0].items():
+                record = await result.single() # Use .single() for a single row result
+                if record: # Check if a record was returned
+                    for key, value in record.items(): # Iterate over the single record
                         exists_results[key] = value
-            
+
             # Only create links for hubs that exist
             if exists_results.get('main_exists', False):
                 # Research link
@@ -368,7 +367,7 @@ async def create_links_between_hubs(driver: AsyncDriver, database: str = "neo4j"
                         logger.info("Created link to research hub")
                     except Exception as e:
                         logger.error(f"Error creating research link: {e}")
-                
+
                 # Decision link
                 if exists_results.get('decision_exists', False):
                     try:
@@ -376,7 +375,7 @@ async def create_links_between_hubs(driver: AsyncDriver, database: str = "neo4j"
                         logger.info("Created link to decision hub")
                     except Exception as e:
                         logger.error(f"Error creating decision link: {e}")
-                
+
                 # Learning link
                 if exists_results.get('learning_exists', False):
                     try:
@@ -384,7 +383,7 @@ async def create_links_between_hubs(driver: AsyncDriver, database: str = "neo4j"
                         logger.info("Created link to learning hub")
                     except Exception as e:
                         logger.error(f"Error creating learning link: {e}")
-                
+
                 # Simulation link
                 if exists_results.get('simulation_exists', False):
                     try:
@@ -392,7 +391,7 @@ async def create_links_between_hubs(driver: AsyncDriver, database: str = "neo4j"
                         logger.info("Created link to simulation hub")
                     except Exception as e:
                         logger.error(f"Error creating simulation link: {e}")
-            
+
         logger.info("Hub links created successfully")
     except Exception as e:
         logger.error(f"Error creating hub links: {e}")
@@ -422,7 +421,7 @@ async def init_db(incarnations: Optional[List[str]] = None):
 
         # Initialize incarnation-specific schemas
         incarnation_tasks = []
-        
+
         if "research_orchestration" in incarnations:
             incarnation_tasks.append(init_research_schema(driver, neo4j_database))
 
