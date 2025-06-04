@@ -46,19 +46,17 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
     """Server for Neo4j-guided AI workflow with polymorphic incarnation support."""
 
     def __init__(self, driver: AsyncDriver, database: str = "neo4j", loop: Optional[asyncio.AbstractEventLoop] = None):
-        """Initialize the workflow server with Neo4j connection.
-
-        Args:
-            driver: Neo4j AsyncDriver instance
-            database: Name of the Neo4j database to use
-            loop: Optional event loop to use (will initialize if not provided)
-        """
+        """Initialize the workflow server with Neo4j connection."""
         # Use the provided loop or initialize a new one
         self.loop = loop if loop is not None else initialize_main_loop()
 
         # Store connection info
         self.driver = driver
         self.database = database
+
+        # Initialize parent classes with required parameters
+        # CypherSnippetMixin requires database and driver
+        super().__init__(database=database, driver=driver)
 
         # Initialize FastMCP server
         self.mcp = FastMCP("mcp-neocoder", dependencies=["neo4j", "pydantic"])
@@ -82,12 +80,7 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
     async def _initialize_async(self):
         """Execute the complete initialization sequence asynchronously."""
         try:
-            # 1. Initialize polymorphic adapter (parent class setup)
-            PolymorphicAdapterMixin.__init__(self)
-            CypherSnippetMixin.__init__(self, database=self.database, driver=self.driver)
-            logger.info("Polymorphic adapter initialized")
-
-            # 2. Run async database initialization
+            # 1. Run async database initialization
             db_init_success = await self._initialize_database()
             if not db_init_success:
                 logger.warning("Database initialization failed, some features may not work")
@@ -1817,6 +1810,8 @@ def main():
                     loop.run_until_complete(asyncio.wait(pending_tasks, timeout=5))
                 except Exception as pending_err:
                     logger.warning(f"Some initialization tasks didn't complete: {pending_err}")
+
+
 
             # Run the server - this should block until termination
             server.run(transport=transport)

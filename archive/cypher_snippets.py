@@ -6,8 +6,7 @@ This module provides functionality to manage and search for Cypher snippets in t
 
 import json
 import logging
-import typing
-from typing import List, Optional, Dict, Any, Union
+from typing import List, Optional, Dict, Any
 
 import mcp.types as types
 from pydantic import Field
@@ -19,11 +18,16 @@ logger = logging.getLogger("mcp_neocoder.cypher_snippets")
 class CypherSnippetMixin:
     """Mixin class providing Cypher snippet functionality for the Neo4jWorkflowServer."""
 
-    async def _read_query(self, tx: AsyncTransaction, query: str, params: dict) -> str:
+    def __init__(self, database: str, driver: Any):
+        """Initialize the CypherSnippetMixin with a database and driver."""
+        self.database = database
+        self.driver = driver
+
+    async def _read_query(self, tx: AsyncTransaction, query: str, params: Dict[str, Any]) -> str:
         """Execute a read query and return results as JSON string."""
         raise NotImplementedError("_read_query must be implemented by the parent class")
 
-    async def _write(self, tx: AsyncTransaction, query: str, params: dict):
+    async def _write(self, tx: AsyncTransaction, query: str, params: Dict[str, Any]):
         """Execute a write query and return results as JSON string."""
         raise NotImplementedError("_write must be implemented by the parent class")
 
@@ -40,7 +44,7 @@ class CypherSnippetMixin:
         WHERE 1=1
         """
 
-        params = {"limit": limit, "offset": offset}
+        params: Dict[str, Any] = {"limit": limit, "offset": offset}
 
         # Add optional filters
         if tag:
@@ -91,7 +95,7 @@ class CypherSnippetMixin:
                         filter_msg += f" with tag '{tag}'"
                     if since_version is not None:
                         if filter_msg:
-                            filter_msg += f" and"
+                            filter_msg += " and"
                         filter_msg += f" compatible with Neo4j {since_version}"
 
                     if filter_msg:
@@ -157,7 +161,7 @@ class CypherSnippetMixin:
     ) -> List[types.TextContent]:
         """Search for Cypher snippets by keyword, tag, or pattern."""
         query = ""
-        params = {"query_text": query_text, "limit": limit}
+        params: Dict[str, Any] = {"query_text": query_text, "limit": limit}
 
         if search_type.lower() == "text":
             # Text search using TEXT index
@@ -234,6 +238,7 @@ class CypherSnippetMixin:
         except Exception as e:
             logger.error(f"Error searching Cypher snippets: {e}")
             return [types.TextContent(type="text", text=f"Error: {e}")]
+
     async def create_cypher_snippet(
         self,
         id: str = Field(..., description="Unique identifier for the snippet"),
@@ -257,7 +262,7 @@ class CypherSnippetMixin:
                       c.lastUpdated = date()
         """
 
-        params = {
+        params: Dict[str, Any] = {
             "id": id,
             "name": name,
             "syntax": syntax,
@@ -307,7 +312,7 @@ class CypherSnippetMixin:
         """Update an existing Cypher snippet."""
         # Build dynamic SET clause based on provided parameters
         set_clauses = ["c.lastUpdated = date()"]
-        params = {"id": id}
+        params: Dict[str, Any] = {"id": id}
 
         if name is not None:
             set_clauses.append("c.name = $name")

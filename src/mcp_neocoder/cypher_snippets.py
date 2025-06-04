@@ -19,9 +19,14 @@ logger = logging.getLogger("mcp_neocoder.cypher_snippets")
 class CypherSnippetMixin:
     """Mixin class providing Cypher snippet functionality for the Neo4jWorkflowServer."""
 
-    def __init__(self, database: str, driver):
-        self.database = database
-        self.driver = driver
+    def __init__(self, database=None, driver=None, *args, **kwargs):
+        """Initialize cypher snippet mixin with keyword arguments for inheritance compatibility."""
+        # Only set if not already set by a parent class
+        if not hasattr(self, 'database'):
+            self.database = database
+        if not hasattr(self, 'driver'):
+            self.driver = driver
+        super().__init__(*args, **kwargs)
 
     async def _read_query(
         self,
