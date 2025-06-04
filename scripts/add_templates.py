@@ -68,7 +68,12 @@ def add_template_from_cypher(driver, database, cypher_path):
     try:
         with driver.session(database=database) as session:
             result = session.run(full_query)
-            logger.info(f"Template added successfully via direct execution: {result.single()[0]}")
+            # Try to get a result if available, otherwise just log success
+            try:
+                summary = result.consume()
+                logger.info(f"Template added successfully via direct execution. Nodes created: {summary.counters.nodes_created}")
+            except:
+                logger.info("Template added successfully via direct execution")
             return True
     except Exception as e:
         logger.warning(f"Direct execution failed: {e}")
@@ -107,6 +112,8 @@ def add_template_from_cypher(driver, database, cypher_path):
             """
             template_result = session.run(template_query)
             template_record = template_result.single()
+            if template_record:
+                logger.debug(f"Template node created/updated: {template_record['keyword']} v{template_record['version']}")
 
             # 2. Then find the content section and update it separately
             steps_match = re.search(r"t.steps = \"(.*?)\"", full_query, re.DOTALL)
@@ -120,7 +127,10 @@ def add_template_from_cypher(driver, database, cypher_path):
                 SET t.steps = "{steps_content}"
                 RETURN t.keyword as keyword
                 """
-                session.run(steps_query)
+                steps_result = session.run(steps_query)
+                steps_record = steps_result.single()
+                if steps_record:
+                    logger.debug(f"Steps content updated for: {steps_record['keyword']}")
 
             # 3. Finally create the relationship to the hub
             hub_query = f"""
@@ -130,6 +140,9 @@ def add_template_from_cypher(driver, database, cypher_path):
             RETURN t.keyword as keyword
             """
             hub_result = session.run(hub_query)
+            hub_record = hub_result.single()
+            if hub_record:
+                logger.debug(f"Hub relationship created for: {hub_record['keyword']}")
 
             logger.info(f"Template {keyword} v{version} added successfully via multi-transaction approach")
             return True

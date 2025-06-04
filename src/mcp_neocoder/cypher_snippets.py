@@ -11,26 +11,51 @@ from typing import List, Optional
 
 import mcp.types as types
 from pydantic import Field
-from neo4j import AsyncTransaction
+from neo4j import AsyncManagedTransaction, AsyncDriver
 
 logger = logging.getLogger("mcp_neocoder.cypher_snippets")
 
 
 class CypherSnippetMixin:
     """Mixin class providing Cypher snippet functionality for the Neo4jWorkflowServer."""
+    driver: AsyncDriver
+    database: Optional[str]
 
-    def __init__(self, database=None, driver=None, *args, **kwargs):
+    def __init__(self, database: Optional[str] = None, driver: Optional[AsyncDriver] = None, *args, **kwargs):
         """Initialize cypher snippet mixin with keyword arguments for inheritance compatibility."""
         # Only set if not already set by a parent class
         if not hasattr(self, 'database'):
             self.database = database
         if not hasattr(self, 'driver'):
+            if driver is None:
+                raise ValueError(
+                    "Neo4j driver is not initialized or is None. "
+                    "It must be provided to CypherSnippetMixin's constructor as a valid driver instance, "
+                    "or initialized by a superclass."
+                )
             self.driver = driver
+
+        if self.driver is None:
+            raise ValueError(
+                "Neo4j driver is not initialized or is None. "
+                "It must be provided to CypherSnippetMixin's constructor as a valid driver instance, "
+                "or initialized by a superclass."
+            )
+
         super().__init__(*args, **kwargs)
+
+        # After super().__init__(), self.driver might have been set by a parent,
+        # or it retains the value from above. We must ensure it's not None.
+        if not hasattr(self, 'driver') or self.driver is None:
+            raise ValueError(
+                "Neo4j driver is not initialized or is None. "
+                "It must be provided to CypherSnippetMixin's constructor as a valid driver instance, "
+                "or initialized by a superclass."
+            )
 
     async def _read_query(
         self,
-        tx: AsyncTransaction,
+        tx: AsyncManagedTransaction,
         query: str,
         params: dict[str, object]
     ) -> str:
@@ -41,7 +66,7 @@ class CypherSnippetMixin:
 
     async def _write(
         self,
-        tx: AsyncTransaction,
+        tx: AsyncManagedTransaction,
         query: str,
         params: dict
     ):
@@ -411,7 +436,7 @@ class CypherSnippetMixin:
             "name": name,
             "syntax": syntax,
             "description": description,
-            "since": snippet_since,
+            "since": str(snippet_since),  # Convert float to string
             "tags": snippet_tags
         }
 
@@ -507,7 +532,7 @@ class CypherSnippetMixin:
 
         if since is not None:
             set_clauses.append("c.since = $since")
-            params["since"] = str(since)
+            params["since"] = str(since)  # Convert float to string
 
         # Build the query
         query = f"""
