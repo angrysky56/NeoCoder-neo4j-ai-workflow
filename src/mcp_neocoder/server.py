@@ -22,7 +22,7 @@ from typing import Any, Dict, List, Optional, TypeVar, Awaitable
 
 import mcp.types as types
 from mcp.server.fastmcp import FastMCP
-from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncTransaction
+from neo4j import AsyncDriver, AsyncGraphDatabase, AsyncTransaction, AsyncManagedTransaction
 import neo4j
 from pydantic import Field
 
@@ -45,28 +45,28 @@ T = TypeVar('T')
 class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolProposalMixin, ActionTemplateMixin):
     """Server for Neo4j-guided AI workflow with polymorphic incarnation support."""
 
-    def __init__(self, driver: AsyncDriver, database: str = "neo4j", loop: Optional[asyncio.AbstractEventLoop] = None):
+    def __init__(self, driver: AsyncDriver, database: str = "neo4j", loop: Optional[asyncio.AbstractEventLoop] = None, *args: Any, **kwargs: Any):
         """Initialize the workflow server with Neo4j connection."""
         # Use the provided loop or initialize a new one
-        self.loop = loop if loop is not None else initialize_main_loop()
+        self.loop: asyncio.AbstractEventLoop = loop if loop is not None else initialize_main_loop()
 
         # Store connection info
-        self.driver = driver
-        self.database = database
+        self.driver: AsyncDriver = driver
+        self.database = database if database is not None else "neo4j"
 
         # Initialize parent classes with required parameters
         # CypherSnippetMixin requires database and driver
-        super().__init__(database=database, driver=driver)
+        super().__init__(driver=driver, database=database, *args, **kwargs)
 
         # Initialize FastMCP server
-        self.mcp = FastMCP("mcp-neocoder", dependencies=["neo4j", "pydantic"])
+        self.mcp: FastMCP = FastMCP("mcp-neocoder", dependencies=["neo4j", "pydantic"])
 
         # Initialize the base attributes
-        self.incarnation_registry = {}
-        self.current_incarnation = None
+        self.incarnation_registry: Dict[str, Any] = {}
+        self.current_incarnation: Optional[Any] = None
 
         # Add initialization event for synchronization
-        self.initialized_event = asyncio.Event()
+        self.initialized_event: asyncio.Event = asyncio.Event()
 
         # Register basic protocol handlers first to ensure responsiveness
         asyncio.create_task(self._register_basic_handlers())
@@ -230,69 +230,54 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
         return bool(records[0][0])
 
     def _register_core_tools(self):
-        """Register all core tools with the MCP server.
+        """Register all core tools with the ToolRegistry.
 
         Core tools are those that don't depend on specific incarnations.
         """
-        # Group tools by category for better organization
-        self._register_navigation_tools()
-        self._register_project_tools()
-        self._register_workflow_tools()
-        self._register_query_tools()
-        self._register_cypher_tools()
-        self._register_tool_proposal_tools()
-        self._register_incarnation_tools()
+        from .tool_registry import registry as tool_registry
 
-        logger.info("Registered all core tools")
+        # Register tools with the ToolRegistry instead of directly with MCP
+        # This prevents duplicate registration
 
-    def _register_navigation_tools(self):
-        """Register navigation and guidance tools."""
-        tools = [
+        # Navigation tools
+        navigation_tools = [
             self.get_guidance_hub,
             self.list_action_templates,
             self.get_action_template,
             self.get_best_practices,
             self.suggest_tool
         ]
+        for tool in navigation_tools:
+            tool_registry.register_tool(tool, "navigation")
 
-        for tool in tools:
-            self.mcp.add_tool(tool)
-
-    def _register_project_tools(self):
-        """Register project management tools."""
-        tools = [
+        # Project tools
+        project_tools = [
             self.get_project,
             self.list_projects
         ]
+        for tool in project_tools:
+            tool_registry.register_tool(tool, "project")
 
-        for tool in tools:
-            self.mcp.add_tool(tool)
-
-    def _register_workflow_tools(self):
-        """Register workflow execution and tracking tools."""
-        tools = [
+        # Workflow tools
+        workflow_tools = [
             self.log_workflow_execution,
             self.get_workflow_history,
             self.add_template_feedback
         ]
+        for tool in workflow_tools:
+            tool_registry.register_tool(tool, "workflow")
 
-        for tool in tools:
-            self.mcp.add_tool(tool)
-
-    def _register_query_tools(self):
-        """Register database query tools."""
-        tools = [
+        # Query tools
+        query_tools = [
             self.run_custom_query,
             self.write_neo4j_cypher,
             self.check_connection
         ]
+        for tool in query_tools:
+            tool_registry.register_tool(tool, "query")
 
-        for tool in tools:
-            self.mcp.add_tool(tool)
-
-    def _register_cypher_tools(self):
-        """Register Cypher snippet toolkit tools."""
-        tools = [
+        # Cypher toolkit tools
+        cypher_tools = [
             self.list_cypher_snippets,
             self.get_cypher_snippet,
             self.search_cypher_snippets,
@@ -301,13 +286,11 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
             self.delete_cypher_snippet,
             self.get_cypher_tags
         ]
+        for tool in cypher_tools:
+            tool_registry.register_tool(tool, "cypher")
 
-        for tool in tools:
-            self.mcp.add_tool(tool)
-
-    def _register_tool_proposal_tools(self):
-        """Register tool proposal system tools."""
-        tools = [
+        # Tool proposal tools
+        proposal_tools = [
             self.propose_tool,
             self.request_tool,
             self.get_tool_proposal,
@@ -315,20 +298,19 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
             self.list_tool_proposals,
             self.list_tool_requests
         ]
+        for tool in proposal_tools:
+            tool_registry.register_tool(tool, "proposal")
 
-        for tool in tools:
-            self.mcp.add_tool(tool)
-
-    def _register_incarnation_tools(self):
-        """Register incarnation management tools."""
-        tools = [
+        # Incarnation management tools
+        incarnation_tools = [
             self.get_current_incarnation,
             self.list_incarnations,
             self.switch_incarnation
         ]
+        for tool in incarnation_tools:
+            tool_registry.register_tool(tool, "incarnation")
 
-        for tool in tools:
-            self.mcp.add_tool(tool)
+        logger.info("Registered all core tools with ToolRegistry")
 
     def _load_incarnations(self):
         """Discover and load all available incarnations."""
@@ -395,27 +377,19 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
                 logger.info(f"Registered incarnation: {name_str} ({inc_class.__name__})")
                 incarnation_count += 1
 
-                # Preload an instance immediately to make its tools available
+                # Create and store an instance for later use
                 try:
-                    instance = inc_class(self.driver, self.database)
+                    # Ensure database is never None by providing a default value
+                    instance = inc_class(self.driver, self.database or "neo4j")
                     logger.info(f"Created instance of {inc_class.__name__}")
 
                     # Store in the registry for later use
                     global_registry.instances[name_str] = instance
 
-                    # Try to immediately register its tools
-                    tool_methods = instance.list_tool_methods()
-                    logger.info(f"Found {len(tool_methods)} tool methods in {name_str}")
-
-                    # Directly register tools with MCP
-                    for method_name in tool_methods:
-                        if hasattr(instance, method_name) and callable(getattr(instance, method_name)):
-                            tool_method = getattr(instance, method_name)
-                            try:
-                                self.mcp.add_tool(tool_method)
-                                logger.info(f"Directly registered tool {method_name} from {name_str}")
-                            except Exception as tool_err:
-                                logger.error(f"Error registering tool {method_name}: {tool_err}")
+                    # Don't register tools here - they will be registered via ToolRegistry
+                    # in _register_all_incarnation_tools to avoid duplicates
+                    tool_methods = instance.list_tool_methods() if hasattr(instance, 'list_tool_methods') else []
+                    logger.info(f"Found {len(tool_methods)} tool methods in {name_str} (will register later)")
 
                 except Exception as inst_err:
                     logger.error(f"Failed to create instance of {inc_class.__name__}: {inst_err}")
@@ -498,145 +472,77 @@ Please wait a moment for full initialization to complete or check connection sta
 
         except Exception as e:
             # Last resort error handling
-                logger.error(f"Failed to register basic handlers: {e}")
-                logger.info("Server will continue but may have reduced functionality")
+            logger.error(f"Failed to register basic handlers: {e}")
+            logger.info("Server will continue but may have reduced functionality")
 
-        async def _register_basic_handlers(self):
-            """Register handlers for basic MCP protocol requests to prevent timeouts."""
-            # Define the basic handlers
-            async def empty_list_handler():
-                """Return empty list for protocol handlers."""
-                return []
 
-            async def default_guidance_hub_handler():
-                """Return basic guidance hub content in case database is not available."""
-                content = """
-    # NeoCoder Neo4j-Guided AI Workflow
-
-    Welcome! This system is still initializing. Basic commands available:
-
-    - `check_connection()` - Verify database connection
-    - `list_incarnations()` - List available operational modes
-    - `switch_incarnation(incarnation_type="...")` - Change operational mode
-
-    Please wait a moment for full initialization to complete or check connection status.
-    """
-                return [types.TextContent(type="text", text=content)]
-
-            # Try to set the handlers with several fallback mechanisms
-            try:
-                # First try to set handlers with attribute assignment
-                try:
-                    # Set basic handlers for list endpoints
-                    if hasattr(self.mcp, 'list_prompts'):
-                        async def list_prompts_handler():
-                            return []
-                        self.mcp.add_tool(list_prompts_handler, "list_prompts")
-
-                    if hasattr(self.mcp, 'list_resources'):
-                        async def list_resources_handler():
-                            return []
-                        self.mcp.add_tool(list_resources_handler, "list_resources")
-
-                    # Also register a default guidance hub handler as a fallback
-                    if hasattr(self.mcp, 'add_tool'):
-                        # Create a wrapper function that matches the tool signature
-                        async def guidance_hub_wrapper():
-                            return await default_guidance_hub_handler()
-
-                        # Only add this if get_guidance_hub isn't working yet
-                        self.mcp.add_tool(guidance_hub_wrapper, "get_guidance_hub_initializing")
-
-                    logger.info("Registered basic protocol handlers via direct attribute assignment")
-                except Exception as attr_err:
-                    logger.warning(f"Could not set handlers via attributes: {attr_err}")
-
-                    # Try alternative method - using the decorator interface if available
-                    if hasattr(self.mcp, 'list_prompts'):
-                        async def list_prompts_handler():
-                            return []
-                        self.mcp.add_tool(list_prompts_handler, "list_prompts")
-
-                        async def list_resources_handler():
-                            return []
-                        self.mcp.add_tool(list_resources_handler, "list_resources")
-
-                        logger.info("Registered basic protocol handlers via add_tool")
-                    else:
-                        logger.warning("Could not register basic handlers via add_tool")
-
-                # Error suppression handler has been removed as part of refactoring
-                # We now handle Neo4j transaction scope issues properly in query methods
-
-            except Exception as e:
-                # Last resort error handling
-                logger.error(f"Failed to register basic handlers: {e}")
-                logger.info("Server will continue but may have reduced functionality")
-        # Error suppression handler removed
-        # We now process results properly within transaction scope to avoid errors
 
     async def _register_all_incarnation_tools(self):
-        """Populate ToolRegistry from all incarnations, then register all with MCP."""
-        logger.info("Registering tools from all incarnations by populating ToolRegistry...")
+        """Register tools from all incarnations through the ToolRegistry."""
+        logger.info("Registering tools from all incarnations...")
 
         if not self.incarnation_registry:
             logger.warning("No incarnations registered, skipping tool registration")
             return 0
 
-        total_tools_identified = 0
-        # Import the global registry
+        # Import the registries
         from .incarnation_registry import registry as global_registry
         from .tool_registry import registry as tool_registry
 
-        # Check if incarnation_registry has items
+        # Ensure incarnations are discovered
         if not self.incarnation_registry:
             logger.warning("incarnation_registry is empty, trying to discover incarnations automatically")
-            # Try to discover incarnations
             global_registry.discover()
 
-        # Iterate through all registered incarnations
+        # Clear any previously registered MCP tools to start fresh
+        tool_registry._mcp_registered_tools.clear()
+
+        # First register core tools with MCP
+        logger.info("Registering core tools with MCP server...")
+        core_count = tool_registry.register_tools_with_server(self)
+        logger.info(f"Registered {core_count} core tools with MCP server")
+
+        # Process each incarnation
+        total_incarnation_tools = 0
         logger.info(f"Processing {len(self.incarnation_registry)} incarnation types")
+
         for incarnation_type, incarnation_class in list(self.incarnation_registry.items()):
             try:
-                logger.info(f"Processing incarnation for ToolRegistry: {incarnation_type}")
+                logger.info(f"Processing incarnation: {incarnation_type}")
 
-                # Get or create an instance of the incarnation
-                instance = global_registry.get_instance(incarnation_type, self.driver, self.database)
+                # Get or create an instance
+                instance = global_registry.get_instance(incarnation_type, self.driver, self.database or "neo4j")
 
-                # If not available in global registry, create it directly
                 if not instance:
                     logger.info(f"Creating new instance of {incarnation_type} incarnation")
                     try:
                         instance = incarnation_class(self.driver, self.database)
+                        # Store the instance for future use
+                        global_registry.instances[incarnation_type] = instance
                     except Exception as instance_err:
                         logger.error(f"Failed to create instance of {incarnation_class.__name__}: {instance_err}")
-                        import traceback
-                        logger.error(traceback.format_exc())
                         continue
 
-                # Populate the ToolRegistry via the instance's register_tools method
-                # This method no longer calls server.mcp.add_tool directly
+                # Register incarnation tools through the ToolRegistry
                 if instance:
-                    count = await instance.register_tools(self)
-                    total_tools_identified += count
-                    logger.info(f"Added {count} tools from {incarnation_type} to ToolRegistry")
+                    # Use the ToolRegistry's method to register incarnation tools
+                    count = tool_registry.register_incarnation_tools(instance, self)
+                    total_incarnation_tools += count
+                    logger.info(f"Registered {count} tools from {incarnation_type} incarnation")
                 else:
-                    logger.error(f"Failed to get instance for {incarnation_type}")
+                    logger.error(f"No instance available for {incarnation_type}")
 
             except Exception as e:
-                logger.error(f"Error processing incarnation {incarnation_type} for ToolRegistry: {e}")
-                import traceback
+                logger.error(f"Error processing incarnation {incarnation_type}: {e}")
                 logger.error(traceback.format_exc())
 
-        # After iterating through all incarnations and populating the registry:
-        logger.info(f"ToolRegistry population complete. Found {len(tool_registry.tools)} unique tools.")
-        logger.info("Registering all collected tools with MCP server...")
+        # Log final summary
+        total_registered = core_count + total_incarnation_tools
+        logger.info(f"Tool registration complete. Total tools registered: {total_registered}")
+        logger.info(f"  - Core tools: {core_count}")
+        logger.info(f"  - Incarnation tools: {total_incarnation_tools}")
 
-        # Perform the actual registration with the MCP server using the central registry method
-        final_mcp_registered_count = tool_registry.register_tools_with_server(self)
-
-        logger.info(f"Successfully registered {final_mcp_registered_count} unique tools with MCP server.")
-        return final_mcp_registered_count
+        return total_registered
 
     async def get_current_incarnation(self) -> List[types.TextContent]:
         """Get the currently active incarnation type."""
@@ -663,7 +569,7 @@ Please wait a moment for full initialization to complete or check connection sta
             for inc_type, inc_class in self.incarnation_registry.items():
                 # Get the type value - handle both string and enum cases
                 type_value = inc_type
-                if hasattr(inc_type, 'value'):
+                if hasattr(inc_type, 'value') and not isinstance(inc_type, str):
                     type_value = inc_type.value
 
                 incarnations.append({
@@ -800,7 +706,7 @@ Please wait a moment for full initialization to complete or check connection sta
             "switch_incarnation": ["change mode", "switch to", "research mode", "coding mode", "decision mode"]
         }
 
-        # Add research-specific patterns if in research mode
+        # Add research-specific patterns if in research mode- I think this may be redundant and should come from the incarnation itself.
         if current_incarnation == "research":
             research_patterns = {
                 "register_hypothesis": ["new hypothesis", "create hypothesis", "register hypothesis", "add hypothesis"],
@@ -987,7 +893,7 @@ This is the default guidance hub. Use the commands above to explore the system's
                 for inc_type, inc_class in self.incarnation_registry.items():
                     # Convert to string if it's an enum
                     inc_name = inc_type
-                    if hasattr(inc_type, 'value'):
+                    if hasattr(inc_type, 'value') and not isinstance(inc_type, str):
                         inc_name = inc_type.value
 
                     incarnation_types.append(inc_name)
@@ -1148,7 +1054,7 @@ This is the default guidance hub. Use the commands above to explore the system's
                         try:
                             # Get instance
                             from .incarnation_registry import registry as global_registry
-                            instance = global_registry.get_instance(inc_type, self.driver, self.database)
+                            instance = global_registry.get_instance(inc_type, self.driver, self.database or "neo4j")
                             if not instance:
                                 continue
 
@@ -1235,7 +1141,7 @@ This is the default guidance hub. Use the commands above to explore the system's
         return [types.TextContent(type="text", text=response)]
 
 
-    async def _read_query(self, tx: AsyncTransaction, query: str, params: dict) -> str:
+    async def _read_query(self, tx: AsyncManagedTransaction, query: str, params: dict) -> str:
         """Execute a read query and return results as JSON string.
 
         Args:
@@ -1257,7 +1163,7 @@ This is the default guidance hub. Use the commands above to explore the system's
             logger.debug(f"Parameters: {params}")
             raise
 
-    async def _write(self, tx: AsyncTransaction, query: str, params: dict):
+    async def _write(self, tx: AsyncManagedTransaction, query: str, params: dict):
         """Execute a write query and return result summary.
 
         Args:
@@ -1278,7 +1184,7 @@ This is the default guidance hub. Use the commands above to explore the system's
             logger.debug(f"Parameters: {params}")
             raise
 
-    async def _safe_execute_read(self, query: str, params: Optional[dict] = None) -> List[Dict[str, Any]]:
+    async def _safe_execute_read(self, query: str, params: Optional[Dict[str, Any]] = None) -> List[Dict[str, Any]]:
         """Execute a read query with proper error handling and transaction management.
 
         This is a higher-level method that handles session creation and error handling.
@@ -1309,7 +1215,7 @@ This is the default guidance hub. Use the commands above to explore the system's
             logger.error(f"Error in safe read execution: {str(e)}")
             return []
 
-    async def _safe_execute_write(self, query: str, params: Optional[dict] = None) -> bool:
+    async def _safe_execute_write(self, query: str, params: Optional[Dict[str, Any]] = None) -> bool:
         """Execute a write query with proper error handling and transaction management.
 
         This is a higher-level method that handles session creation and error handling.
@@ -1328,7 +1234,7 @@ This is the default guidance hub. Use the commands above to explore the system's
                 # Execute inside a write transaction
                 from typing import Callable
                 await session.execute_write(
-                    Callable[[neo4j.AsyncTransaction], Awaitable[Any]](lambda tx: self._write(tx, query, params)) # type: ignore
+                    Callable[[neo4j.AsyncManagedTransaction], Awaitable[Any]](lambda tx: self._write(tx, query, params)) # type: ignore
                 )
                 return True
         except Exception as e:
@@ -1817,6 +1723,7 @@ def main():
             server.run(transport=transport)
 
         except Exception as server_err:
+
             logger.error(f"Server creation or execution failed: {str(server_err)}")
             logger.debug(f"Error details: {traceback.format_exc()}")
             sys.exit(1)

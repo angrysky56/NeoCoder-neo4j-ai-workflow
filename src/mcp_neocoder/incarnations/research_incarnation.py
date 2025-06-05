@@ -10,7 +10,7 @@ import json
 import logging
 import uuid
 import datetime
-from typing import Dict, Any, List, Optional, Union, Tuple
+from typing import Dict, Any, List, Optional, Union
 
 import mcp.types as types
 from pydantic import Field

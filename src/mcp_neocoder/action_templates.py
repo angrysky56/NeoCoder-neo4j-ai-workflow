@@ -10,7 +10,7 @@ from typing import List, Optional, Dict, Any
 
 import mcp.types as types
 from pydantic import Field
-from neo4j import AsyncTransaction
+from neo4j import AsyncManagedTransaction
 
 logger = logging.getLogger("mcp_neocoder.action_templates")
 
@@ -22,11 +22,11 @@ class ActionTemplateMixin:
     driver: Any = None
     database: str = "neo4j"
 
-    async def _read_query(self, tx: AsyncTransaction, query: str, params: dict) -> str:
+    async def _read_query(self, tx: AsyncManagedTransaction, query: str, params: dict) -> str:
         """Execute a read query and return results as JSON string."""
         raise NotImplementedError("_read_query must be implemented by the parent class")
 
-    async def _write(self, tx: AsyncTransaction, query: str, params: dict):
+    async def _write(self, tx: AsyncManagedTransaction, query: str, params: dict):
         """Execute a write query and return results as JSON string."""
         raise NotImplementedError("_write must be implemented by the parent class")
 

@@ -5,15 +5,9 @@ This incarnation provides the original NeoCoder functionality for AI-assisted co
 including action templates, project management, workflow tracking, and best practices guidance.
 """
 
-import json
 import logging
-import uuid
-from typing import Dict, Any, List, Optional, Union
 
-import mcp.types as types
-from pydantic import Field
-from neo4j import AsyncTransaction
-
+from neo4j import LiteralString
 from .base_incarnation import BaseIncarnation
 
 logger = logging.getLogger("mcp_neocoder.incarnations.coding")
@@ -29,26 +23,26 @@ class CodingIncarnation(BaseIncarnation):
 
     # Define the incarnation name
     name = "coding"
-    
+
     # Metadata for display in the UI
     description = "Original NeoCoder for AI-assisted coding workflows"
     version = "1.0.0"
-    
+
     # Schema queries for Neo4j setup
     schema_queries = [
         # Project constraints
         "CREATE CONSTRAINT project_id IF NOT EXISTS FOR (p:Project) REQUIRE p.id IS UNIQUE",
-        
+
         # Action template constraints
         "CREATE CONSTRAINT template_keyword IF NOT EXISTS FOR (t:ActionTemplate) REQUIRE t.keyword IS UNIQUE",
-        
+
         # Workflow execution constraints
         "CREATE CONSTRAINT workflow_id IF NOT EXISTS FOR (w:WorkflowExecution) REQUIRE w.id IS UNIQUE",
-        
+
         # File and directory constraints
         "CREATE CONSTRAINT file_path IF NOT EXISTS FOR (f:File) REQUIRE f.path IS UNIQUE",
         "CREATE CONSTRAINT dir_path IF NOT EXISTS FOR (d:Directory) REQUIRE d.path IS UNIQUE",
-        
+
         # Indexes for efficient querying
         "CREATE INDEX project_name IF NOT EXISTS FOR (p:Project) ON (p.name)",
         "CREATE INDEX template_current IF NOT EXISTS FOR (t:ActionTemplate) ON (t.isCurrent)",
@@ -56,7 +50,7 @@ class CodingIncarnation(BaseIncarnation):
         "CREATE INDEX file_name IF NOT EXISTS FOR (f:File) ON (f.name)",
         "CREATE INDEX dir_name IF NOT EXISTS FOR (d:Directory) ON (d.name)"
     ]
-    
+
     # Hub content - guidance for coding workflows
     hub_content = """
 # NeoCoder Coding Workflow System
@@ -169,27 +163,27 @@ Welcome to the NeoCoder Coding Workflow System. This incarnation provides struct
 
 Remember: The key to NeoCoder is following structured workflows that ensure quality and maintainability!
 """
-    
+
     async def initialize_schema(self):
         """Initialize the Neo4j schema for the Coding incarnation."""
         try:
             # First run the parent class initialization
             await super().initialize_schema()
-            
+
             # Then create the coding-specific action templates
             await self._create_action_templates()
-            
+
             # Create sample projects if needed
             await self._create_sample_projects()
-            
+
             # Create best practices guide
             await self._create_best_practices()
-            
+
             logger.info("Coding incarnation schema initialized successfully")
         except Exception as e:
             logger.error(f"Error initializing coding schema: {e}")
             raise
-    
+
     async def _create_action_templates(self):
         """Create the standard action templates for coding workflows."""
         templates = [
@@ -272,11 +266,11 @@ Remember: The key to NeoCoder is following structured workflows that ensure qual
 8. Update project documentation"""
             }
         ]
-        
+
         try:
             async with self.driver.session(database=self.database) as session:
                 for template in templates:
-                    query = """
+                    query = LiteralString("""
                     MERGE (t:ActionTemplate {keyword: $keyword})
                     SET t.name = $name,
                         t.description = $description,
@@ -285,24 +279,24 @@ Remember: The key to NeoCoder is following structured workflows that ensure qual
                         t.version = 1,
                         t.created = datetime(),
                         t.updated = datetime()
-                    """
+                    """)
                     await session.execute_write(lambda tx: tx.run(query, template))
                     logger.info(f"Created action template: {template['keyword']}")
         except Exception as e:
             logger.error(f"Error creating action templates: {e}")
             raise
-    
+
     async def _create_sample_projects(self):
         """Create sample projects if none exist."""
         try:
             async with self.driver.session(database=self.database) as session:
                 # Check if any projects exist
-                result = await session.run("MATCH (p:Project) RETURN count(p) as count")
+                result = await session.run(LiteralString("MATCH (p:Project) RETURN count(p) as count"))
                 data = await result.single()
-                
+
                 if data and data["count"] == 0:
                     # Create a sample project
-                    query = """
+                    query = LiteralString("""
                     CREATE (p:Project {
                         id: 'neocoder_project',
                         name: 'NeoCoder System',
@@ -311,22 +305,22 @@ Remember: The key to NeoCoder is following structured workflows that ensure qual
                         created: datetime(),
                         updated: datetime()
                     })
-                    """
+                    """)
                     await session.execute_write(lambda tx: tx.run(query))
                     logger.info("Created sample project")
         except Exception as e:
             logger.error(f"Error creating sample projects: {e}")
-    
+
     async def _create_best_practices(self):
         """Create the best practices guide."""
         try:
             async with self.driver.session(database=self.database) as session:
-                query = """
+                query = LiteralString("""
                 MERGE (bp:BestPracticesGuide {id: 'main'})
                 SET bp.content = $content,
                     bp.updated = datetime()
-                """
-                
+                """)
+
                 content = """# NeoCoder Best Practices
 
 ## Code Quality
@@ -349,7 +343,7 @@ Remember: The key to NeoCoder is following structured workflows that ensure qual
 3. Include examples in documentation
 4. Explain the "why" not just the "what"
 5. Use clear, concise language"""
-                
+
                 await session.execute_write(lambda tx: tx.run(query, {"content": content}))
                 logger.info("Created best practices guide")
         except Exception as e:

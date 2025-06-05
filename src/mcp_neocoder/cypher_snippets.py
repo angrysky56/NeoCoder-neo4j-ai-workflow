@@ -512,7 +512,7 @@ class CypherSnippetMixin:
         """Update an existing Cypher snippet."""
         # Build dynamic SET clause based on provided parameters
         set_clauses = ["c.lastUpdated = date()"]
-        params = {"id": id}
+        params: dict[str, object] = {"id": id}
 
         if name is not None:
             set_clauses.append("c.name = $name")
@@ -547,11 +547,11 @@ class CypherSnippetMixin:
             OPTIONAL MATCH (c)-[r:TAGGED_AS]->(:Tag)
             DELETE r
             WITH c
-            UNWIND $tags AS tag
+            UNWIND $tag_list AS tag
               MERGE (t:Tag {name: tag})
               MERGE (c)-[:TAGGED_AS]->(t)
             """
-            params["tags"] = json.dumps(tags)
+            params["tag_list"] = tags
 
         query += """
         RETURN c.id AS id, c.name AS name
