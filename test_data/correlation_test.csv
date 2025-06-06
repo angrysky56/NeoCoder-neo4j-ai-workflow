@@ -1,0 +1,11 @@
+name,score1,score2,score3,category
+Component A,85,90,78,core
+Component B,92,88,95,analysis
+Component C,76,82,71,workflow
+Component D,88,85,89,core
+Component E,94,96,92,analysis
+Component F,79,81,75,workflow
+Component G,91,89,93,core
+Component H,83,87,80,analysis
+Component I,77,79,74,workflow
+Component J,89,91,86,core

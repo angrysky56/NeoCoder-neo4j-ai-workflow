@@ -225,9 +225,9 @@ This is a default hub that should be overridden by each incarnation.
 
     async def _read_query(self, tx: AsyncTransaction, query: typing.LiteralString, params: dict) -> str:
         """Execute a read query and return results as JSON string."""
-        raw_results = await tx.run(query, params)
-        eager_results = await raw_results.to_eager_result()
-        return json.dumps([r.data() for r in eager_results.records], default=str)
+        result = await tx.run(query, params)
+        records = await result.data()  # Use .data() instead of .to_eager_result().records
+        return json.dumps(records, default=str)
 
     async def _write(self, tx: AsyncTransaction, query: typing.LiteralString, params: dict):
         """Execute a write query and return results as JSON string."""

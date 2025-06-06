@@ -11,6 +11,7 @@ import uuid
 import os
 import csv
 import sqlite3
+import statistics
 from pathlib import Path
 from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
@@ -720,36 +721,180 @@ All analysis steps are automatically tracked and can be reproduced or referenced
         Returns:
             Detailed data profiling report with quality metrics
         """
-        # Implementation would go here
-        return [types.TextContent(type="text", text=f"""
-# Data Profiling: Not Yet Fully Implemented
+        try:
+            async with self.driver.session(database=self.database) as session:
+                # Get dataset and column information
+                dataset_query = """
+                MATCH (d:Dataset {id: $dataset_id})
+                OPTIONAL MATCH (d)-[:HAS_COLUMN]->(c:DataColumn)
+                RETURN d, collect(c) as columns
+                """
 
-This tool would provide comprehensive data profiling for dataset {dataset_id}:
+                result = await self._safe_read_query(session, dataset_query, {"dataset_id": dataset_id})
 
-## Planned Features:
-1. **Data Quality Assessment**
-   - Missing value patterns
-   - Data type consistency
-   - Outlier detection
-   - Duplicate record analysis
+                if not result:
+                    return [types.TextContent(type="text", text=f"Error: Dataset not found with ID: {dataset_id}")]
 
-2. **Statistical Summaries**
-   - Descriptive statistics for numeric columns
-   - Frequency distributions for categorical columns
-   - Data distribution analysis
+                dataset = result[0]["d"]
+                columns = result[0]["columns"]
 
-3. **Correlation Analysis** (if enabled)
-   - Pearson correlation matrix
-   - Spearman rank correlation
-   - Statistical significance testing
+                # Load actual data for analysis
+                data_rows = []
+                try:
+                    file_path = dataset["source_path"]
+                    source_type = dataset["source_type"]
 
-4. **Data Issues Detection**
-   - Inconsistent formats
-   - Potential data entry errors
-   - Referential integrity issues
+                    if source_type == "csv" and os.path.exists(file_path):
+                        data_info = self._load_csv_data(file_path)
+                        data_rows = data_info["all_data"]
+                    elif source_type == "json" and os.path.exists(file_path):
+                        data_info = self._load_json_data(file_path)
+                        data_rows = data_info["all_data"]
+                    else:
+                        return [types.TextContent(type="text", text="Data file not accessible for profiling")]
 
-Use `explore_dataset()` for basic exploration in the meantime.
-        """)]
+                except Exception as e:
+                    return [types.TextContent(type="text", text=f"Error loading data for profiling: {e}")]
+
+                if not data_rows:
+                    return [types.TextContent(type="text", text="No data available for profiling")]
+
+                # Generate comprehensive profile
+                report = f"""
+# Data Profiling Report: {dataset["name"]}
+
+## Dataset Overview
+- **Dataset ID:** {dataset_id}
+- **Total Rows:** {len(data_rows):,}
+- **Total Columns:** {len(columns)}
+- **Source:** {dataset["source_path"]}
+- **Last Updated:** {dataset.get("created_timestamp", "Unknown")}
+
+## Data Quality Assessment
+
+### Completeness Analysis
+"""
+
+                # Analyze each column for completeness and data quality
+                for col in columns:
+                    col_name = col["name"]
+                    values = [row.get(col_name, '') for row in data_rows]
+                    non_empty_values = [v for v in values if v is not None and str(v).strip() != '']
+
+                    completeness = (len(non_empty_values) / len(data_rows)) * 100 if data_rows else 0
+                    unique_count = len(set(str(v) for v in non_empty_values))
+
+                    # Detect potential data quality issues
+                    issues = []
+                    if completeness < 90:
+                        issues.append(f"Low completeness ({completeness:.1f}%)")
+                    if unique_count == 1 and len(non_empty_values) > 1:
+                        issues.append("All values identical")
+                    if col["data_type"] == "numeric":
+                        try:
+                            numeric_values = [float(v) for v in non_empty_values if str(v).replace('.', '').replace('-', '').isdigit()]
+                            if len(numeric_values) != len(non_empty_values):
+                                issues.append("Mixed numeric/text values")
+                        except (ValueError, TypeError):
+                            pass
+
+                    status = "⚠️ ISSUES" if issues else "✅ GOOD"
+
+                    report += f"""
+### {col_name} ({col["data_type"]}) - {status}
+- **Completeness:** {completeness:.1f}% ({len(non_empty_values):,} non-empty values)
+- **Unique Values:** {unique_count:,}
+- **Data Issues:** {', '.join(issues) if issues else 'None detected'}
+"""
+
+                # Add sample duplicate detection
+                if len(data_rows) > 1:
+                    # Simple duplicate detection based on all column values
+                    row_signatures = []
+                    for row in data_rows[:1000]:  # Check first 1000 rows
+                        signature = tuple(str(row.get(col["name"], "")) for col in columns)
+                        row_signatures.append(signature)
+
+                    unique_signatures = set(row_signatures)
+                    duplicate_count = len(row_signatures) - len(unique_signatures)
+
+                    report += f"""
+
+### Duplicate Analysis
+- **Rows Checked:** {len(row_signatures):,}
+- **Duplicate Rows:** {duplicate_count:,}
+- **Duplication Rate:** {(duplicate_count / len(row_signatures) * 100):.1f}%
+"""
+
+                # Basic correlation analysis for numeric columns if requested
+                if include_correlations:
+                    numeric_columns = [col for col in columns if col["data_type"] == "numeric"]
+
+                    if len(numeric_columns) >= 2:
+                        report += f"""
+
+## Correlation Analysis
+
+Found {len(numeric_columns)} numeric columns for correlation analysis:
+{', '.join([col['name'] for col in numeric_columns])}
+
+*Note: Full correlation matrix calculation requires additional statistical libraries.*
+*This analysis shows column types suitable for correlation.*
+"""
+                    else:
+                        report += """
+
+## Correlation Analysis
+
+Insufficient numeric columns for meaningful correlation analysis.
+Need at least 2 numeric columns.
+"""
+
+                # Data recommendations
+                report += """
+
+## Data Quality Recommendations
+
+"""
+                recommendations = []
+
+                # Check for columns with high missing values
+                high_missing_cols = [col for col in columns
+                                   if (col["null_count"] / dataset["row_count"] * 100) > 20]
+                if high_missing_cols:
+                    recommendations.append(f"**Address missing data** in columns: {', '.join([col['name'] for col in high_missing_cols])}")
+
+                # Check for columns with low uniqueness (potential categorical)
+                low_unique_cols = [col for col in columns
+                                 if col["unique_count"] < 20 and col["data_type"] == "text"]
+                if low_unique_cols:
+                    recommendations.append(f"**Consider categorical encoding** for: {', '.join([col['name'] for col in low_unique_cols])}")
+
+                # Check for potential identifier columns
+                id_cols = [col for col in columns
+                          if col["unique_count"] == dataset["row_count"] and dataset["row_count"] > 1]
+                if id_cols:
+                    recommendations.append(f"**Potential ID columns detected**: {', '.join([col['name'] for col in id_cols])} (consider excluding from analysis)")
+
+                if recommendations:
+                    for rec in recommendations:
+                        report += f"1. {rec}\n"
+                else:
+                    report += "✅ No major data quality issues detected!\n"
+
+                report += f"""
+
+## Next Steps
+- Use `calculate_statistics(dataset_id="{dataset_id}")` for detailed statistical analysis
+- Use `analyze_correlations(dataset_id="{dataset_id}")` for correlation matrix
+- Use `filter_data(dataset_id="{dataset_id}", conditions="...")` to clean data
+"""
+
+                return [types.TextContent(type="text", text=report)]
+
+        except Exception as e:
+            logger.error(f"Error profiling data: {e}")
+            return [types.TextContent(type="text", text=f"Error profiling data: {str(e)}")]
 
     async def calculate_statistics(
         self,
@@ -767,25 +912,280 @@ Use `explore_dataset()` for basic exploration in the meantime.
         Returns:
             Descriptive statistics report
         """
-        # Implementation placeholder
-        return [types.TextContent(type="text", text=f"""
-# Statistical Analysis: Not Yet Fully Implemented
+        try:
+            async with self.driver.session(database=self.database) as session:
+                # Get dataset and column information
+                dataset_query = """
+                MATCH (d:Dataset {id: $dataset_id})
+                OPTIONAL MATCH (d)-[:HAS_COLUMN]->(c:DataColumn)
+                RETURN d, collect(c) as columns
+                """
 
-This tool would calculate descriptive statistics for dataset {dataset_id}:
+                result = await self._safe_read_query(session, dataset_query, {"dataset_id": dataset_id})
 
-## Planned Statistics:
-- Mean, median, mode
-- Standard deviation, variance
-- Min, max, quartiles
-- Skewness and kurtosis
-- Count, null count, unique count
+                if not result:
+                    return [types.TextContent(type="text", text=f"Error: Dataset not found with ID: {dataset_id}")]
 
-## Parameters:
-- Columns: {columns or "All numeric columns"}
-- Group by: {group_by or "No grouping"}
+                dataset = result[0]["d"]
+                available_columns = result[0]["columns"]
 
-Use `explore_dataset()` for basic column information in the meantime.
-        """)]
+                # Load actual data for analysis
+                data_rows = []
+                try:
+                    file_path = dataset["source_path"]
+                    source_type = dataset["source_type"]
+
+                    if source_type == "csv" and os.path.exists(file_path):
+                        data_info = self._load_csv_data(file_path)
+                        data_rows = data_info["all_data"]
+                    elif source_type == "json" and os.path.exists(file_path):
+                        data_info = self._load_json_data(file_path)
+                        data_rows = data_info["all_data"]
+                    else:
+                        return [types.TextContent(type="text", text="Data file not accessible for statistics")]
+
+                except Exception as e:
+                    return [types.TextContent(type="text", text=f"Error loading data: {e}")]
+
+                if not data_rows:
+                    return [types.TextContent(type="text", text="No data available for statistical analysis")]
+
+                # Determine which columns to analyze
+                if columns:
+                    # Validate specified columns exist
+                    available_col_names = [col["name"] for col in available_columns]
+                    invalid_cols = [col for col in columns if col not in available_col_names]
+                    if invalid_cols:
+                        return [types.TextContent(type="text", text=f"Error: Columns not found: {', '.join(invalid_cols)}")]
+                    target_columns = [col for col in available_columns if col["name"] in columns]
+                else:
+                    # Use all numeric columns
+                    target_columns = [col for col in available_columns if col["data_type"] == "numeric"]
+
+                if not target_columns:
+                    return [types.TextContent(type="text", text="No numeric columns found for statistical analysis")]
+
+                def calculate_basic_stats(values):
+                    """Calculate basic statistics for a list of numeric values"""
+                    if not values:
+                        return None
+
+                    import statistics
+
+                    try:
+                        sorted_vals = sorted(values)
+                        n = len(values)
+
+                        stats = {
+                            "count": n,
+                            "mean": statistics.mean(values),
+                            "median": statistics.median(values),
+                            "min": min(values),
+                            "max": max(values),
+                            "std": statistics.stdev(values) if n > 1 else 0,
+                            "var": statistics.variance(values) if n > 1 else 0
+                        }
+
+                        # Calculate quartiles
+                        if n >= 4:
+                            q1_idx = n // 4
+                            q3_idx = 3 * n // 4
+                            stats["q1"] = sorted_vals[q1_idx]
+                            stats["q3"] = sorted_vals[q3_idx]
+                            stats["iqr"] = stats["q3"] - stats["q1"]
+                        else:
+                            stats["q1"] = stats["min"]
+                            stats["q3"] = stats["max"]
+                            stats["iqr"] = stats["max"] - stats["min"]
+
+                        # Try to calculate mode
+                        try:
+                            stats["mode"] = statistics.mode(values)
+                        except statistics.StatisticsError:
+                            stats["mode"] = "No unique mode"
+
+                        return stats
+                    except Exception as e:
+                        logger.error(f"Error calculating statistics: {e}")
+                        return None
+
+                # Generate statistics report
+                report = f"""
+# Statistical Analysis: {dataset["name"]}
+
+## Dataset Overview
+- **Dataset ID:** {dataset_id}
+- **Total Rows:** {len(data_rows):,}
+- **Analyzed Columns:** {len(target_columns)}
+- **Group By:** {group_by or "None"}
+
+"""
+
+                if group_by:
+                    # Grouped statistics
+                    if group_by not in [col["name"] for col in available_columns]:
+                        return [types.TextContent(type="text", text=f"Error: Group by column '{group_by}' not found")]
+
+                    # Group data by the specified column
+                    groups = {}
+                    for row in data_rows:
+                        group_value = str(row.get(group_by, "Unknown"))
+                        if group_value not in groups:
+                            groups[group_value] = []
+                        groups[group_value].append(row)
+
+                    report += f"## Grouped Statistics (by {group_by})\n\n"
+
+                    for group_name, group_rows in groups.items():
+                        report += f"### Group: {group_name} ({len(group_rows)} rows)\n\n"
+
+                        for col in target_columns:
+                            col_name = col["name"]
+                            values = []
+
+                            for row in group_rows:
+                                val = row.get(col_name, '')
+                                if val is not None and str(val).strip() != '':
+                                    try:
+                                        values.append(float(val))
+                                    except (ValueError, TypeError):
+                                        pass
+
+                            if values:
+                                stats = calculate_basic_stats(values)
+                                if stats:
+                                    report += f"""
+#### {col_name}
+- **Count:** {stats["count"]:,}
+- **Mean:** {stats["mean"]:.3f}
+- **Median:** {stats["median"]:.3f}
+- **Std Dev:** {stats["std"]:.3f}
+- **Min:** {stats["min"]:.3f}
+- **Max:** {stats["max"]:.3f}
+- **Q1:** {stats["q1"]:.3f}
+- **Q3:** {stats["q3"]:.3f}
+- **IQR:** {stats["iqr"]:.3f}
+- **Mode:** {stats["mode"]}
+
+"""
+                            else:
+                                report += f"\n#### {col_name}\n*No valid numeric data*\n\n"
+
+                        report += "---\n\n"
+
+                else:
+                    # Overall statistics for each column
+                    report += "## Column Statistics\n\n"
+
+                    for col in target_columns:
+                        col_name = col["name"]
+                        values = []
+
+                        # Extract numeric values
+                        for row in data_rows:
+                            val = row.get(col_name, '')
+                            if val is not None and str(val).strip() != '':
+                                try:
+                                    values.append(float(val))
+                                except (ValueError, TypeError):
+                                    pass
+
+                        if values:
+                            stats = calculate_basic_stats(values)
+                            if stats:
+                                # Calculate additional insights
+                                range_val = stats["max"] - stats["min"]
+                                cv = (stats["std"] / stats["mean"] * 100) if stats["mean"] != 0 else 0
+
+                                report += f"""
+### {col_name}
+
+#### Descriptive Statistics
+| Statistic | Value |
+|-----------|-------|
+| Count | {stats["count"]:,} |
+| Mean | {stats["mean"]:.3f} |
+| Median | {stats["median"]:.3f} |
+| Mode | {stats["mode"]} |
+| Standard Deviation | {stats["std"]:.3f} |
+| Variance | {stats["var"]:.3f} |
+| Minimum | {stats["min"]:.3f} |
+| Maximum | {stats["max"]:.3f} |
+| Range | {range_val:.3f} |
+| Q1 (25th percentile) | {stats["q1"]:.3f} |
+| Q3 (75th percentile) | {stats["q3"]:.3f} |
+| IQR | {stats["iqr"]:.3f} |
+| Coefficient of Variation | {cv:.1f}% |
+
+#### Data Distribution Insights
+"""
+                                # Add distribution insights
+                                if cv < 15:
+                                    report += "- **Low variability** - Data points are close to the mean\n"
+                                elif cv > 50:
+                                    report += "- **High variability** - Data points are spread widely\n"
+                                else:
+                                    report += "- **Moderate variability** - Normal spread of data\n"
+
+                                if abs(stats["mean"] - stats["median"]) / stats["std"] > 0.5 if stats["std"] > 0 else False:
+                                    if stats["mean"] > stats["median"]:
+                                        report += "- **Right-skewed** - Distribution has a long right tail\n"
+                                    else:
+                                        report += "- **Left-skewed** - Distribution has a long left tail\n"
+                                else:
+                                    report += "- **Approximately symmetric** - Mean and median are close\n"
+
+                                # Outlier detection using IQR method
+                                if stats["iqr"] > 0:
+                                    lower_fence = stats["q1"] - 1.5 * stats["iqr"]
+                                    upper_fence = stats["q3"] + 1.5 * stats["iqr"]
+                                    outliers = [v for v in values if v < lower_fence or v > upper_fence]
+                                    report += f"- **Potential outliers** (IQR method): {len(outliers)} values ({len(outliers)/len(values)*100:.1f}%)\n"
+
+                                report += "\n"
+                            else:
+                                report += f"\n### {col_name}\n*Error calculating statistics*\n\n"
+                        else:
+                            report += f"\n### {col_name}\n*No valid numeric data found*\n\n"
+
+                # Add summary and recommendations
+                report += """
+## Summary & Recommendations
+
+### Key Insights
+"""
+
+                # Generate insights
+                insights = []
+                for col in target_columns:
+                    col_name = col["name"]
+                    null_pct = (col["null_count"] / dataset["row_count"] * 100) if dataset["row_count"] > 0 else 0
+
+                    if null_pct > 10:
+                        insights.append(f"**{col_name}** has {null_pct:.1f}% missing values - consider imputation strategies")
+
+                    if col["unique_count"] == dataset["row_count"] and dataset["row_count"] > 1:
+                        insights.append(f"**{col_name}** appears to be a unique identifier")
+
+                if insights:
+                    for insight in insights:
+                        report += f"- {insight}\n"
+                else:
+                    report += "- No major statistical concerns detected\n"
+
+                report += f"""
+
+### Next Steps
+- Use `analyze_correlations(dataset_id="{dataset_id}")` to find relationships between variables
+- Use `profile_data(dataset_id="{dataset_id}")` for comprehensive data quality assessment
+- Use `filter_data()` to investigate outliers or specific value ranges
+"""
+
+                return [types.TextContent(type="text", text=report)]
+
+        except Exception as e:
+            logger.error(f"Error calculating statistics: {e}")
+            return [types.TextContent(type="text", text=f"Error calculating statistics: {str(e)}")]
 
     async def analyze_correlations(
         self,
@@ -803,25 +1203,295 @@ Use `explore_dataset()` for basic column information in the meantime.
         Returns:
             Correlation analysis report
         """
-        # Implementation placeholder
-        return [types.TextContent(type="text", text=f"""
-# Correlation Analysis: Not Yet Fully Implemented
+        try:
+            if method not in ["pearson", "spearman", "kendall"]:
+                return [types.TextContent(type="text", text="Error: Method must be 'pearson', 'spearman', or 'kendall'")]
 
-This tool would analyze correlations in dataset {dataset_id}:
+            async with self.driver.session(database=self.database) as session:
+                # Get dataset and column information
+                dataset_query = """
+                MATCH (d:Dataset {id: $dataset_id})
+                OPTIONAL MATCH (d)-[:HAS_COLUMN]->(c:DataColumn)
+                WHERE c.data_type = 'numeric'
+                RETURN d, collect(c) as numeric_columns
+                """
 
-## Parameters:
-- Method: {method}
-- Threshold: {threshold}
+                result = await self._safe_read_query(session, dataset_query, {"dataset_id": dataset_id})
 
-## Planned Features:
-1. Correlation matrix calculation
-2. Statistical significance testing
-3. Visualization recommendations
-4. Strong correlation identification
-5. Multicollinearity detection
+                if not result:
+                    return [types.TextContent(type="text", text=f"Error: Dataset not found with ID: {dataset_id}")]
 
-Use `explore_dataset()` for basic data exploration in the meantime.
-        """)]
+                dataset = result[0]["d"]
+                numeric_columns = result[0]["numeric_columns"]
+
+                if len(numeric_columns) < 2:
+                    return [types.TextContent(type="text", text="Error: Need at least 2 numeric columns for correlation analysis")]
+
+                # Load actual data for analysis
+                data_rows = []
+                try:
+                    file_path = dataset["source_path"]
+                    source_type = dataset["source_type"]
+
+                    if source_type == "csv" and os.path.exists(file_path):
+                        data_info = self._load_csv_data(file_path)
+                        data_rows = data_info["all_data"]
+                    elif source_type == "json" and os.path.exists(file_path):
+                        data_info = self._load_json_data(file_path)
+                        data_rows = data_info["all_data"]
+                    else:
+                        return [types.TextContent(type="text", text="Data file not accessible for correlation analysis")]
+
+                except Exception as e:
+                    return [types.TextContent(type="text", text=f"Error loading data: {e}")]
+
+                if not data_rows:
+                    return [types.TextContent(type="text", text="No data available for correlation analysis")]
+
+                # Extract numeric data for each column
+                column_data = {}
+                for col in numeric_columns:
+                    col_name = col["name"]
+                    values = []
+
+                    for row in data_rows:
+                        val = row.get(col_name, '')
+                        if val is not None and str(val).strip() != '':
+                            try:
+                                values.append(float(val))
+                            except (ValueError, TypeError):
+                                values.append(None)
+                        else:
+                            values.append(None)
+
+                    column_data[col_name] = values
+
+                # Calculate correlations
+                def calculate_correlation(x_vals, y_vals, method):
+                    """Calculate correlation between two lists, handling missing values"""
+                    # Remove rows where either value is None
+                    paired_data = [(x, y) for x, y in zip(x_vals, y_vals) if x is not None and y is not None]
+
+                    if len(paired_data) < 3:  # Need at least 3 points for meaningful correlation
+                        return None, 0
+
+                    x_clean = [pair[0] for pair in paired_data]
+                    y_clean = [pair[1] for pair in paired_data]
+
+                    try:
+                        import statistics
+
+                        if method == "pearson":
+                            # Pearson correlation coefficient
+                            n = len(x_clean)
+                            if n < 2:
+                                return None, n
+
+                            x_mean = statistics.mean(x_clean)
+                            y_mean = statistics.mean(y_clean)
+
+                            numerator = sum((x - x_mean) * (y - y_mean) for x, y in zip(x_clean, y_clean))
+                            x_variance = sum((x - x_mean) ** 2 for x in x_clean)
+                            y_variance = sum((y - y_mean) ** 2 for y in y_clean)
+
+                            if x_variance == 0 or y_variance == 0:
+                                return None, n
+
+                            correlation = numerator / (x_variance * y_variance) ** 0.5
+                            return correlation, n
+
+                        elif method == "spearman":
+                            # Spearman rank correlation - simplified implementation
+                            # Convert to ranks
+                            x_ranks = [sorted(x_clean).index(x) + 1 for x in x_clean]
+                            y_ranks = [sorted(y_clean).index(y) + 1 for y in y_clean]
+
+                            # Calculate Pearson correlation of ranks
+                            return calculate_correlation(x_ranks, y_ranks, "pearson")
+
+                        else:  # kendall - simplified version
+                            # Basic Kendall's tau implementation
+                            n = len(x_clean)
+                            concordant = 0
+                            discordant = 0
+
+                            for i in range(n):
+                                for j in range(i + 1, n):
+                                    x_diff = x_clean[i] - x_clean[j]
+                                    y_diff = y_clean[i] - y_clean[j]
+
+                                    if (x_diff > 0 and y_diff > 0) or (x_diff < 0 and y_diff < 0):
+                                        concordant += 1
+                                    elif (x_diff > 0 and y_diff < 0) or (x_diff < 0 and y_diff > 0):
+                                        discordant += 1
+
+                            total_pairs = n * (n - 1) / 2
+                            if total_pairs == 0:
+                                return None, n
+
+                            tau = (concordant - discordant) / total_pairs
+                            return tau, n
+
+                    except Exception as e:
+                        logger.error(f"Error calculating {method} correlation: {e}")
+                        return None, 0
+
+                # Generate correlation matrix
+                column_names = list(column_data.keys())
+                correlations = []
+
+                for i, col1 in enumerate(column_names):
+                    for j, col2 in enumerate(column_names):
+                        if i < j:  # Only calculate upper triangle
+                            corr, n_pairs = calculate_correlation(
+                                column_data[col1],
+                                column_data[col2],
+                                method
+                            )
+
+                            if corr is not None:
+                                correlations.append({
+                                    "column1": col1,
+                                    "column2": col2,
+                                    "correlation": corr,
+                                    "n_pairs": n_pairs,
+                                    "abs_correlation": abs(corr)
+                                })
+
+                # Generate report
+                report = f"""
+# Correlation Analysis: {dataset["name"]}
+
+## Analysis Parameters
+- **Method:** {method.title()} correlation
+- **Threshold:** {threshold}
+- **Dataset:** {dataset_id}
+- **Numeric Columns:** {len(numeric_columns)}
+- **Total Rows:** {len(data_rows):,}
+
+## Correlation Matrix
+
+"""
+
+                if not correlations:
+                    report += "No correlations could be calculated. Check data quality and ensure numeric columns have sufficient non-missing values.\n"
+                else:
+                    # Sort by absolute correlation strength
+                    correlations.sort(key=lambda x: x["abs_correlation"], reverse=True)
+
+                    # Create correlation matrix table
+                    report += "### All Correlations\n\n"
+                    report += "| Variable 1 | Variable 2 | Correlation | N Pairs | Strength |\n"
+                    report += "|------------|------------|-------------|---------|----------|\n"
+
+                    for corr in correlations:
+                        strength = ""
+                        abs_corr = corr["abs_correlation"]
+                        if abs_corr >= 0.8:
+                            strength = "Very Strong"
+                        elif abs_corr >= 0.6:
+                            strength = "Strong"
+                        elif abs_corr >= 0.4:
+                            strength = "Moderate"
+                        elif abs_corr >= 0.2:
+                            strength = "Weak"
+                        else:
+                            strength = "Very Weak"
+
+                        report += f"| {corr['column1']} | {corr['column2']} | {corr['correlation']:.3f} | {corr['n_pairs']:,} | {strength} |\n"
+
+                    # Highlight strong correlations
+                    strong_correlations = [c for c in correlations if c["abs_correlation"] >= threshold]
+
+                    if strong_correlations:
+                        report += f"""
+
+### Strong Correlations (|r| ≥ {threshold})
+
+Found {len(strong_correlations)} correlation(s) above the threshold:
+
+"""
+                        for corr in strong_correlations:
+                            direction = "positive" if corr["correlation"] > 0 else "negative"
+                            report += f"""
+#### {corr['column1']} ↔ {corr['column2']}
+- **Correlation:** {corr['correlation']:.3f} ({direction})
+- **Sample size:** {corr['n_pairs']:,} paired observations
+- **Interpretation:** As {corr['column1']} increases, {corr['column2']} tends to {'increase' if corr['correlation'] > 0 else 'decrease'}
+
+"""
+
+                        # Multicollinearity warning
+                        very_strong = [c for c in strong_correlations if c["abs_correlation"] >= 0.8]
+                        if very_strong:
+                            report += f"""
+### ⚠️ Multicollinearity Warning
+
+Found {len(very_strong)} very strong correlation(s) (|r| ≥ 0.8):
+"""
+                            for corr in very_strong:
+                                report += f"- **{corr['column1']} ↔ {corr['column2']}** (r = {corr['correlation']:.3f})\n"
+
+                            report += """
+**Recommendation:** Consider removing one variable from each highly correlated pair to avoid multicollinearity in statistical models.
+
+"""
+                    else:
+                        report += f"""
+
+### No Strong Correlations Found
+
+No correlations above the threshold of {threshold} were detected. This could indicate:
+- Variables are largely independent
+- Relationships may be non-linear
+- Data quality issues may be masking relationships
+
+"""
+
+                    # Summary statistics
+                    if correlations:
+                        corr_values = [c["correlation"] for c in correlations]
+                        abs_corr_values = [c["abs_correlation"] for c in correlations]
+
+                        report += f"""
+## Correlation Summary
+
+- **Total Pairs Analyzed:** {len(correlations)}
+- **Mean Absolute Correlation:** {statistics.mean(abs_corr_values):.3f}
+- **Strongest Correlation:** {max(corr_values, key=abs):.3f} ({correlations[0]['column1']} ↔ {correlations[0]['column2']})
+- **Correlations Above Threshold:** {len(strong_correlations)}
+
+"""
+
+                # Interpretation guide
+                report += f"""
+## Interpretation Guide
+
+### {method.title()} Correlation Strength:
+- **0.8 to 1.0:** Very strong relationship
+- **0.6 to 0.8:** Strong relationship
+- **0.4 to 0.6:** Moderate relationship
+- **0.2 to 0.4:** Weak relationship
+- **0.0 to 0.2:** Very weak or no relationship
+
+### Important Notes:
+- Correlation does not imply causation
+- {method.title()} correlation measures {'linear' if method == 'pearson' else 'monotonic'} relationships
+- Missing values are excluded from calculations
+- Consider scatter plots for visual inspection of relationships
+
+## Next Steps
+- Use `calculate_statistics()` for detailed variable analysis
+- Consider creating scatter plots for strong correlations
+- Investigate potential confounding variables
+- Use domain knowledge to interpret relationships
+"""
+
+                return [types.TextContent(type="text", text=report)]
+
+        except Exception as e:
+            logger.error(f"Error analyzing correlations: {e}")
+            return [types.TextContent(type="text", text=f"Error analyzing correlations: {str(e)}")]
 
     async def filter_data(
         self,

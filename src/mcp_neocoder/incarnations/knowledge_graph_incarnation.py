@@ -209,10 +209,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
 
         try:
             async with self.driver.session(database=self.database) as session:
-                async def read_query(tx):
-                    return await self._read_query(tx, query, {})
-                results_json = await session.execute_read(read_query)
-                results = json.loads(results_json)
+                results = await self._safe_read_query(session, query, {})
 
                 if results and len(results) > 0:
                     return [types.TextContent(type="text", text=results[0]["description"])]
@@ -548,7 +545,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                 # Use a direct transaction to avoid scope issues
                 async def execute_query(tx):
                     result = await tx.run(query)
-                    records = await result.records()
+                    records = await result.data()  # Fixed: use .data() instead of .records()
                     entities = []
 
                     for record in records:
@@ -624,7 +621,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                 # Use a direct transaction to avoid scope issues
                 async def execute_query(tx):
                     result = await tx.run(cypher_query, {"query": query})
-                    records = await result.records()
+                    records = await result.data()  # Fixed: use .data() instead of .records()
                     result_data = []
 
                     for record in records:
@@ -712,7 +709,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                 # Use a direct transaction to avoid scope issues
                 async def execute_query(tx):
                     result = await tx.run(query, {"names": names})
-                    records = await result.records()
+                    records = await result.data()  # Fixed: use .data() instead of .records()
                     entity_details = []
 
                     for record in records:
