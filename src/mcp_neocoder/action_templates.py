@@ -11,6 +11,7 @@ from typing import List, Optional, Dict, Any
 import mcp.types as types
 from pydantic import Field
 from neo4j import AsyncManagedTransaction
+from .event_loop_manager import safe_neo4j_session
 
 logger = logging.getLogger("mcp_neocoder.action_templates")
 
@@ -61,7 +62,7 @@ class ActionTemplateMixin:
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(self._read_query, query, params)
                 results = json.loads(results_json)
 
@@ -132,7 +133,7 @@ class ActionTemplateMixin:
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(self._read_query, query, params)
                 results = json.loads(results_json)
 
@@ -205,7 +206,7 @@ class ActionTemplateMixin:
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(self._read_query, query, params)
                 results = json.loads(results_json)
 
@@ -272,7 +273,7 @@ class ActionTemplateMixin:
             params["suggestions"] = suggestions
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # First check if the template exists
                 check_query = """
                 MATCH (t:ActionTemplate {keyword: $keyword, isCurrent: true})
@@ -367,7 +368,7 @@ Currently supported incarnations:
         params = {"project_id": project_id}
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 try:
                     results_json = await session.execute_read(self._read_query, query, params)
                     results = json.loads(results_json)
@@ -456,7 +457,7 @@ Currently supported incarnations:
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 try:
                     results_json = await session.execute_read(self._read_query, query, params)
                     results = json.loads(results_json)
@@ -542,7 +543,7 @@ Currently supported incarnations:
             params["notes"] = notes
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Check if project exists
                 check_project_query = """
                 MATCH (p:Project {id: $project_id})
@@ -622,7 +623,7 @@ Currently supported incarnations:
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(self._read_query, query, params)
                 results = json.loads(results_json)
 

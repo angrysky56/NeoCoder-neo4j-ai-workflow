@@ -154,8 +154,10 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
         Returns:
             bool: True if all required components exist
         """
+        from .event_loop_manager import safe_neo4j_session
+
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database or "neo4j") as session:
                 # 1. Check if main hub exists
                 hub_exists = await self._check_component_exists(
                     session,
@@ -802,6 +804,9 @@ Please wait a moment for full initialization to complete or check connection sta
         Returns:
             MCP response containing the hub content
         """
+        # Import the safe session manager
+        from .event_loop_manager import safe_neo4j_session
+
         # Fallback description in case of any database issues
         fallback_hub_description = """
 # NeoCoder Neo4j-Guided AI Workflow
@@ -829,12 +834,12 @@ This is the default guidance hub. Use the commands above to explore the system's
                 logger.error(f"Error getting hub from incarnation {self.current_incarnation.name}: {str(e)}")
                 logger.info("Falling back to main hub")
 
-        # 2. Get the main hub with more robust error handling
+        # 2. Get the main hub with event loop safe session handling
         logger.info("Getting main guidance hub")
 
         try:
-            # Use a direct session approach for more reliable results
-            async with self.driver.session(database=self.database) as session:
+            # Use the safe session manager to avoid event loop issues
+            async with safe_neo4j_session(self.driver, self.database or "neo4j") as session:
                 query = """
                 MATCH (hub:AiGuidanceHub {id: 'main_hub'})
                 RETURN hub.description AS description
@@ -967,6 +972,8 @@ This is the default guidance hub. Use the commands above to explore the system's
 
     async def check_connection(self) -> List[types.TextContent]:
         """Check the Neo4j connection status and database access permissions."""
+        from .event_loop_manager import safe_neo4j_session
+
         result = {
             "connection": "Not Connected",
             "database": self.database,
@@ -988,8 +995,8 @@ This is the default guidance hub. Use the commands above to explore the system's
             if not self.driver:
                 raise RuntimeError("Driver is not initialized")
 
-            # Test read access with a simple query
-            async with self.driver.session(database=self.database) as session:
+            # Test read access with a simple query using safe session manager
+            async with safe_neo4j_session(self.driver, self.database or "neo4j") as session:
                 try:
                     # Test read access
                     read_result = await session.run("RETURN 'Connection works' as status")
@@ -1196,10 +1203,12 @@ This is the default guidance hub. Use the commands above to explore the system's
         Returns:
             Query results as a list of dictionaries
         """
+        from .event_loop_manager import safe_neo4j_session
+
         params = params or {}
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database or "neo4j") as session:
                 # Execute inside a read transaction
                 result_json = await session.execute_read(
                     lambda tx: self._read_query(tx, query, params)  # type: ignore
@@ -1227,10 +1236,12 @@ This is the default guidance hub. Use the commands above to explore the system's
         Returns:
             True if the operation succeeded, False otherwise
         """
+        from .event_loop_manager import safe_neo4j_session
+
         params = params or {}
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database or "neo4j") as session:
                 # Execute inside a write transaction
                 from typing import Callable
                 await session.execute_write(
@@ -1304,10 +1315,12 @@ This is the default guidance hub. Use the commands above to explore the system's
         params: Optional[Dict[str, Any]] = Field(None, description="Query parameters")
     ) -> List[types.TextContent]:
         """Run a custom Cypher query for advanced operations."""
+        from .event_loop_manager import safe_neo4j_session
+
         params = params or {}
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database or "neo4j") as session:
                 from typing import Callable
                 results_json = await session.execute_read(
                     Callable[[neo4j.AsyncTransaction], Awaitable[Any]](lambda tx: self._read_query(tx, query, params)) # type: ignore
@@ -1323,6 +1336,8 @@ This is the default guidance hub. Use the commands above to explore the system's
         params: Optional[Dict[str, Any]] = Field(None, description="Query parameters")
     ) -> List[types.TextContent]:
         """Execute a WRITE Cypher query (for creating/updating data)."""
+        from .event_loop_manager import safe_neo4j_session
+
         params = params or {}
 
         # Check if this is actually a write query
@@ -1338,7 +1353,7 @@ This is the default guidance hub. Use the commands above to explore the system's
             return [types.TextContent(type="text", text=message)]
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database or "neo4j") as session:
                 from typing import Callable
                 result = await session.execute_write(
                     Callable[[neo4j.AsyncManagedTransaction], Awaitable[Any]](lambda tx: self._write(tx, query, params)) # type: ignore
@@ -1365,6 +1380,8 @@ This is the default guidance hub. Use the commands above to explore the system's
         Returns:
             MCP response containing the hub content
         """
+        from .event_loop_manager import safe_neo4j_session
+
         # Define the default hub content
         default_description = """
 # NeoCoder Neo4j-Guided AI Workflow
@@ -1409,8 +1426,8 @@ Each incarnation has its own set of specialized tools alongside the core Neo4j i
 """
 
         try:
-            # Try to create the hub node directly with a session
-            async with self.driver.session(database=self.database) as session:
+            # Try to create the hub node using safe session manager
+            async with safe_neo4j_session(self.driver, self.database or "neo4j") as session:
                 query = """
                 CREATE (hub:AiGuidanceHub {id: 'main_hub', description: $description, created: datetime()})
                 RETURN hub.description AS description

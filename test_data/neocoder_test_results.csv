@@ -1,0 +1,8 @@
+test_name,functionality_score,implementation_status,category
+Neo4j Connection,10,complete,core
+Code Analysis,7,partial,analysis
+Knowledge Graph,8,mostly_complete,core
+Research Orchestration,9,complete,workflow
+Data Analysis,6,testing,analysis
+Action Templates,8,complete,workflow
+Tool Registry,9,complete,core

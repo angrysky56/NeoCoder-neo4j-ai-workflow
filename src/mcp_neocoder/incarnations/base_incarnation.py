@@ -48,10 +48,12 @@ This is a default hub that should be overridden by each incarnation.
 
     async def initialize_schema(self):
         """Initialize the Neo4j schema for this incarnation."""
+        from ..event_loop_manager import safe_neo4j_session
+        
         # Execute schema queries if defined
         if self.schema_queries:
             try:
-                async with self.driver.session(database=self.database) as session:
+                async with safe_neo4j_session(self.driver, self.database) as session:
                     # Execute each constraint/index query individually
                     for query in self.schema_queries:
                         await session.execute_write(lambda tx: tx.run(query))  # type: ignore
@@ -72,6 +74,8 @@ This is a default hub that should be overridden by each incarnation.
 
     async def ensure_hub_exists(self):
         """Create the guidance hub for this incarnation if it doesn't exist."""
+        from ..event_loop_manager import safe_neo4j_session
+        
         hub_id = f"{self.name}_hub"
 
         query = """
@@ -86,7 +90,7 @@ This is a default hub that should be overridden by each incarnation.
         }
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 await session.execute_write(lambda tx: tx.run(query, params))
                 logger.info(f"Ensured hub exists for {self.name}")
         except Exception as e:
@@ -95,6 +99,8 @@ This is a default hub that should be overridden by each incarnation.
 
     async def get_guidance_hub(self) -> List[types.TextContent]:
         """Get the guidance hub content for this incarnation."""
+        from ..event_loop_manager import safe_neo4j_session
+        
         hub_id = f"{self.name}_hub"
 
         query = """
@@ -103,7 +109,7 @@ This is a default hub that should be overridden by each incarnation.
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(lambda tx: self._read_query(tx, query, {"hub_id": hub_id}))  # type: ignore
                 results = json.loads(results_json)
 
@@ -228,6 +234,19 @@ This is a default hub that should be overridden by each incarnation.
         result = await tx.run(query, params or {})
         summary = await result.consume()
         return summary
+
+    async def safe_session(self):
+        """Get a safe Neo4j session that handles event loop issues.
+        
+        This is a convenience method that incarnations can use to get a session
+        that properly handles asyncio event loop management.
+        
+        Usage:
+            async with self.safe_session() as session:
+                # Use session here
+        """
+        from ..event_loop_manager import safe_neo4j_session
+        return safe_neo4j_session(self.driver, self.database)
 
 
 # End of base incarnation module
