@@ -4,6 +4,7 @@ Data Analysis incarnation of the NeoCoder framework.
 Provides comprehensive data analysis capabilities including data loading, exploration,
 visualization, transformation, and statistical analysis with results stored in Neo4j.
 """
+from .base_incarnation import BaseIncarnation
 
 import json
 import logging
@@ -44,7 +45,6 @@ import mcp.types as types
 from pydantic import Field
 from neo4j import AsyncTransaction
 
-from .base_incarnation import BaseIncarnation
 
 logger = logging.getLogger("mcp_neocoder.incarnations.data_analysis")
 
@@ -346,7 +346,7 @@ Welcome to the Enhanced Data Analysis System powered by the NeoCoder framework. 
 - Automated processing scripts will monitor this directory
 - Supports automatic format detection and conversion
 
-### ⚙️ Scripts Directory  
+### ⚙️ Scripts Directory
 **Location:** `/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/data/scripts/`
 - Contains automated data processing scripts
 - Conversion utilities for various data formats
@@ -378,7 +378,7 @@ Welcome to the Enhanced Data Analysis System powered by the NeoCoder framework. 
 # - Generate processing reports
 
 # Step 3: Load processed data for analysis
-load_dataset(file_path="/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/data/downloads/processed_data.csv", 
+load_dataset(file_path="/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/data/downloads/processed_data.csv",
              dataset_name="my_analysis", source_type="csv")
 
 # Get intelligent insights automatically
@@ -583,7 +583,7 @@ analyze_correlations(dataset_id="DATASET_ID", threshold=0.1)  # Low threshold fo
 
 ### Available Processing Scripts
 1. **`auto_converter.py`** - Automatic format detection and conversion
-2. **`data_cleaner.py`** - Data cleaning and validation pipeline  
+2. **`data_cleaner.py`** - Data cleaning and validation pipeline
 3. **`format_standardizer.py`** - Standardize column names and data types
 4. **`batch_processor.py`** - Process multiple files simultaneously
 5. **`excel_processor.py`** - Extract and convert Excel files with multiple sheets

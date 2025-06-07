@@ -1005,7 +1005,6 @@ The comparison would highlight structural and semantic changes between versions.
                 # Call our internal AST analyzer functions
                 ast_result = self._call_ast_analyzer_sync("parse_to_ast", {"code": code_content, "language": language})
                 metrics_result = self._call_ast_analyzer_sync("analyze_code", {"code": code_content, "language": language})
-                asg_result = self._call_ast_analyzer_sync("generate_asg", {"code": code_content, "language": language})
             else:
                 # Try to retrieve analysis from Neo4j using the ID
                 async with self.driver.session(database=self.database) as session:
@@ -1035,11 +1034,10 @@ The comparison would highlight structural and semantic changes between versions.
                         return [types.TextContent(type="text", text=f"Error reading file: {e}")]
 
                     # Use existing tools for fresh analysis
+                    # Use existing tools for fresh analysis
                     # Call our internal AST analyzer functions
                     ast_result = self._call_ast_analyzer_sync("parse_to_ast", {"code": code_content, "language": language})
                     metrics_result = self._call_ast_analyzer_sync("analyze_code", {"code": code_content, "language": language})
-                    asg_result = self._call_ast_analyzer_sync("generate_asg", {"code": code_content, "language": language})
-
             # Define code smell detection functions
             def detect_complex_functions(ast_data, metrics_data, threshold_level):
                 """Detect overly complex functions based on nesting and complexity."""
