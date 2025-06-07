@@ -338,6 +338,21 @@ class DataAnalysisIncarnation(BaseIncarnation):
 
 Welcome to the Enhanced Data Analysis System powered by the NeoCoder framework. This system provides comprehensive, AI-powered data analysis with modern Python data science libraries, full tracking, and reproducibility.
 
+## 📁 Data Management Directories
+
+### 📥 Downloads Directory
+**Location:** `/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/data/downloads/`
+- Store all raw data files here (CSV, JSON, Excel, etc.)
+- Automated processing scripts will monitor this directory
+- Supports automatic format detection and conversion
+
+### ⚙️ Scripts Directory  
+**Location:** `/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/data/scripts/`
+- Contains automated data processing scripts
+- Conversion utilities for various data formats
+- Data cleaning and preprocessing pipelines
+- Custom analysis scripts
+
 ## 🎯 Key Features
 
 ✅ **Enhanced Data Type Detection** - Automatically detects 10+ data types including dates, booleans, currency, percentages
@@ -346,19 +361,37 @@ Welcome to the Enhanced Data Analysis System powered by the NeoCoder framework. 
 ✅ **Time Series Analysis** - Trend detection, seasonality analysis, and forecasting insights
 ✅ **Automated Insights** - AI-powered recommendations and data quality scoring
 ✅ **Statistical Analysis** - Comprehensive statistical tests and correlation analysis
+✅ **Automated Data Processing** - Scripts for format conversion and data preparation
 
 ## 🚀 Quick Start Workflow
 
-### 1. Load & Explore Your Data
+### 1. Automated Data Processing Workflow
 ```
-# Load data with enhanced type detection
-load_dataset(file_path="/path/to/data.csv", dataset_name="my_analysis", source_type="csv")
+# Step 1: Place your data files in the downloads directory
+# /home/ty/Repositories/NeoCoder-neo4j-ai-workflow/data/downloads/
+
+# Step 2: Run automated processing scripts
+# The scripts will:
+# - Auto-detect file formats
+# - Convert to CSV if needed
+# - Clean and validate data
+# - Generate processing reports
+
+# Step 3: Load processed data for analysis
+load_dataset(file_path="/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/data/downloads/processed_data.csv", 
+             dataset_name="my_analysis", source_type="csv")
 
 # Get intelligent insights automatically
 generate_insights(dataset_id="DATASET_ID", insight_types=["patterns", "quality", "recommendations"])
 
 # Explore with sample data
 explore_dataset(dataset_id="DATASET_ID", sample_size=20)
+```
+
+### Alternative: Direct Data Loading
+```
+# Load data directly with enhanced type detection
+load_dataset(file_path="/path/to/data.csv", dataset_name="my_analysis", source_type="csv")
 ```
 
 ### 2. Comprehensive Analysis
@@ -546,12 +579,34 @@ detect_anomalies(dataset_id="DATASET_ID", method="statistical")
 analyze_correlations(dataset_id="DATASET_ID", threshold=0.1)  # Low threshold for data validation
 ```
 
+## 🤖 Automated Data Processing Scripts
+
+### Available Processing Scripts
+1. **`auto_converter.py`** - Automatic format detection and conversion
+2. **`data_cleaner.py`** - Data cleaning and validation pipeline  
+3. **`format_standardizer.py`** - Standardize column names and data types
+4. **`batch_processor.py`** - Process multiple files simultaneously
+5. **`excel_processor.py`** - Extract and convert Excel files with multiple sheets
+
+### Usage Examples
+```bash
+# Process all files in downloads directory
+python /home/ty/Repositories/NeoCoder-neo4j-ai-workflow/data/scripts/batch_processor.py
+
+# Convert specific Excel file
+python /home/ty/Repositories/NeoCoder-neo4j-ai-workflow/data/scripts/excel_processor.py input.xlsx
+
+# Clean and standardize data
+python /home/ty/Repositories/NeoCoder-neo4j-ai-workflow/data/scripts/data_cleaner.py data.csv
+```
+
 ## ⚡ Performance & Scalability
 
 - **Efficient Processing**: Pandas/NumPy vectorization for large datasets
 - **Memory Optimization**: Chunked processing for files > 1GB
 - **Smart Sampling**: Statistical sampling for initial analysis (expandable)
 - **Caching**: Neo4j result caching for repeated queries
+- **Automated Pipelines**: Background processing for large datasets
 
 ## 🛠️ Technical Requirements
 
@@ -2186,8 +2241,7 @@ Use `list_datasets()` to see available datasets for now.
                 # Get dataset information
                 dataset_query = """
                 MATCH (d:Dataset {id: $dataset_id})
-                OPTIONAL MATCH (d)-[:HAS_COLUMN]->(c:DataColumn)
-                RETURN d, collect(c) as columns
+                RETURN d
                 """
 
                 result = await self._safe_read_query(session, dataset_query, {"dataset_id": dataset_id})
@@ -2196,8 +2250,18 @@ Use `list_datasets()` to see available datasets for now.
                     return [types.TextContent(type="text", text=f"Error: Dataset not found with ID: {dataset_id}")]
 
                 dataset = result[0]["d"]
-                available_columns = result[0]["columns"]
+                # Get dataset information
+                dataset_query = """
+                MATCH (d:Dataset {id: $dataset_id})
+                RETURN d
+                """
 
+                result = await self._safe_read_query(session, dataset_query, {"dataset_id": dataset_id})
+
+                if not result:
+                    return [types.TextContent(type="text", text=f"Error: Dataset not found with ID: {dataset_id}")]
+
+                dataset = result[0]["d"]
                 # Load data
                 data_rows = []
                 try:
