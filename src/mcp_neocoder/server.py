@@ -223,6 +223,7 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
             bool: Query result
         """
         from typing import cast, LiteralString
+
         result = await tx.run(cast(LiteralString, query), params)
         records = await result.values()
 
@@ -1321,9 +1322,9 @@ This is the default guidance hub. Use the commands above to explore the system's
 
         try:
             async with safe_neo4j_session(self.driver, self.database or "neo4j") as session:
-                from typing import Callable
+                # Fixed: Use lambda directly without wrapping in Callable
                 results_json = await session.execute_read(
-                    Callable[[neo4j.AsyncTransaction], Awaitable[Any]](lambda tx: self._read_query(tx, query, params)) # type: ignore
+                    lambda tx: self._read_query(tx, query, params)
                 )
                 return [types.TextContent(type="text", text=results_json)]
         except Exception as e:
@@ -1354,9 +1355,9 @@ This is the default guidance hub. Use the commands above to explore the system's
 
         try:
             async with safe_neo4j_session(self.driver, self.database or "neo4j") as session:
-                from typing import Callable
+                # Fixed: Use lambda directly without wrapping in Callable
                 result = await session.execute_write(
-                    Callable[[neo4j.AsyncManagedTransaction], Awaitable[Any]](lambda tx: self._write(tx, query, params)) # type: ignore
+                    lambda tx: self._write(tx, query, params)
                 )
 
                 # Format a summary of what happened
