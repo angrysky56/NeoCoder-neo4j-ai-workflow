@@ -11,3 +11,27 @@ psutil
 neo4j-rust-ext
 neo4j
 fastmcp
+
+# Enhanced Data Analysis Dependencies - 2025 Standards
+pandas>=2.0.0
+numpy>=1.24.0
+matplotlib>=3.7.0
+seaborn>=0.12.0
+plotly>=5.15.0
+scipy>=1.10.0
+scikit-learn>=1.3.0
+statsmodels>=0.14.0
+
+# Data Type Detection & Processing
+python-dateutil>=2.8.0
+pytz>=2023.3
+
+# Performance & Optimization
+numba>=0.57.0
+
+# Data Validation & Quality
+jsonschema>=4.17.0
+
+# Export & Reporting
+openpyxl>=3.1.0
+xlsxwriter>=3.1.0
