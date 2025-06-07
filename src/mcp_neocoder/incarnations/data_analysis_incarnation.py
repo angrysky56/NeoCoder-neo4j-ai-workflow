@@ -2827,6 +2827,13 @@ Use `list_datasets()` to see available datasets for now.
 
                 report += "\n## Cluster Characteristics\n\n"
 
+                # Show cluster centers for K-means
+                if method == "kmeans" and cluster_centers is not None:
+                    report += "### Cluster Centers\n"
+                    for i, center in enumerate(cluster_centers):
+                        report += f"**Cluster {i}:** {', '.join([f'{col}={val:.3f}' for col, val in zip(numeric_cols, center)])}\n"
+                    report += "\n"
+
                 # Analyze each cluster
                 for cluster_id in sorted(unique_labels):
                     if cluster_id == -1:  # Skip noise points for now
@@ -3298,6 +3305,7 @@ Since your data has more than 2 dimensions, consider:
                 # Load actual data for analysis
                 data_rows = []
                 df = None # Initialize df to None
+                numeric_df_cols = [] # Initialize numeric_df_cols to empty list
 
                 try:
                     file_path = dataset["source_path"]
@@ -3381,6 +3389,12 @@ Dataset contains {dataset["row_count"]:,} rows and {dataset["column_count"]} col
                             report += f"- **{col['name']}**: Appears to be a unique identifier\n"
                         report += "\n"
 
+                    if duplicate_prone:
+                        report += "### 📋 Low Cardinality Columns\n"
+                        for col in duplicate_prone:
+                            report += f"- **{col['name']}**: Very low cardinality ({col['unique_count']} unique values)\n"
+                        report += "\n"
+
                     # Overall quality assessment
                     quality_score = max(0, min(100, quality_score))
                     if quality_score > 80:
@@ -3403,6 +3417,10 @@ Dataset contains {dataset["row_count"]:,} rows and {dataset["column_count"]} col
                 categorical_cols = [col for col in columns if col["data_type"] in ["categorical", "text"]]
                 datetime_cols = [col for col in columns if col["data_type"] == "datetime"]
 
+                # Initialize cardinality lists to avoid unbound variables
+                low_cardinality = [col for col in columns if col["unique_count"] <= 10 and col["data_type"] == "text"]
+                high_cardinality = [col for col in columns if col["unique_count"] > dataset["row_count"] * 0.8]
+
                 # Pattern Recognition Insights
                 if "patterns" in insight_types:
                     report += "## 🔍 Pattern Recognition Insights\n\n"
@@ -3415,8 +3433,6 @@ Dataset contains {dataset["row_count"]:,} rows and {dataset["column_count"]} col
                     report += f"- **Date/time columns**: {len(datetime_cols)} ({len(datetime_cols)/len(columns)*100:.1f}%)\n\n"
 
                     # Cardinality insights
-                    low_cardinality = [col for col in columns if col["unique_count"] <= 10 and col["data_type"] == "text"]
-                    high_cardinality = [col for col in columns if col["unique_count"] > dataset["row_count"] * 0.8]
 
                     if low_cardinality:
                         report += "### 📋 Categorical Pattern Candidates\n"
@@ -3451,10 +3467,16 @@ Dataset contains {dataset["row_count"]:,} rows and {dataset["column_count"]} col
                                     report += f"- **{col1} & {col2}**: {val:.2f}\n"
                                 report += "\n"
 
+                    if high_cardinality:
+                        report += "### 🔢 High Cardinality Columns\n"
+                        for col in high_cardinality:
+                            report += f"- **{col['name']}**: Very high cardinality ({col['unique_count']} unique values)\n"
+                        report += "\n"
+
                         # Outlier patterns (simplified example)
                         outlier_summary = []
                         for col_name in numeric_df_cols:
-                            if col_name in df:
+                            if df is not None and col_name in df.columns:
                                 series = df[col_name].dropna()
                                 if len(series) > 10: # Basic check for sufficient data
                                     q1 = series.quantile(0.25)
@@ -3466,16 +3488,16 @@ Dataset contains {dataset["row_count"]:,} rows and {dataset["column_count"]} col
                                     if num_outliers > 0:
                                         outlier_summary.append(f"**{col_name}**: {num_outliers} potential outliers ({num_outliers/len(series)*100:.1f}%)")
 
-                        if outlier_summary:
-                            report += "### ⚠️ Potential Outliers (IQR method)\n"
-                            for summary_line in outlier_summary:
-                                report += f"- {summary_line}\n"
-                            report += "\n"
+                            if outlier_summary:
+                                report += "### ⚠️ Potential Outliers (IQR method)\n"
+                                for summary_line in outlier_summary:
+                                    report += f"- {summary_line}\n"
+                                report += "\n"
 
                         # Trend patterns analysis
                         insights_from_trends = []
                         for col in numeric_df_cols:
-                            if col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
+                            if df is not None and col in df.columns and pd.api.types.is_numeric_dtype(df[col]):
                                 series = df[col].dropna()
                                 if len(series) >= 2:
                                     try:
