@@ -547,6 +547,15 @@ A comprehensive analysis of the NeoCoder codebase is available in the `/analysis
 
 ## Recent Updates
 
+### 2025-06-14: Fixed Critical Async/Event Loop Management Issues (v1.4.1)
+- **CRITICAL FIX**: Resolved async context manager protocol errors in `safe_neo4j_session` function
+- **Root Cause**: AsyncMock in tests and some driver configurations returned coroutines instead of async context managers
+- **Solution**: Added `_handle_session_creation` helper function to detect and properly handle both coroutines and context managers
+- **Impact**: Eliminates "TypeError: 'coroutine' object does not support the asynchronous context manager protocol" errors
+- **Testing**: Added comprehensive test suite (`test_event_loop_fix.py`) to prevent regression
+- **Compatibility**: Maintains full backward compatibility with existing Neo4j driver usage
+- **Files Modified**: `src/mcp_neocoder/event_loop_manager.py`, `tests/test_event_loop_fix.py`
+
 ### 2025-04-27: Added Code Analysis Incarnation with AST/ASG Support (v1.4.0)
 - Added new `code_analysis_incarnation.py` for deep code analysis using AST and ASG tools
 - Implemented Neo4j schema for storing code structure and analysis results

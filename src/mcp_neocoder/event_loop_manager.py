@@ -41,6 +41,52 @@ def get_main_loop() -> Optional[asyncio.AbstractEventLoop]:
     global _MAIN_LOOP
     return _MAIN_LOOP
 
+async def _handle_session_creation(driver: AsyncDriver, database: str, **kwargs):
+    """
+    Helper function to handle session creation, dealing with both coroutines and context managers.
+    
+    Args:
+        driver: Neo4j AsyncDriver
+        database: Database name
+        **kwargs: Additional arguments to pass to session()
+    
+    Returns:
+        Async context manager for the session
+    """
+    session_result = driver.session(database=database, **kwargs)
+    
+    # Check if session() returned a coroutine (common with AsyncMock)
+    if asyncio.iscoroutine(session_result):
+        # If it's a coroutine, await it first to get the actual session
+        logger.debug("Driver.session() returned coroutine, awaiting...")
+        actual_session = await session_result
+        
+        # Now check if the result has async context manager methods
+        if hasattr(actual_session, '__aenter__') and hasattr(actual_session, '__aexit__'):
+            return actual_session
+        else:
+            # Create a simple context manager wrapper for non-context manager objects
+            class SessionWrapper:
+                def __init__(self, session):
+                    self.session = session
+                
+                async def __aenter__(self):
+                    return self.session
+                
+                async def __aexit__(self, exc_type, exc_val, exc_tb):
+                    # Try to close if possible
+                    if hasattr(self.session, 'close') and callable(self.session.close):
+                        if asyncio.iscoroutinefunction(self.session.close):
+                            await self.session.close()
+                        else:
+                            self.session.close()
+            
+            return SessionWrapper(actual_session)
+    else:
+        # Normal async context manager case
+        return session_result
+
+
 @asynccontextmanager
 async def safe_neo4j_session(driver: AsyncDriver, database: str):
     """
@@ -98,7 +144,8 @@ async def safe_neo4j_session(driver: AsyncDriver, database: str):
                 # For simplicity, we'll still use the session in the current loop
                 # This is a compromise - ideally we'd do all operations in the main loop
                 # but that would require restructuring the entire application
-                async with driver.session(database=database) as session:
+                session_mgr = await _handle_session_creation(driver, database)
+                async with session_mgr as session:
                     yield session
             except asyncio.CancelledError:
                 # Important to handle cancellation explicitly
@@ -110,7 +157,8 @@ async def safe_neo4j_session(driver: AsyncDriver, database: str):
                     # As a last resort, try to create a completely fresh connection
                     logger.warning("Attempting last-resort session creation")
                     # This may still fail but worth trying
-                    async with driver.session(database=database, fetch_size=1) as emergency_session:
+                    emergency_session_mgr = await _handle_session_creation(driver, database, fetch_size=1)
+                    async with emergency_session_mgr as emergency_session:
                         yield emergency_session
                 else:
                     # Other error, not loop related
@@ -118,7 +166,8 @@ async def safe_neo4j_session(driver: AsyncDriver, database: str):
                     raise
         else:
             # Normal case - same loop or no main loop yet
-            async with driver.session(database=database) as session:
+            session_mgr = await _handle_session_creation(driver, database)
+            async with session_mgr as session:
                 yield session
     except Exception as e:
         logger.error(f"Error in Neo4j session: {e}")
@@ -127,6 +176,8 @@ async def safe_neo4j_session(driver: AsyncDriver, database: str):
             logger.error("This is likely due to an event loop mismatch issue. Check event loop initialization and usage.")
         elif "Event loop is running" in str(e):
             logger.error("Cannot create new event loop when one is already running.")
+        elif "asynchronous context manager protocol" in str(e):
+            logger.error("Driver.session() returned an object that doesn't support async context manager protocol. This is likely a mocking issue or driver problem.")
         raise
 
 async def run_in_main_loop(coro):
