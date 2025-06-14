@@ -6,14 +6,15 @@ including action templates, project management, workflow tracking, and best prac
 """
 
 import logging
+from typing import LiteralString
 
-from neo4j import LiteralString
 from .base_incarnation import BaseIncarnation
+from ..action_templates import ActionTemplateMixin
 
 logger = logging.getLogger("mcp_neocoder.incarnations.coding")
 
 
-class CodingIncarnation(BaseIncarnation):
+class CodingIncarnation(BaseIncarnation, ActionTemplateMixin):
     """
     Coding Incarnation for the NeoCoder framework.
 
@@ -27,6 +28,18 @@ class CodingIncarnation(BaseIncarnation):
     # Metadata for display in the UI
     description = "Original NeoCoder for AI-assisted coding workflows"
     version = "1.0.0"
+
+    # Explicitly define which methods should be registered as tools
+    _tool_methods = [
+        "list_action_templates",
+        "get_action_template", 
+        "get_best_practices",
+        "add_template_feedback",
+        "get_project",
+        "list_projects",
+        "log_workflow_execution",
+        "get_workflow_history"
+    ]
 
     # Schema queries for Neo4j setup
     schema_queries = [
