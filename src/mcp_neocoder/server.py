@@ -1612,12 +1612,19 @@ def create_server(db_url: str, username: str, password: str, database: str = "ne
 
         # 6. Run the async setup with proper error handling
         if loop.is_running():
-            # If loop is already running (e.g., in Jupyter), use create_task + run_until_complete pattern
-            task = asyncio.create_task(async_server_setup())
-            # Wait for a short time to allow basic initialization
-            server = loop.run_until_complete(asyncio.wait_for(task, timeout=10))
+            # METHODOLOGICAL CORRECTION: Cannot call run_until_complete on running loop
+            # Use run_coroutine_threadsafe for cross-thread execution
+            logger.info("Loop is running - using run_coroutine_threadsafe pattern")
+            future = asyncio.run_coroutine_threadsafe(async_server_setup(), loop)
+            try:
+                server = future.result(timeout=60)  # Increased timeout for initialization
+                logger.info("Server initialization completed via threadsafe execution")
+            except asyncio.TimeoutError:
+                logger.error("Server initialization timed out")
+                raise RuntimeError("Server initialization timed out after 60 seconds")
         else:
-            # If loop is not running, use run_until_complete directly
+            # Loop is not running, safe to use run_until_complete
+            logger.info("Loop is not running - using run_until_complete")
             server = loop.run_until_complete(async_server_setup())
 
         return server
@@ -1730,8 +1737,14 @@ def main():
             if pending_tasks:
                 logger.info(f"Waiting for {len(pending_tasks)} pending initialization tasks to complete...")
                 try:
-                    # Give pending tasks a chance to complete but don't block indefinitely
-                    loop.run_until_complete(asyncio.wait(pending_tasks, timeout=5))
+                    # METHODOLOGICAL CORRECTION: Check if loop is running before run_until_complete
+                    if loop.is_running():
+                        logger.warning("Cannot wait for pending tasks - loop is already running")
+                        logger.info("Pending tasks will complete naturally in running loop")
+                    else:
+                        # Give pending tasks a chance to complete but don't block indefinitely
+                        loop.run_until_complete(asyncio.wait(pending_tasks, timeout=5))
+                        logger.info("Pending tasks completed successfully")
                 except Exception as pending_err:
                     logger.warning(f"Some initialization tasks didn't complete: {pending_err}")
 

@@ -115,25 +115,26 @@ def switch_incarnation(
     incarnation_type: str
 ) -> List[types.TextContent]:
     """Switch the server to a different incarnation."""
-    # Handle async operation in a way that respects the current event loop
+    # Handle async operation with proper event loop methodology
     try:
         # Get the current running loop or create a new one
         try:
             loop = asyncio.get_running_loop()
-        except RuntimeError:
-            # If no loop is running, create a new one
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            return loop.run_until_complete(_switch_incarnation_async(server, incarnation_type))
-
-        # If we already have a running loop
-        if loop.is_running():
-            # Create a future and schedule the coroutine
+            # METHODOLOGICAL CORRECTION: If we got here, loop IS running
+            # Must use run_coroutine_threadsafe, not run_until_complete
+            logger.debug("Using existing running loop for switch_incarnation")
             future = asyncio.run_coroutine_threadsafe(_switch_incarnation_async(server, incarnation_type), loop)
             return future.result(timeout=30)  # Add timeout to prevent hanging
-        else:
-            # Use the existing loop
-            return loop.run_until_complete(_switch_incarnation_async(server, incarnation_type))
+        except RuntimeError:
+            # No loop is running in current thread, create a new one
+            logger.debug("Creating new event loop for switch_incarnation")
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                return loop.run_until_complete(_switch_incarnation_async(server, incarnation_type))
+            finally:
+                # Clean up the loop we created
+                loop.close()
     except Exception as e:
         logger.error(f"Error in switch_incarnation: {e}")
         import traceback
@@ -217,25 +218,25 @@ def get_current_incarnation(server) -> List[types.TextContent]:
     """Get the currently active incarnation type."""
     import asyncio
 
-    # Handle async operation in a way that respects the current event loop
+    # Handle async operation with proper event loop methodology
     try:
         # Get the current running loop or create a new one
         try:
             loop = asyncio.get_running_loop()
+            # METHODOLOGICAL CORRECTION: If we got here, loop IS running
+            logger.debug("Using existing running loop for get_current_incarnation")
+            future = asyncio.run_coroutine_threadsafe(_get_current_incarnation_async(server), loop)
+            return future.result(timeout=30)
         except RuntimeError:
-            # If no loop is running, create a new one
+            # No loop is running in current thread, create a new one
+            logger.debug("Creating new event loop for get_current_incarnation")
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            return loop.run_until_complete(_get_current_incarnation_async(server))
-
-        # If we already have a running loop
-        if loop.is_running():
-            # Create a future and schedule the coroutine
-            future = asyncio.run_coroutine_threadsafe(_get_current_incarnation_async(server), loop)
-            return future.result()
-        else:
-            # Use the existing loop
-            return loop.run_until_complete(_get_current_incarnation_async(server))
+            try:
+                return loop.run_until_complete(_get_current_incarnation_async(server))
+            finally:
+                # Clean up the loop we created
+                loop.close()
     except Exception as e:
         logger.error(f"Error in get_current_incarnation: {e}")
         import traceback
@@ -265,25 +266,25 @@ def list_incarnations(server) -> List[types.TextContent]:
     """List all available incarnations."""
     import asyncio
 
-    # Handle async operation in a way that respects the current event loop
+    # Handle async operation with proper event loop methodology
     try:
         # Get the current running loop or create a new one
         try:
             loop = asyncio.get_running_loop()
+            # METHODOLOGICAL CORRECTION: If we got here, loop IS running
+            logger.debug("Using existing running loop for list_incarnations")
+            future = asyncio.run_coroutine_threadsafe(_list_incarnations_async(server), loop)
+            return future.result(timeout=30)
         except RuntimeError:
-            # If no loop is running, create a new one
+            # No loop is running in current thread, create a new one
+            logger.debug("Creating new event loop for list_incarnations")
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
-            return loop.run_until_complete(_list_incarnations_async(server))
-
-        # If we already have a running loop
-        if loop.is_running():
-            # Create a future and schedule the coroutine
-            future = asyncio.run_coroutine_threadsafe(_list_incarnations_async(server), loop)
-            return future.result()
-        else:
-            # Use the existing loop
-            return loop.run_until_complete(_list_incarnations_async(server))
+            try:
+                return loop.run_until_complete(_list_incarnations_async(server))
+            finally:
+                # Clean up the loop we created
+                loop.close()
     except Exception as e:
         logger.error(f"Error in list_incarnations: {e}")
         import traceback
