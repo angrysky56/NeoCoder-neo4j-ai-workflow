@@ -4,29 +4,49 @@
 
 An MCP server implementation that enables AI assistants like Claude to use a Neo4j knowledge graph as their primary, dynamic "instruction manual" and project memory for standardized coding workflows.
 
+# NeoCoder: Hybrid AI Reasoning & Workflow System
+
+An advanced MCP server implementation that combines Neo4j knowledge graphs, Qdrant vector databases, and sophisticated AI orchestration to create a hybrid reasoning system for knowledge management, research analysis, and standardized workflows.
+
 ## Overview
 
-NeoCoder implements a system where:
+NeoCoder implements a revolutionary **Context-Augmented Reasoning** system that goes far beyond traditional RAG (Retrieval-Augmented Generation) by combining:
 
-1. AI assistants query a Neo4j database for standardized workflows (`ActionTemplates`) triggered by keywords (e.g., `FIX`, `REFACTOR`)
-2. The AI follows specific steps in these templates when performing coding tasks
-3. Critical steps like testing are enforced before logging success
-4. A complete audit trail of changes is maintained in the graph itself
+### **Core Architecture:**
 
-📈 System Status Updated:
+1. **Neo4j Knowledge Graphs** - Authoritative structured facts, relationships, and workflows
+2. **Qdrant Vector Databases** - Semantic search, similarity detection, and contextual understanding  
+3. **MCP Orchestration** - Intelligent routing between data sources with synthesis and citation
+4. **F-Contraction Synthesis** - Dynamic knowledge merging that preserves source attribution
 
-The NeoCoder system now provides sophisticated, protocol-driven workflows for everything from MVP planning to meta-cognitive coding! 🚀
+### **Key Capabilities:**
+
+- **Hybrid Knowledge Reasoning**: Seamlessly combine structured facts with semantic context
+- **Dynamic Knowledge Extraction**: Process documents, code, and conversations into interconnected knowledge structures
+- **Citation-Based Analysis**: Every claim tracked to its source across multiple databases
+- **Multi-Incarnation System**: Specialized modes for coding, research, decision support, and knowledge management
+- **Intelligent Workflow Templates**: Neo4j-guided procedures with mandatory verification steps
+
+### **Revolutionary Features:**
+
+🧠 **Smart Query Routing**: AI automatically determines optimal data source (graph, vector, or hybrid)
+🔬 **Research Analysis Engine**: Process academic papers with citation graphs and semantic content
+⚡ **F-Contraction Processing**: Dynamically merge similar concepts while preserving provenance
+🎯 **Context-Augmented Reasoning**: Generate insights impossible with single data sources
+📊 **Full Audit Trails**: Complete tracking of knowledge synthesis and workflow execution
 
 ## Quick Start
 
 ### Prerequisites
 
-- **Neo4j**: Running locally or a remote instance
+- **Neo4j**: Running locally or remote instance (for structured knowledge graphs)
+- **Qdrant**: Vector database for semantic search and embeddings (for hybrid reasoning)
 - **Python 3.10+**: For running the MCP server
 - **uv**: The Python package manager for MCP servers
 - **Claude Desktop**: For using with Claude AI
-- [MCP-Desktop-Commander](https://github.com/wonderwhy-er/DesktopCommanderMCP): Invaluable For cli and filesystem operations
-- [For the Code Analysis Incarnation: AST/ASG](https://github.com/angrysky56/ast-mcp-server)
+- [MCP-Desktop-Commander](https://github.com/wonderwhy-er/DesktopCommanderMCP): Invaluable for CLI and filesystem operations
+- [For Code Analysis Incarnation: AST/ASG](https://github.com/angrysky56/ast-mcp-server)
+- [For Enhanced Memory: Qdrant MCP Server](https://github.com/calclavia/mcp-server-qdrant): Enhanced vector database integration
 ## The MCP server runs the Python code, bridging the gap between the Neo4j graph and the AI assistant ( e.g. Claude)
 
 ![alt text](image-3.png)
@@ -92,18 +112,34 @@ If it doesn't work maybe try:
 ## Suggested system prompt
 
 ```plaintext
-> **System Instruction:** You are an AI coding assistant integrated with a Neo4j knowledge graph that defines our standard coding procedures and tracks project changes.
+> **System Instruction:** You are an AI assistant integrated with a sophisticated hybrid reasoning system that combines Neo4j knowledge graphs, Qdrant vector databases, and MCP orchestration for advanced knowledge management and workflow execution.
+>
+> **Your Core Capabilities:**
+> 1. **Standard Coding Workflows:** Use Neo4j-guided templates for structured development tasks
+> 2. **Hybrid Knowledge Reasoning:** Combine structured facts (Neo4j) with semantic search (Qdrant) for comprehensive analysis
+> 3. **Dynamic Knowledge Synthesis:** Apply F-Contraction principles to merge and consolidate knowledge from multiple sources
+> 4. **Multi-Modal Analysis:** Process research papers, code, documentation, and conversations into interconnected knowledge structures
+> 5. **Citation-Based Reasoning:** Provide fully attributed answers with source tracking across databases
 >
 > **Your Core Interaction Loop:**
-> 1.  **Identify Task & Keyword:** Determine the coding action required (e.g., fix a bug -> `FIX`).
-> 2.  **Consult the Hub:** If unsure about keywords or process, start by querying `:AiGuidanceHub {id: 'main_hub'}` for guidance and links to best practices or other guides.
-> 3.  **Retrieve Instructions:** Formulate a Cypher query to fetch the `steps` from the current `:ActionTemplate` matching the keyword (e.g., `MATCH (t:ActionTemplate {keyword: 'FIX', isCurrent: true}) RETURN t.steps`). Execute this query.
-> 4.  **Execute Guided Workflow:** Follow the retrieved `steps` meticulously. This includes reviewing project READMEs, implementing changes, and critically:
-> 5.  **Perform Verification:** Execute the testing steps defined in the template. **ALL required tests MUST pass before you consider the task complete.**
-> 6.  **Record Completion (Post-Testing):** Only if tests pass, formulate and execute the Cypher query specified in the template to create a `:WorkflowExecution` node, linking it appropriately. Do NOT record if tests failed.
-> 7.  **Finalize Updates:** Update the project's README content (in Neo4j or the file) as per the template's instructions.
+> 1.  **Identify Task & Context:** Determine the required action and select appropriate incarnation/workflow
+> 2.  **Consult Guidance Hubs:** Query incarnation-specific guidance hubs for specialized capabilities and procedures
+> 3.  **Execute Hybrid Workflows:** For knowledge tasks, use KNOWLEDGE_QUERY template for intelligent routing between graph and vector search
+> 4.  **Apply Dynamic Synthesis:** Use KNOWLEDGE_EXTRACT template to process documents into both structured (Neo4j) and semantic (Qdrant) representations
+> 5.  **Ensure Quality & Citations:** All knowledge claims must be properly cited with source attribution
+> 6.  **Record & Learn:** Log successful executions for system optimization and learning
 >
-> **Strict Rule:** Always prioritize instructions retrieved from the Neo4j graph over your general knowledge for workflow procedures. Use the graph as your single source of truth for *how* tasks are done here.
+> **Hybrid Reasoning Protocol:**
+> - **Graph-First**: Use Neo4j for authoritative facts, relationships, and structured data
+> - **Vector-Enhanced**: Use Qdrant for semantic context, opinions, and nuanced information  
+> - **Intelligent Synthesis**: Combine both sources with conflict detection and full citation tracking
+> - **F-Contraction Merging**: Dynamically merge similar concepts while preserving source attribution
+>
+> **Strict Rules:** 
+> - Always prioritize structured facts from Neo4j over semantic information
+> - Every claim must include proper source citations
+> - Use incarnation-specific tools and templates as single source of truth for procedures
+> - Apply F-Contraction principles when processing multi-source information
 ```
 
 ## Multiple Incarnations
@@ -144,11 +180,16 @@ All incarnations share these core elements:
   - Model components with state vectors and physical couplings
   - Simulate failure propagation using path queries
   - Optional quantum-inspired scheduler for parameter testing
-- **knowledge_graph_incarnation** - Knowledge graph management system
-  - Create and manage entities with observations
-  - Connect entities with typed relationships
-  - Search and visualize knowledge structures
-  - Support for complex semantic queries
+- **knowledge_graph_incarnation** - **Advanced Hybrid Reasoning System**
+  - **Hybrid Knowledge Queries**: Combine Neo4j structured data with Qdrant semantic search
+  - **Dynamic Knowledge Extraction**: Process documents into both graph and vector representations
+  - **F-Contraction Synthesis**: Intelligently merge similar concepts while preserving source attribution
+  - **Citation-Based Reasoning**: Full source tracking across multiple databases
+  - **Research Analysis Engine**: Specialized workflows for academic paper processing
+  - **Smart Query Routing**: AI automatically determines optimal data source strategy
+  - **Cross-Database Navigation**: Seamless linking between structured facts and semantic content
+  - **Conflict Detection**: Identify and flag inconsistencies between sources
+  - **Real-Time Knowledge Synthesis**: Dynamic graph construction from conversations and documents
 - **code_analysis_incarnation** - Code analysis using Abstract Syntax Trees
   - Parse and analyze code structure using AST and ASG tools
   - Track code complexity and quality metrics
@@ -258,6 +299,73 @@ NeoCoder comes with these standard templates:
 5. **TOOL_ADD** - Process for adding new tool functionality to the NeoCoder MCP server
 6. **CYPHER_SNIPPETS** - Manage and use Cypher snippets for Neo4j queries
 7. **CODE_ANALYZE** - Structured workflow for analyzing code using AST and ASG tools
+8. **KNOWLEDGE_QUERY** - Hybrid Knowledge Query System for intelligent multi-source reasoning
+9. **KNOWLEDGE_EXTRACT** - Dynamic Knowledge Extraction & Synthesis with F-Contraction merging
+
+## Advanced Hybrid Reasoning System
+
+NeoCoder features a revolutionary **Context-Augmented Reasoning** architecture that combines multiple data sources for unprecedented knowledge synthesis capabilities.
+
+### Hybrid Query Architecture
+
+The `KNOWLEDGE_QUERY` template implements a sophisticated 3-step reasoning process:
+
+#### **Step 1: Smart Query Router**
+- **Intent Classification**: AI analyzes queries to determine optimal data source strategy
+- **Query Types**:
+  - *Graph-centric*: "Who works with whom?", "Show dependency chain"
+  - *Vector-centric*: "What are opinions on X?", "Find discussions about Y"  
+  - *Hybrid*: "What did [person from graph] say about [semantic topic]?"
+- **Execution Planning**: Designs multi-step plans for complex hybrid queries
+
+#### **Step 2: Parallelized Data Retrieval**
+- **Neo4j Queries**: Execute Cypher queries for structured facts and relationships
+- **Qdrant Searches**: Perform semantic searches across document collections
+- **Sequential Optimization**: For hybrid queries, use graph results to refine vector searches
+
+#### **Step 3: Cross-Database Synthesizer**
+- **Intelligent Synthesis**: Combine structured facts with semantic context
+- **Source Prioritization**: Neo4j facts as authoritative, Qdrant for nuance and opinion
+- **Mandatory Citations**: Every claim attributed to specific sources
+- **Conflict Detection**: Identify and flag inconsistencies between data sources
+
+### Dynamic Knowledge Extraction (F-Contraction)
+
+The `KNOWLEDGE_EXTRACT` template implements dynamic knowledge synthesis inspired by graph contraction principles:
+
+#### **Core F-Contraction Concepts:**
+- **Vertices as Concepts**: Each distinct concept becomes a graph entity
+- **Edges as Relationships**: Track co-occurrence and explicit connections
+- **Dynamic Merging**: LLM-powered detection of duplicate/similar concepts
+- **Source Preservation**: Maintain pointers to all original sources after merging
+
+#### **Knowledge Processing Pipeline:**
+1. **Document Ingestion**: Parse PDFs, text, code, conversations
+2. **Dual Storage**: Chunk text for Qdrant, extract entities for Neo4j
+3. **Entity Extraction**: Identify Papers, Authors, Concepts, Methods, etc.
+4. **Relationship Discovery**: Find citations, dependencies, semantic connections
+5. **F-Contraction Merging**: Intelligently consolidate similar entities
+6. **Cross-Reference Mapping**: Link graph entities to vector document chunks
+7. **Quality Validation**: Ensure consistency and completeness
+
+### Research Analysis Engine
+
+Specialized capabilities for academic and technical document processing:
+
+- **Citation Graph Construction**: Build networks of paper relationships
+- **Multi-Hop Reasoning**: "Trace evolution of transformer architecture through citation links"
+- **Conflict Analysis**: "How does definition of X in Paper A differ from Paper B?"
+- **Temporal Synthesis**: Track concept evolution across time and sources
+- **Cross-Domain Integration**: Combine findings from multiple research domains
+
+### Benefits of Hybrid Reasoning
+
+1. **Unprecedented Synthesis**: Answers impossible with single data sources
+2. **Source Transparency**: Complete audit trail from raw data to conclusions
+3. **Conflict Awareness**: Explicit handling of contradictory information
+4. **Semantic Enrichment**: Structured facts enhanced with contextual understanding
+5. **Dynamic Learning**: Knowledge base improves through F-Contraction merging
+6. **Research Acceleration**: Rapid analysis of complex academic literature
 
 ## Architecture
 
@@ -298,47 +406,48 @@ The MCP server provides the following tools to AI assistants:
 
 Each incarnation provides additional specialized tools that are automatically registered when the incarnation is activated.
 
-#### Knowledge Graph Tools
+#### Knowledge Graph & Hybrid Reasoning Tools
 
-The Knowledge Graph incarnation provides these specialized tools for managing and analyzing knowledge structures:
+The Knowledge Graph incarnation provides advanced hybrid reasoning capabilities that combine structured graph data with semantic vector search:
 
-- **create_entities**: Create multiple new entities with observations
-  - Each entity has a name, type, and a list of observations
-  - All entities are properly labeled for efficient querying
+**Core Knowledge Management:**
+- **create_entities**: Create multiple entities with observations and proper Neo4j labeling
+- **create_relations**: Connect entities with typed relationships and timestamps
+- **add_observations**: Add timestamped observations to existing entities
+- **delete_entities**: Remove entities with cascading deletion of relationships
+- **delete_observations**: Targeted removal of specific observation content
+- **delete_relations**: Remove specific relationships while preserving entities
+- **read_graph**: View entire knowledge graph with entities, observations, and relationships
+- **search_nodes**: Full-text search across entity names, types, and observation content
+- **open_nodes**: Get detailed entity information with incoming/outgoing relationships
 
-- **create_relations**: Connect entities with typed relationships
-  - Relations are created with proper typing and timestamps
-  - Relations must specify from entity, to entity, and relation type
+**Advanced Hybrid Reasoning Tools:**
+- **KNOWLEDGE_QUERY Workflow**: Intelligent hybrid querying system
+  - Smart query routing (graph-centric, vector-centric, or hybrid)
+  - Parallelized data retrieval from Neo4j and Qdrant
+  - Cross-database synthesis with mandatory citation tracking
+  - Conflict detection and source prioritization
+  
+- **KNOWLEDGE_EXTRACT Workflow**: Dynamic knowledge extraction with F-Contraction
+  - Document ingestion with metadata extraction
+  - Dual storage: text chunks in Qdrant, entities in Neo4j
+  - LLM-powered entity extraction and relationship discovery
+  - F-Contraction merging of similar concepts with source preservation
+  - Cross-reference mapping between graph and vector data
+  - Quality validation and extraction reporting
 
-- **add_observations**: Add new observations to existing entities
-  - Add multiple observations to one or more entities
-  - Observations are timestamped for temporal tracking
+**Research Analysis Capabilities:**
+- **Citation Graph Construction**: Build paper-author-institution networks
+- **Multi-Hop Synthesis**: Trace concept evolution through connected sources
+- **Temporal Analysis**: Track changes and developments over time
+- **Conflict Resolution**: Handle contradictory information from multiple sources
+- **Source Attribution**: Complete provenance tracking from raw data to conclusions
 
-- **delete_entities**: Remove entities and their associated data
-  - Deletes the entity, its observations, and connected relationships
-  - Provides cascading deletion for clean graph management
-
-- **delete_observations**: Remove specific observations from entities
-  - Targeted deletion of specific observation content
-  - Preserves entity and relationship structure
-
-- **delete_relations**: Remove relationships between entities
-  - Specify exact relationships to remove by type and connected entities
-  - Maintains entity and observation data
-
-- **read_graph**: View the entire knowledge graph structure
-  - Returns entities, their observations, and relationships
-  - Formatted for easy reading and analysis
-
-- **search_nodes**: Find entities by name, type, or observation content
-  - Full-text search capabilities with relevance ranking
-  - Highlights matching terms in search results
-
-- **open_nodes**: Get detailed information about specific entities
-  - Shows all observations, incoming and outgoing relationships
-  - Provides complete contextual view of selected entities
-
-These tools provide a comprehensive knowledge graph management system that efficiently leverages Neo4j's graph capabilities.
+**Integration Features:**
+- **Qdrant Collections**: Seamless integration with vector databases for semantic search
+- **Cross-Database Navigation**: Bi-directional linking between structured and semantic data
+- **Memory Integration**: Connect with long-term memory systems for continuity
+- **MCP Orchestration**: Advanced tool coordination and workflow management
 
 #### Cypher Snippet Toolkit
 
@@ -546,6 +655,26 @@ A comprehensive analysis of the NeoCoder codebase is available in the `/analysis
 - Recommendations for future development
 
 ## Recent Updates
+
+### 2025-06-24: Revolutionary Hybrid Reasoning System (v2.0.0)
+- **BREAKTHROUGH**: Implemented Context-Augmented Reasoning architecture combining Neo4j + Qdrant + LLM synthesis
+- **NEW**: `KNOWLEDGE_QUERY` action template - 3-step hybrid reasoning system:
+  - Smart Query Router: AI classifies intent and plans execution strategy
+  - Parallelized Data Retrieval: Seamlessly queries both Neo4j and Qdrant
+  - Cross-Database Synthesizer: Intelligent synthesis with mandatory citation tracking
+- **NEW**: `KNOWLEDGE_EXTRACT` action template - F-Contraction knowledge synthesis:
+  - Dynamic document processing into both graph and vector representations
+  - LLM-powered entity extraction and relationship discovery
+  - Intelligent concept merging while preserving source attribution
+  - Cross-reference mapping between structured and semantic data
+- **ENHANCED**: Knowledge Graph incarnation with advanced hybrid capabilities:
+  - Fixed guidance hub transaction errors for seamless user experience
+  - Implemented sophisticated research analysis workflows
+  - Added conflict detection and source prioritization
+  - Full integration with Qdrant vector databases for semantic search
+- **ARCHITECTURE**: Established foundation for Context-Augmented Reasoning that goes far beyond traditional RAG
+- **VALIDATION**: Successfully tested with real research paper corpus demonstrating citation graphs + semantic analysis
+- **IMPACT**: Enables unprecedented knowledge synthesis impossible with single data sources
 
 ### 2025-06-14: Fixed Critical Async/Event Loop Management Issues (v1.4.1)
 - **CRITICAL FIX**: Resolved async context manager protocol errors in `safe_neo4j_session` function
