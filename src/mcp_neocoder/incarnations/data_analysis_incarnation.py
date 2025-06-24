@@ -649,8 +649,13 @@ python /home/ty/Repositories/NeoCoder-neo4j-ai-workflow/data/scripts/data_cleane
 
         try:
             async with self.driver.session(database=self.database) as session:
-                result = await session.execute_read(lambda tx: tx.run(query, {}))
-                records = await result.data()
+                # Use a direct transaction to avoid scope issues
+                async def read_hub_data(tx):
+                    result = await tx.run(query, {})
+                    records = await result.data()
+                    return records
+                    
+                records = await session.execute_read(read_hub_data)
 
                 if records and len(records) > 0:
                     return [types.TextContent(type="text", text=records[0]["description"])]

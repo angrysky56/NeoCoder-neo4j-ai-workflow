@@ -1434,14 +1434,12 @@ Each incarnation has its own set of specialized tools alongside the core Neo4j i
                 CREATE (hub:AiGuidanceHub {id: 'main_hub', description: $description, created: datetime()})
                 RETURN hub.description AS description
                 """
-                # Use a direct transaction to avoid scope issues
-                async def create_hub(tx):
-                    result = await tx.run(query, {"description": default_description})
-                    values = await result.values()
-                    return values
-                    
-                values = await session.execute_write(create_hub)
-                
+                result = await session.execute_write(
+                    lambda tx: tx.run(query, {"description": default_description})
+                )
+
+                # Get result within the transaction to avoid scope issues
+                values = await result.values()
                 if values and len(values) > 0:
                     logger.info("Successfully created default guidance hub")
                     return [types.TextContent(type="text", text=default_description)]

@@ -1,0 +1,60 @@
+#!/usr/bin/env python3
+"""
+Script to find and report all incomplete await tx.run calls in the codebase
+"""
+
+import os
+import re
+
+def find_incomplete_tx_run_calls(directory):
+    """Find all incomplete await tx.run calls"""
+    issues = []
+    
+    for root, dirs, files in os.walk(directory):
+        # Skip .git and .venv directories
+        dirs[:] = [d for d in dirs if d not in {'.git', '.venv', '__pycache__'}]
+        
+        for filename in files:
+            if filename.endswith('.py'):
+                filepath = os.path.join(root, filename)
+                
+                try:
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        lines = f.readlines()
+                    
+                    for i, line in enumerate(lines, 1):
+                        # Look for lines that have await tx.run but no opening parenthesis
+                        if 'await tx.run' in line and not 'await tx.run(' in line:
+                            issues.append({
+                                'file': filepath,
+                                'line': i,
+                                'content': line.strip()
+                            })
+                            
+                        # Also check for result = await tx.run patterns
+                        if re.search(r'=\s*await\s+tx\.run\s*$', line):
+                            issues.append({
+                                'file': filepath,
+                                'line': i,
+                                'content': line.strip()
+                            })
+                    
+                except Exception as e:
+                    print(f"Error reading {filepath}: {e}")
+    
+    return issues
+
+def main():
+    src_dir = "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/src"
+    issues = find_incomplete_tx_run_calls(src_dir)
+    
+    print(f"Found {len(issues)} incomplete await tx.run calls:\n")
+    
+    for issue in issues:
+        rel_path = os.path.relpath(issue['file'], src_dir)
+        print(f"{rel_path}:{issue['line']}")
+        print(f"  {issue['content']}")
+        print()
+
+if __name__ == "__main__":
+    main()
