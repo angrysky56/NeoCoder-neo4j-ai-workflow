@@ -10,15 +10,17 @@ discovered and loaded without requiring central registration of types.
 
 import json
 import logging
-from typing import List
+from typing import List, cast, LiteralString
 
 import mcp.types as types
-from neo4j import AsyncDriver, AsyncTransaction
+from neo4j import AsyncDriver, AsyncManagedTransaction
+
+from ..action_templates import ActionTemplateMixin
 
 logger = logging.getLogger("mcp_neocoder.incarnations.base")
 
 
-class BaseIncarnation:
+class BaseIncarnation(ActionTemplateMixin):
     """Base class for all incarnation implementations."""
 
     # This should be overridden by each incarnation
@@ -39,7 +41,11 @@ This is a default hub that should be overridden by each incarnation.
     # Optional list of tool method names - can be defined by subclasses
     # to explicitly declare which methods should be registered as tools
     # Format: list[str] with method names to be registered as tools
-    _tool_methods: List[str] = []
+    _tool_methods: List[str] = [
+        "list_action_templates",
+        "get_action_template",
+        "add_template_feedback",
+    ]
 
     def __init__(self, driver: AsyncDriver, database: str = "neo4j"):
         """Initialize the incarnation with database connection."""
@@ -49,7 +55,7 @@ This is a default hub that should be overridden by each incarnation.
     async def initialize_schema(self):
         """Initialize the Neo4j schema for this incarnation."""
         from ..event_loop_manager import safe_neo4j_session
-        
+
         # Execute schema queries if defined
         if self.schema_queries:
             try:
@@ -75,7 +81,7 @@ This is a default hub that should be overridden by each incarnation.
     async def ensure_hub_exists(self):
         """Create the guidance hub for this incarnation if it doesn't exist."""
         from ..event_loop_manager import safe_neo4j_session
-        
+
         hub_id = f"{self.name}_hub"
 
         query = """
@@ -100,7 +106,7 @@ This is a default hub that should be overridden by each incarnation.
     async def get_guidance_hub(self) -> List[types.TextContent]:
         """Get the guidance hub content for this incarnation."""
         from ..event_loop_manager import safe_neo4j_session
-        
+
         hub_id = f"{self.name}_hub"
 
         query = """
@@ -221,26 +227,24 @@ This is a default hub that should be overridden by each incarnation.
         # Return the count of tools identified/added to registry
         return len(tool_methods)
 
-    import typing
-
-    async def _read_query(self, tx: AsyncTransaction, query: typing.LiteralString, params: dict) -> str:
+    async def _read_query(self, tx: AsyncManagedTransaction, query: str, params: dict) -> str:
         """Execute a read query and return results as JSON string."""
-        result = await tx.run(query, params)
+        result = await tx.run(cast(LiteralString, query), params)
         records = await result.data()  # Use .data() instead of .to_eager_result().records
         return json.dumps(records, default=str)
 
-    async def _write(self, tx: AsyncTransaction, query: typing.LiteralString, params: dict):
+    async def _write(self, tx: AsyncManagedTransaction, query: str, params: dict):
         """Execute a write query and return results as JSON string."""
-        result = await tx.run(query, params or {})
+        result = await tx.run(cast(LiteralString, query), params or {})
         summary = await result.consume()
         return summary
 
     async def safe_session(self):
         """Get a safe Neo4j session that handles event loop issues.
-        
+
         This is a convenience method that incarnations can use to get a session
         that properly handles asyncio event loop management.
-        
+
         Usage:
             async with self.safe_session() as session:
                 # Use session here

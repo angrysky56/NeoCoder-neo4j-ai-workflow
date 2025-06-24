@@ -6,7 +6,6 @@ including action templates, project management, workflow tracking, and best prac
 """
 
 import logging
-from typing import LiteralString
 
 from .base_incarnation import BaseIncarnation
 from ..action_templates import ActionTemplateMixin
@@ -32,7 +31,7 @@ class CodingIncarnation(BaseIncarnation, ActionTemplateMixin):
     # Explicitly define which methods should be registered as tools
     _tool_methods = [
         "list_action_templates",
-        "get_action_template", 
+        "get_action_template",
         "get_best_practices",
         "add_template_feedback",
         "get_project",
@@ -283,7 +282,7 @@ Remember: The key to NeoCoder is following structured workflows that ensure qual
         try:
             async with self.driver.session(database=self.database) as session:
                 for template in templates:
-                    query = LiteralString("""
+                    query = """
                     MERGE (t:ActionTemplate {keyword: $keyword})
                     SET t.name = $name,
                         t.description = $description,
@@ -292,7 +291,7 @@ Remember: The key to NeoCoder is following structured workflows that ensure qual
                         t.version = 1,
                         t.created = datetime(),
                         t.updated = datetime()
-                    """)
+                    """
                     await session.execute_write(lambda tx: tx.run(query, template))
                     logger.info(f"Created action template: {template['keyword']}")
         except Exception as e:
@@ -304,12 +303,12 @@ Remember: The key to NeoCoder is following structured workflows that ensure qual
         try:
             async with self.driver.session(database=self.database) as session:
                 # Check if any projects exist
-                result = await session.run(LiteralString("MATCH (p:Project) RETURN count(p) as count"))
+                result = await session.run("MATCH (p:Project) RETURN count(p) as count")
                 data = await result.single()
 
                 if data and data["count"] == 0:
                     # Create a sample project
-                    query = LiteralString("""
+                    query = """
                     CREATE (p:Project {
                         id: 'neocoder_project',
                         name: 'NeoCoder System',
@@ -318,7 +317,7 @@ Remember: The key to NeoCoder is following structured workflows that ensure qual
                         created: datetime(),
                         updated: datetime()
                     })
-                    """)
+                    """
                     await session.execute_write(lambda tx: tx.run(query))
                     logger.info("Created sample project")
         except Exception as e:
@@ -328,11 +327,11 @@ Remember: The key to NeoCoder is following structured workflows that ensure qual
         """Create the best practices guide."""
         try:
             async with self.driver.session(database=self.database) as session:
-                query = LiteralString("""
+                query = """
                 MERGE (bp:BestPracticesGuide {id: 'main'})
                 SET bp.content = $content,
                     bp.updated = datetime()
-                """)
+                """
 
                 content = """# NeoCoder Best Practices
 
