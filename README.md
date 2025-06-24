@@ -15,9 +15,11 @@ NeoCoder implements a revolutionary **Context-Augmented Reasoning** system that 
 ### **Core Architecture:**
 
 1. **Neo4j Knowledge Graphs** - Authoritative structured facts, relationships, and workflows
-2. **Qdrant Vector Databases** - Semantic search, similarity detection, and contextual understanding  
+2. **Qdrant Vector Databases** - Semantic search, similarity detection, and contextual understanding
 3. **MCP Orchestration** - Intelligent routing between data sources with synthesis and citation
 4. **F-Contraction Synthesis** - Dynamic knowledge merging that preserves source attribution
+
+[QDRANT feature requires my qdrant-enhanced mcp server installed in your client as well](https://github.com/angrysky56/mcp-server-qdrant-enhanced)
 
 ### **Key Capabilities:**
 
@@ -131,11 +133,11 @@ If it doesn't work maybe try:
 >
 > **Hybrid Reasoning Protocol:**
 > - **Graph-First**: Use Neo4j for authoritative facts, relationships, and structured data
-> - **Vector-Enhanced**: Use Qdrant for semantic context, opinions, and nuanced information  
+> - **Vector-Enhanced**: Use Qdrant for semantic context, opinions, and nuanced information
 > - **Intelligent Synthesis**: Combine both sources with conflict detection and full citation tracking
 > - **F-Contraction Merging**: Dynamically merge similar concepts while preserving source attribution
 >
-> **Strict Rules:** 
+> **Strict Rules:**
 > - Always prioritize structured facts from Neo4j over semantic information
 > - Every claim must include proper source citations
 > - Use incarnation-specific tools and templates as single source of truth for procedures
@@ -314,7 +316,7 @@ The `KNOWLEDGE_QUERY` template implements a sophisticated 3-step reasoning proce
 - **Intent Classification**: AI analyzes queries to determine optimal data source strategy
 - **Query Types**:
   - *Graph-centric*: "Who works with whom?", "Show dependency chain"
-  - *Vector-centric*: "What are opinions on X?", "Find discussions about Y"  
+  - *Vector-centric*: "What are opinions on X?", "Find discussions about Y"
   - *Hybrid*: "What did [person from graph] say about [semantic topic]?"
 - **Execution Planning**: Designs multi-step plans for complex hybrid queries
 
@@ -427,7 +429,7 @@ The Knowledge Graph incarnation provides advanced hybrid reasoning capabilities 
   - Parallelized data retrieval from Neo4j and Qdrant
   - Cross-database synthesis with mandatory citation tracking
   - Conflict detection and source prioritization
-  
+
 - **KNOWLEDGE_EXTRACT Workflow**: Dynamic knowledge extraction with F-Contraction
   - Document ingestion with metadata extraction
   - Dual storage: text chunks in Qdrant, entities in Neo4j
