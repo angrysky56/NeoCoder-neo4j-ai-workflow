@@ -19,6 +19,15 @@ logger = logging.getLogger("mcp_neocoder.action_templates")
 class ActionTemplateMixin:
     """Mixin class providing action template functionality for the Neo4jWorkflowServer."""
 
+    # Schema queries for Neo4j setup
+    schema_queries = [
+        # Action template constraints
+        "CREATE CONSTRAINT IF NOT EXISTS FOR (t:ActionTemplate) REQUIRE t.keyword IS UNIQUE",
+
+        # Indexes for efficient querying
+        "CREATE INDEX IF NOT EXISTS FOR (t:ActionTemplate) ON (t.isCurrent)",
+    ]
+
     # These should be set by the parent class or during initialization
     driver: Any = None
     database: str = "neo4j"

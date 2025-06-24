@@ -21,6 +21,7 @@ class ToolRegistry:
         self.tools: Dict[str, Callable] = {}
         self.tool_categories: Dict[str, Set[str]] = {}
         self.tool_descriptions: Dict[str, str] = {}
+        self.tool_full_docs: Dict[str, str] = {}
         self.registered_classes: Set[str] = set()
 
     def register_tool(self, tool_func: Callable, category: str = "general") -> None:
@@ -48,8 +49,10 @@ class ToolRegistry:
         # Extract description from docstring
         if tool_func.__doc__:
             self.tool_descriptions[tool_name] = tool_func.__doc__.split('\n')[0].strip()
+            self.tool_full_docs[tool_name] = tool_func.__doc__.strip()
         else:
             self.tool_descriptions[tool_name] = f"{tool_name} tool"
+            self.tool_full_docs[tool_name] = f"{tool_name} tool"
 
         logger.info(f"Registered tool '{tool_name}' in category '{category}'")
 
@@ -274,6 +277,10 @@ class ToolRegistry:
         """
         return self.tool_descriptions
 
+    def get_full_tool_description(self, tool_name: str) -> str:
+        """Get the full docstring for a tool."""
+        return self.tool_full_docs.get(tool_name, "No description available.")
+
     def clear_category(self, category: str) -> None:
         """Remove all tools in a category.
 
@@ -288,6 +295,8 @@ class ToolRegistry:
                 del self.tools[tool_name]
                 if tool_name in self.tool_descriptions:
                     del self.tool_descriptions[tool_name]
+                if tool_name in self.tool_full_docs:
+                    del self.tool_full_docs[tool_name]
 
         del self.tool_categories[category]
         logger.info(f"Cleared tools in category '{category}'")

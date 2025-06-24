@@ -81,31 +81,11 @@ class KnowledgeGraphIncarnation(BaseIncarnation):
                     # Run the query
                     result = await tx.run(query, params)
 
-                    # Process the records inside the transaction
-                    records = await result.values()
-
-                    # Convert records to a list of dictionaries for JSON serialization
-                    processed_data = []
-                    for record in records:
-                        # Convert record to dict if it's not already
-                        if isinstance(record, (list, tuple)):
-                            # For simple list results with defined column names
-                            field_names = ['col0', 'col1', 'col2', 'col3', 'col4', 'col5']
-                            row_data = {}
-
-                            for i, value in enumerate(record):
-                                if i < len(field_names):
-                                    row_data[field_names[i]] = value
-                                else:
-                                    row_data[f'col{i}'] = value
-
-                            processed_data.append(row_data)
-                        else:
-                            # Record is already a dict or another format
-                            processed_data.append(record)
+                    # Use .data() to get records with proper column names
+                    records = await result.data()
 
                     # Convert to JSON string inside the transaction
-                    return json.dumps(processed_data, default=str)
+                    return json.dumps(records, default=str)
                 except Exception as inner_e:
                     # Catch any errors inside the transaction
                     logger.error(f"Error inside transaction: {inner_e}")
@@ -209,7 +189,13 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
 
         try:
             async with self.driver.session(database=self.database) as session:
-                results = await self._safe_read_query(session, query, {})
+                # Use direct transaction execution like other methods
+                async def execute_query(tx):
+                    result = await tx.run(query)
+                    records = await result.data()
+                    return records
+
+                results = await session.execute_read(execute_query)
 
                 if results and len(results) > 0:
                     return [types.TextContent(type="text", text=results[0]["description"])]
