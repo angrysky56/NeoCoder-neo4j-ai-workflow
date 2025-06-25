@@ -12,6 +12,7 @@ import mcp.types as types
 from pydantic import Field
 
 from .base_incarnation import BaseIncarnation
+from ..event_loop_manager import safe_neo4j_session
 
 logger = logging.getLogger("mcp_neocoder.incarnations.knowledge_graph")
 
@@ -121,7 +122,7 @@ class KnowledgeGraphIncarnation(BaseIncarnation):
         ]
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Execute each constraint/index query individually
                 for query in schema_queries:
                     await session.execute_write(lambda tx: tx.run(query))  # type: ignore[arg-type]
@@ -177,7 +178,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
 
         params = {"description": description}
 
-        async with self.driver.session(database=self.database) as session:
+        async with safe_neo4j_session(self.driver, self.database) as session:
             await session.execute_write(lambda tx: tx.run(query, params))
 
     async def get_guidance_hub(self):
@@ -188,7 +189,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Use direct transaction execution like other methods
                 async def execute_query(tx):
                     result = await tx.run(query)
@@ -339,7 +340,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             observation_count = sum(len(entity.get('observations', [])) for entity in cleaned_entities)
 
             # Execute the query using our safe execution method
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 success = await self._safe_execute_write(session, query, {"entities": cleaned_entities})
 
                 if success:
@@ -385,7 +386,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             relation_count = len(relations)
 
             # Execute the query using our safe execution method
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 success = await self._safe_execute_write(session, query=simple_query, params={"relations": relations})
 
                 if success:
@@ -460,7 +461,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             observation_count = sum(len(obs.get('contents', [])) for obs in observations)
 
             # Execute the query using our safe execution method
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 success = await self._safe_execute_write(session, query, {"observations": observations})
 
                 if success:
@@ -513,7 +514,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             RETURN count(DISTINCT e) as deletedEntities
             """
 
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Use a direct transaction to avoid scope issues
                 async def execute_delete(tx):
                     result = await tx.run(query, {"entityNames": entityNames})
@@ -570,7 +571,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             observation_count = sum(len(deletion.get('observations', [])) for deletion in deletions)
 
             # Execute the query using our safe execution method
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 success = await self._safe_execute_write(session, query, {"deletions": deletions})
 
                 if success:
@@ -614,7 +615,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             relation_count = len(relations)
 
             # Execute the query using our safe execution method
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 success = await self._safe_execute_write(session, query, {"relations": relations})
 
                 if success:
@@ -641,7 +642,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             ORDER BY e.name
             """
 
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Use a direct transaction to avoid scope issues
                 async def execute_query(tx):
                     result = await tx.run(query)
@@ -717,7 +718,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             LIMIT 10
             """
 
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Use a direct transaction to avoid scope issues
                 async def execute_query(tx):
                     result = await tx.run(cypher_query, {"query": query})
@@ -805,7 +806,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                 collect(DISTINCT {type: inRel.type, source: source.name}) AS inRelations
             """
 
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Use a direct transaction to avoid scope issues
                 async def execute_query(tx):
                     result = await tx.run(query, {"names": names})

@@ -1673,7 +1673,7 @@ def create_server(db_url: str, username: str, password: str, database: str = "ne
         async def async_server_setup():
             # 5.1 Verify the driver connection works
             try:
-                async with driver.session(database=database) as session:
+                async with safe_neo4j_session(driver, database) as session:
                     result = await session.run("RETURN 1 as n")
                     data = await result.data()
                     connection_ok = bool(data and data[0]["n"] == 1)
@@ -1702,20 +1702,38 @@ def create_server(db_url: str, username: str, password: str, database: str = "ne
             return server
 
         # 6. Run the async setup with proper error handling
-        if loop.is_running():
-            # METHODOLOGICAL CORRECTION: Cannot call run_until_complete on running loop
-            # Use run_coroutine_threadsafe for cross-thread execution
-            logger.info("Loop is running - using run_coroutine_threadsafe pattern")
+        # The key insight: if we're called from within an async context,
+        # we need to avoid deadlocks by not blocking the event loop
+        try:
+            current_loop = asyncio.get_running_loop()
+            same_loop = current_loop is loop
+        except RuntimeError:
+            # No running loop
+            current_loop = None
+            same_loop = False
+
+        if same_loop:
+            # We're in the same event loop - this is the problematic case
+            # Instead of trying to run async operations synchronously,
+            # we'll create a minimal server instance and let it initialize asynchronously
+            logger.info("Same event loop detected - creating server with deferred initialization")
+
+            # Create the server instance directly without async setup
+            server = Neo4jWorkflowServer(driver, database, loop)
+            logger.info("Neo4jWorkflowServer created with deferred initialization")
+
+            # The server will initialize itself asynchronously in its __init__ method
+            # We don't wait for initialization here to avoid deadlock
+
+        elif current_loop and current_loop is not loop:
+            # Different loops - use run_coroutine_threadsafe
+            logger.info("Different event loops - using run_coroutine_threadsafe pattern")
             future = asyncio.run_coroutine_threadsafe(async_server_setup(), loop)
-            try:
-                server = future.result(timeout=60)  # Increased timeout for initialization
-                logger.info("Server initialization completed via threadsafe execution")
-            except asyncio.TimeoutError:
-                logger.error("Server initialization timed out")
-                raise RuntimeError("Server initialization timed out after 60 seconds")
+            server = future.result(timeout=60)
+            logger.info("Server initialization completed via threadsafe execution")
         else:
-            # Loop is not running, safe to use run_until_complete
-            logger.info("Loop is not running - using run_until_complete")
+            # No running loop - safe to use run_until_complete
+            logger.info("No running loop - using run_until_complete")
             server = loop.run_until_complete(async_server_setup())
 
         return server
@@ -1867,7 +1885,7 @@ async def test_server_initialization(db_url: str, username: str, password: str, 
 
         # Test connection
         logger.info("Testing Neo4j connection")
-        async with driver.session(database=database) as session:
+        async with safe_neo4j_session(driver, database) as session:
             result = await session.run("RETURN 1 as success")
             data = await result.data()
             if not data or data[0]["success"] != 1:

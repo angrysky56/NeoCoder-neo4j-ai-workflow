@@ -15,6 +15,7 @@ import mcp.types as types
 from pydantic import Field
 from neo4j import AsyncTransaction
 from .base_incarnation import BaseIncarnation
+from ..event_loop_manager import safe_neo4j_session
 
 logger = logging.getLogger("mcp_neocoder.incarnations.code_analysis")
 
@@ -344,7 +345,7 @@ Analysis results are stored in Neo4j with the following structure:
     async def initialize_schema(self):
         """Initialize the Neo4j schema for Code Analysis."""
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Execute each constraint/index query individually
                 for query in self.schema_queries:
                     async def run_query(tx, query: str):
@@ -478,7 +479,7 @@ Analysis results are stored in Neo4j with the following structure:
 
         params = {"description": description}
 
-        async with self.driver.session(database=self.database) as session:
+        async with safe_neo4j_session(self.driver, self.database) as session:
             await session.execute_write(lambda tx: tx.run(query, params))
 
     async def _process_ast_data(self, ast_data: Dict[str, Any]) -> Dict[str, Any]:
@@ -588,7 +589,7 @@ Analysis results are stored in Neo4j with the following structure:
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Create file node
                 success1, _ = await self._safe_execute_write(
                     session,
@@ -1007,7 +1008,7 @@ The comparison would highlight structural and semantic changes between versions.
                 metrics_result = self._call_ast_analyzer_sync("analyze_code", {"code": code_content, "language": language})
             else:
                 # Try to retrieve analysis from Neo4j using the ID
-                async with self.driver.session(database=self.database) as session:
+                async with safe_neo4j_session(self.driver, self.database) as session:
                     query = """
                     MATCH (a:Analysis {id: $id})
                     OPTIONAL MATCH (f:CodeFile)-[:HAS_ANALYSIS]->(a)

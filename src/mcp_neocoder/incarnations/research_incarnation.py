@@ -17,6 +17,7 @@ from pydantic import Field
 from neo4j import AsyncDriver, AsyncTransaction, AsyncManagedTransaction
 
 from .base_incarnation import BaseIncarnation
+from ..event_loop_manager import safe_neo4j_session
 
 logger = logging.getLogger("mcp_neocoder.research_incarnation")
 
@@ -92,7 +93,7 @@ class ResearchIncarnation(BaseIncarnation):
         ]
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Execute each constraint/index query individually
                 for query in schema_queries:
                     await session.execute_write(lambda tx, query: tx.run(query), query)
@@ -153,7 +154,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
 
         params = {"description": description}
 
-        async with self.driver.session(database=self.database) as session:
+        async with safe_neo4j_session(self.driver, self.database) as session:
             await session.execute_write(lambda tx: tx.run(query, params))
 
     async def get_guidance_hub(self):
@@ -164,7 +165,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 async def read_query(tx):
                     return await self._read_query(tx, query, {})
 
@@ -224,7 +225,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_write(lambda tx: self._read_query(tx, query, params))
                 results = json.loads(results_json)
 
@@ -284,7 +285,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(self._read_query, query, params)
                 results = json.loads(results_json)
 
@@ -350,7 +351,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
         params = {"id": id}
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(self._read_query, query, params)
                 results = json.loads(results_json)
 
@@ -430,7 +431,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_write(self._read_query, query, params)
                 results = json.loads(results_json)
 
@@ -495,7 +496,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_write(self._read_query, query, params)
                 results = json.loads(results_json)
 
@@ -554,7 +555,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
         params: Dict[str, Any] = {"limit": limit}
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(self._read_query, query, params)
                 results = json.loads(results_json)
 
@@ -599,7 +600,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
         params = {"id": id}
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(self._read_query, query, params)
                 results = json.loads(results_json)
 
@@ -682,7 +683,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_write(self._read_query, query, params)
                 results = json.loads(results_json)
 
@@ -760,7 +761,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(self._read_query, query, params)
                 results = json.loads(results_json)
 
@@ -838,7 +839,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
         params = {"id": id}
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(self._read_query, query, params)
                 results = json.loads(results_json)
 
@@ -909,7 +910,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_write(self._read_query, query, params)
                 results = json.loads(results_json)
 
@@ -990,7 +991,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 async def write_query(tx):
                     raw_result = await tx.run(query, params)
                     return await raw_result.to_eager_result()
@@ -1047,7 +1048,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
         }
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(self._read_query, query, params)
                 results = json.loads(results_json)
 
@@ -1120,7 +1121,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
         params = {"experiment_id": experiment_id}
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(self._read_query, query, params)
                 results = json.loads(results_json)
 
@@ -1240,7 +1241,7 @@ Each entity in the system has provenance tracking, ensuring reproducibility and 
         params = {"experiment_id": experiment_id}
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 async def read_query(tx):
                     raw_result = await tx.run(exp_query, params)
                     return await raw_result.to_eager_result()

@@ -9,6 +9,7 @@ import logging
 
 from .base_incarnation import BaseIncarnation
 from ..action_templates import ActionTemplateMixin
+from ..event_loop_manager import safe_neo4j_session
 
 logger = logging.getLogger("mcp_neocoder.incarnations.coding")
 
@@ -280,7 +281,7 @@ Remember: The key to NeoCoder is following structured workflows that ensure qual
         ]
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 for template in templates:
                     query = """
                     MERGE (t:ActionTemplate {keyword: $keyword})
@@ -301,7 +302,7 @@ Remember: The key to NeoCoder is following structured workflows that ensure qual
     async def _create_sample_projects(self):
         """Create sample projects if none exist."""
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Check if any projects exist
                 result = await session.run("MATCH (p:Project) RETURN count(p) as count")
                 data = await result.single()
@@ -326,7 +327,7 @@ Remember: The key to NeoCoder is following structured workflows that ensure qual
     async def _create_best_practices(self):
         """Create the best practices guide."""
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 query = """
                 MERGE (bp:BestPracticesGuide {id: 'main'})
                 SET bp.content = $content,

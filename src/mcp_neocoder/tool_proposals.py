@@ -11,6 +11,7 @@ import uuid
 from typing import List, Optional, Dict, Any
 
 import mcp.types as types
+from .event_loop_manager import safe_neo4j_session
 from pydantic import Field
 from neo4j import AsyncManagedTransaction
 
@@ -87,7 +88,7 @@ class ToolProposalMixin:
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_write(self._read_query, query, params)
                 results = json.loads(results_json)
 
@@ -150,7 +151,7 @@ class ToolProposalMixin:
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_write(self._read_query, query, params)
                 results = json.loads(results_json)
 
@@ -189,7 +190,7 @@ class ToolProposalMixin:
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(self._read_query, query, {"id": id})
                 results = json.loads(results_json)
 
@@ -255,7 +256,7 @@ class ToolProposalMixin:
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(self._read_query, query, {"id": id})
                 results = json.loads(results_json)
 
@@ -314,7 +315,7 @@ class ToolProposalMixin:
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(self._read_query, query, params)
                 results = json.loads(results_json)
 
@@ -379,7 +380,7 @@ class ToolProposalMixin:
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(self._read_query, query, params)
                 results = json.loads(results_json)
 

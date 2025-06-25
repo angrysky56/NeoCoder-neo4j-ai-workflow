@@ -15,6 +15,7 @@ from pydantic import Field
 from neo4j import AsyncDriver, AsyncTransaction, AsyncManagedTransaction
 
 from .base_incarnation import BaseIncarnation
+from ..event_loop_manager import safe_neo4j_session
 
 logger = logging.getLogger("mcp_neocoder.decision_incarnation")
 
@@ -78,7 +79,7 @@ class DecisionIncarnation(BaseIncarnation):
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 await session.execute_write(lambda tx: tx.run(schema_query))
 
                 # Create base guidance hub for decisions if it doesn't exist
@@ -138,7 +139,7 @@ Each decision maintains a complete audit trail of all inputs, evidence, and reas
 
         params = {"description": description}
 
-        async with self.driver.session(database=self.database) as session:
+        async with safe_neo4j_session(self.driver, self.database) as session:
             await session.execute_write(lambda tx: tx.run(query, params))
 
     async def register_tools(self, server) -> int:
@@ -161,7 +162,7 @@ Each decision maintains a complete audit trail of all inputs, evidence, and reas
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 async def run_query(tx):
                     result = await tx.run(query, {})
                     return await result.data()
@@ -222,7 +223,7 @@ Each decision maintains a complete audit trail of all inputs, evidence, and reas
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_write(lambda tx: self._read_query(tx, query, params))
                 results = json.loads(results_json)
 
@@ -289,7 +290,7 @@ Each decision maintains a complete audit trail of all inputs, evidence, and reas
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(lambda tx: self._read_query(tx, query, params))
                 results = json.loads(results_json)
 
@@ -357,7 +358,7 @@ Each decision maintains a complete audit trail of all inputs, evidence, and reas
         params = {"id": id}
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(self._read_query, query, params)
                 results = json.loads(results_json)
 
@@ -453,7 +454,7 @@ Each decision maintains a complete audit trail of all inputs, evidence, and reas
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_write(self._read_query, query, params)
                 results = json.loads(results_json)
 
@@ -538,7 +539,7 @@ Each decision maintains a complete audit trail of all inputs, evidence, and reas
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_write(self._read_query, query, params)
                 results = json.loads(results_json)
 
@@ -641,7 +642,7 @@ Each decision maintains a complete audit trail of all inputs, evidence, and reas
             """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_write(self._read_query, query, params)
                 results = json.loads(results_json)
 

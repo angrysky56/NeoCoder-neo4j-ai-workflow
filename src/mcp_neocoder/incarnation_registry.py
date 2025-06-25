@@ -340,6 +340,7 @@ from pydantic import Field
 from neo4j import AsyncDriver, AsyncTransaction
 
 from .base_incarnation import BaseIncarnation
+from ..event_loop_manager import safe_neo4j_session
 
 logger = logging.getLogger("mcp_neocoder.incarnations.{name}")
 
@@ -365,7 +366,8 @@ class {class_name}(BaseIncarnation):
     # Optional list of tool methods that should be registered
     _tool_methods = [
         "example_tool_one",
-        "example_tool_two"
+        "example_tool_two",
+        "example_database_tool"
     ]
 
     # Schema creation queries - run when incarnation is initialized
@@ -427,7 +429,26 @@ Each entity in the system has full tracking and audit capabilities.
         except Exception as e:
             logger.error(f"Error in example_tool_two: {{e}}")
             return [types.TextContent(type="text", text=f"Error: {{e}}")]
-'''
+
+    async def example_database_tool(
+        self,
+        query_param: str = Field(..., description="Parameter for database query")
+    ) -> List[types.TextContent]:
+        """Example database tool showing safe session usage."""
+        try:
+            # IMPORTANT: Always use safe_neo4j_session for database operations
+            # This prevents "Future attached to a different loop" errors
+            async with safe_neo4j_session(self.driver, self.database) as session:
+                query = "MATCH (n) RETURN count(n) as node_count"
+                result = await session.run(query)
+                record = await result.single()
+                node_count = record["node_count"] if record else 0
+
+                response = f"Database query with param '{{query_param}}' returned {{node_count}} nodes"
+                return [types.TextContent(type="text", text=response)]
+        except Exception as e:
+            logger.error(f"Error in example_database_tool: {{e}}")
+            return [types.TextContent(type="text", text=f"Error: {{e}}")]'''
 
         # Create the file
         try:

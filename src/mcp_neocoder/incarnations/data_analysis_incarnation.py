@@ -42,6 +42,7 @@ except ImportError as e:
     ADVANCED_ANALYTICS_AVAILABLE = False
 
 import mcp.types as types
+from ..event_loop_manager import safe_neo4j_session
 from pydantic import Field
 from neo4j import AsyncTransaction
 
@@ -312,7 +313,7 @@ class DataAnalysisIncarnation(BaseIncarnation):
     async def initialize_schema(self):
         """Initialize the Neo4j schema for Data Analysis."""
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Execute each constraint/index query individually
                 for query in self.schema_queries:
                     await session.execute_write(lambda tx, q=query: tx.run(q))
@@ -637,7 +638,7 @@ python /home/ty/Repositories/NeoCoder-neo4j-ai-workflow/data/scripts/data_cleane
 
         params = {"description": description}
 
-        async with self.driver.session(database=self.database) as session:
+        async with safe_neo4j_session(self.driver, self.database) as session:
             await session.execute_write(lambda tx: tx.run(query, params))
 
     async def get_guidance_hub(self) -> List[types.TextContent]:
@@ -648,7 +649,7 @@ python /home/ty/Repositories/NeoCoder-neo4j-ai-workflow/data/scripts/data_cleane
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Use a direct transaction to avoid scope issues
                 async def read_hub_data(tx):
                     result = await tx.run(query, {})
@@ -939,7 +940,7 @@ python /home/ty/Repositories/NeoCoder-neo4j-ai-workflow/data/scripts/data_cleane
                 return [types.TextContent(type="text", text=f"Error: Unsupported source type: {source_type}")]
 
             # Store dataset metadata in Neo4j
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Create dataset node
                 dataset_query = """
                 CREATE (d:Dataset {
@@ -1059,7 +1060,7 @@ python /home/ty/Repositories/NeoCoder-neo4j-ai-workflow/data/scripts/data_cleane
             Dataset overview with sample data and basic information
         """
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Get dataset information
                 dataset_query = """
                 MATCH (d:Dataset {id: $dataset_id})
@@ -1178,7 +1179,7 @@ python /home/ty/Repositories/NeoCoder-neo4j-ai-workflow/data/scripts/data_cleane
             Detailed data profiling report with quality metrics
         """
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Get dataset and column information
                 dataset_query = """
                 MATCH (d:Dataset {id: $dataset_id})
@@ -1369,7 +1370,7 @@ Need at least 2 numeric columns.
             Descriptive statistics report
         """
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Get dataset and column information
                 dataset_query = """
                 MATCH (d:Dataset {id: $dataset_id})
@@ -1663,7 +1664,7 @@ Need at least 2 numeric columns.
             if method not in ["pearson", "spearman", "kendall"]:
                 return [types.TextContent(type="text", text="Error: Method must be 'pearson', 'spearman', or 'kendall'")]
 
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Get dataset and column information
                 dataset_query = """
                 MATCH (d:Dataset {id: $dataset_id})
@@ -2112,7 +2113,7 @@ Analysis results tracking is not yet implemented.
             List of all datasets with their information
         """
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 if include_metadata:
                     query = """
                     MATCH (d:Dataset)
@@ -2242,7 +2243,7 @@ Use `list_datasets()` to see available datasets for now.
             import matplotlib.pyplot as plt
             import seaborn as sns
 
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Get dataset information
                 dataset_query = """
                 MATCH (d:Dataset {id: $dataset_id})
@@ -2503,7 +2504,7 @@ Use `list_datasets()` to see available datasets for now.
             from sklearn.ensemble import IsolationForest
             from scipy import stats
 
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Get dataset information
                 dataset_query = """
                 MATCH (d:Dataset {id: $dataset_id})
@@ -2736,7 +2737,7 @@ Use `list_datasets()` to see available datasets for now.
             from sklearn.preprocessing import StandardScaler
             from sklearn.cluster import KMeans, DBSCAN
 
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Get dataset information
                 dataset_query = """
                 MATCH (d:Dataset {id: $dataset_id})
@@ -3029,10 +3030,10 @@ Since your data has more than 2 dimensions, consider:
             from scipy import stats
             # Ensure Any is available; consider moving to top-level imports if not already there
 
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Get dataset information
 
-              async with self.driver.session(database=self.database) as session:
+              async with safe_neo4j_session(self.driver, self.database) as session:
                 # Get dataset information
                 dataset_query = """
                 MATCH (d:Dataset {id: $dataset_id})
@@ -3355,7 +3356,7 @@ Since your data has more than 2 dimensions, consider:
             Comprehensive insights report with actionable recommendations
         """
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 # Get dataset and column information
                 dataset_query = """
                 MATCH (d:Dataset {id: $dataset_id})

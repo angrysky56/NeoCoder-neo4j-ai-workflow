@@ -111,6 +111,11 @@ def create_tool_template(
         \"""{description or f"Tool for {name.replace('_', ' ')} functionality."}\"\"\"
         try:
             # Implementation goes here
+            # For database operations, use safe_neo4j_session:
+            # async with safe_neo4j_session(self.driver, self.database) as session:
+            #     result = await session.run("YOUR CYPHER QUERY")
+            #     data = await result.data()
+
             response = f"Executed {name} with {' and '.join(f'{param}={{{param}}}' for param in param_list)}"
             return [types.TextContent(type="text", text=response)]
         except Exception as e:

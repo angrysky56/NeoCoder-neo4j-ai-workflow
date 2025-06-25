@@ -9,6 +9,7 @@ import asyncio
 import logging
 import os
 import sys
+from .event_loop_manager import safe_neo4j_session
 from typing import List, Optional
 from neo4j import AsyncGraphDatabase, AsyncDriver
 
@@ -57,7 +58,7 @@ async def init_neo4j_connection(uri: str, user: str, password: str) -> AsyncDriv
     try:
         driver = AsyncGraphDatabase.driver(uri, auth=(user, password))
         # Test the connection
-        async with driver.session() as session:
+        async with safe_neo4j_session(driver, "neo4j") as session:
             await session.run("RETURN 1")
         logger.info("Successfully connected to Neo4j")
         return driver
@@ -91,7 +92,7 @@ async def init_base_schema(driver: AsyncDriver, database: str = "neo4j"):
     ]
 
     try:
-        async with driver.session(database=database) as session:
+        async with safe_neo4j_session(driver, database) as session:
             for query in base_schema_queries:
                 await session.run(query)  # type: ignore[arg-type]
         logger.info("Base schema initialized successfully")
@@ -127,7 +128,7 @@ async def init_research_schema(driver: AsyncDriver, database: str = "neo4j"):
     ]
 
     try:
-        async with driver.session(database=database) as session:
+        async with safe_neo4j_session(driver, database) as session:
             for query in research_schema_queries:
                 await session.run(query)  # type: ignore[arg-type]
         logger.info("Research schema initialized successfully")
@@ -161,7 +162,7 @@ async def init_decision_schema(driver: AsyncDriver, database: str = "neo4j"):
     ]
 
     try:
-        async with driver.session(database=database) as session:
+        async with safe_neo4j_session(driver, database) as session:
             for query in decision_schema_queries:
                 await session.run(query)  # type: ignore[arg-type]
         logger.info("Decision schema initialized successfully")
@@ -196,7 +197,7 @@ async def init_learning_schema(driver: AsyncDriver, database: str = "neo4j"):
     ]
 
     try:
-        async with driver.session(database=database) as session:
+        async with safe_neo4j_session(driver, database) as session:
             from typing import cast, LiteralString
             for query in learning_schema_queries:
                 await session.run(cast(LiteralString, query))
@@ -232,7 +233,7 @@ async def init_simulation_schema(driver: AsyncDriver, database: str = "neo4j"):
     ]
 
     try:
-        async with driver.session(database=database) as session:
+        async with safe_neo4j_session(driver, database) as session:
             for query in simulation_schema_queries:
                 from typing import cast, LiteralString
                 await session.run(cast(LiteralString, query))
@@ -274,7 +275,7 @@ Each incarnation provides its own set of specialized tools while maintaining cor
     """
 
     try:
-        async with driver.session(database=database) as session:
+        async with safe_neo4j_session(driver, database) as session:
             await session.run(query, {"description": main_hub_description})
         logger.info("Main guidance hub created successfully")
     except Exception as e:
@@ -293,7 +294,7 @@ async def create_dynamic_links_between_hubs(driver: AsyncDriver, database: str =
     """
 
     try:
-        async with driver.session(database=database) as session:
+        async with safe_neo4j_session(driver, database) as session:
             # Get all hub IDs using to_eager_result() instead
             result = await session.run(query)
             eager_result = await result.to_eager_result()
@@ -352,7 +353,7 @@ async def create_links_between_hubs(driver: AsyncDriver, database: str = "neo4j"
     """
 
     try:
-        async with driver.session(database=database) as session:
+        async with safe_neo4j_session(driver, database) as session:
             await session.run(query)
         logger.info("Hub links created successfully")
     except Exception as e:
@@ -431,7 +432,7 @@ async def init_db(incarnations: Optional[List[str]] = None):
                 RETURN hub
                 """
 
-                async with driver.session(database=neo4j_database) as session:
+                async with safe_neo4j_session(driver, neo4j_database) as session:
                     await session.run(hub_query, {"hub_id": hub_id, "hub_description": hub_description})
                     logger.info(f"Created hub for {inc_type}")
 

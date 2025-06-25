@@ -10,6 +10,7 @@ import logging
 from typing import List, Optional
 
 import mcp.types as types
+from .event_loop_manager import safe_neo4j_session
 from pydantic import Field
 from neo4j import AsyncManagedTransaction, AsyncDriver
 
@@ -130,7 +131,7 @@ class CypherSnippetMixin:
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(
                     self._read_query,
                     query,
@@ -216,7 +217,7 @@ class CypherSnippetMixin:
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(
                     self._read_query,
                     query,
@@ -340,7 +341,7 @@ class CypherSnippetMixin:
             return [types.TextContent(type="text", text=error_msg)]
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(
                     self._read_query,
                     query,
@@ -453,7 +454,7 @@ class CypherSnippetMixin:
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_write(
                     self._read_query,
                     query,
@@ -558,7 +559,7 @@ class CypherSnippetMixin:
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_write(
                     self._read_query,
                     query,
@@ -596,7 +597,7 @@ class CypherSnippetMixin:
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_write(
                     self._read_query,
                     query,
@@ -626,7 +627,7 @@ class CypherSnippetMixin:
         """
 
         try:
-            async with self.driver.session(database=self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database) as session:
                 results_json = await session.execute_read(
                     self._read_query,
                     query,
