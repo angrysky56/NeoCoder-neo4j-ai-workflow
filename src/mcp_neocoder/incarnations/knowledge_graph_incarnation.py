@@ -247,43 +247,108 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             logger.error(f"Error executing write query: {e}")
             return False
 
+    async def _safe_execute_read(self, session, query, params):
+        """Execute a read query safely and return results or None on error.
+
+        This approach prevents transaction scope errors from reaching the user.
+        """
+        try:
+            # Execute query using a lambda to keep all processing inside transaction
+            async def execute_in_tx(tx):
+                result = await tx.run(query, params)
+                # Convert to list to get all records before transaction ends
+                records = []
+                async for record in result:
+                    records.append(dict(record))
+                return records
+
+            # Execute the transaction function
+            records = await session.execute_read(execute_in_tx)
+            return records
+        except Exception as e:
+            # Log but suppress errors
+            logger.error(f"Error executing read query: {e}")
+            return None
+
     async def create_entities(
         self,
         entities: List[Dict[str, Any]] = Field(
             ...,
-            description="""An array of entity objects to create. Each entity should have:
-            - name: string (unique name for the entity)
-            - entityType: string (type/category of the entity)
-            - observations: array of strings (simple text observations)
+            description="""An array of entity objects to create in the knowledge graph. Each entity MUST have:
+            - name: string (unique identifier/name for the entity)
+            - entityType: string (category/type of the entity)
+            - observations: array of strings (descriptive observations about the entity)
 
-            Example: [{"name": "Deep Learning", "entityType": "Technology", "observations": ["Uses neural networks", "Requires large datasets"]}]
+            REQUIRED FORMAT: [{"name": "EntityName", "entityType": "Category", "observations": ["fact1", "fact2"]}]
 
-            Note: observations should be an array of simple strings, not complex objects.
+            ENTITY TYPE EXAMPLES:
+            - Technical: "Technology", "Framework", "Library", "Tool", "Language", "Platform", "Service"
+            - Conceptual: "Concept", "Principle", "Pattern", "Method", "Approach", "Theory"
+            - Organizational: "Process", "Role", "Team", "Department", "Company", "Project"
+            - Data: "Dataset", "Model", "Schema", "Format", "Protocol", "Standard"
+
+            GOOD EXAMPLES:
+            [{"name": "React", "entityType": "Framework", "observations": ["JavaScript UI library", "Component-based architecture", "Virtual DOM"]}]
+            [{"name": "Machine Learning", "entityType": "Concept", "observations": ["Learns from data", "Makes predictions", "Improves with experience"]}]
+            [{"name": "Docker", "entityType": "Technology", "observations": ["Containerization platform", "Lightweight virtualization", "Portable applications"]}]
+
+            NOTE: observations should be simple descriptive strings, not complex objects.
             """
         )
     ) -> List[types.TextContent]:
         """Create multiple new entities in the knowledge graph.
 
+        This is the primary tool for adding new entities to the knowledge graph. Each entity
+        represents a distinct concept, technology, process, or other meaningful object.
+
         Args:
-            entities: List of entity objects. Each should contain:
-                - name (str): Unique name for the entity
-                - entityType (str): Type/category of the entity
-                - observations (List[str]): Array of simple text observations
+            entities: List of entity objects. Each MUST contain:
+                - name (str): Unique identifier for the entity (will be used for relations)
+                - entityType (str): Category/type of the entity (helps with organization)
+                - observations (List[str]): Array of descriptive facts about the entity
 
         Returns:
-            Success/error message about the operation
+            Success message with count of entities created, or detailed error message if validation fails
 
-        Example usage:
-            entities = [
-                {
-                    "name": "Deep Learning Models",
-                    "entityType": "Technology",
-                    "observations": ["Uses neural networks", "Trained with gradient descent"]
-                }
+        Common Entity Types by Domain:
+            Technology: "Framework", "Library", "Tool", "Platform", "Service", "Database", "API"
+            Programming: "Language", "Paradigm", "Pattern", "Algorithm", "Structure", "Protocol"
+            Business: "Process", "Role", "Department", "Strategy", "Methodology", "Practice"
+            Academic: "Concept", "Theory", "Principle", "Method", "Approach", "Technique"
+            Data: "Dataset", "Model", "Schema", "Format", "Source", "Repository"
+
+        Example Usage Patterns:
+
+        1. Technology Stack:
+            [
+                {"name": "React", "entityType": "Framework", "observations": ["JavaScript UI library", "Component-based", "Virtual DOM"]},
+                {"name": "Node.js", "entityType": "Runtime", "observations": ["JavaScript server runtime", "Non-blocking I/O", "Event-driven"]},
+                {"name": "MongoDB", "entityType": "Database", "observations": ["NoSQL document database", "JSON-like documents", "Horizontally scalable"]}
             ]
 
-        Note: For complex observations, create entities with observations: []
-        and then use add_observations() separately.
+        2. Machine Learning Concepts:
+            [
+                {"name": "Neural Networks", "entityType": "Concept", "observations": ["Inspired by biological neurons", "Learns complex patterns", "Multiple layers of nodes"]},
+                {"name": "Gradient Descent", "entityType": "Algorithm", "observations": ["Optimization algorithm", "Minimizes loss function", "Iterative parameter updates"]},
+                {"name": "Overfitting", "entityType": "Problem", "observations": ["Model learns training data too well", "Poor generalization", "Prevented by regularization"]}
+            ]
+
+        3. Business Processes:
+            [
+                {"name": "Code Review", "entityType": "Process", "observations": ["Peer review of code changes", "Ensures quality standards", "Knowledge sharing"]},
+                {"name": "DevOps Engineer", "entityType": "Role", "observations": ["Bridges development and operations", "Automates deployment", "Monitors infrastructure"]},
+                {"name": "Agile Methodology", "entityType": "Methodology", "observations": ["Iterative development", "Customer collaboration", "Responds to change"]}
+            ]
+
+        Tips for Good Entities:
+            - Use clear, descriptive names that others will recognize
+            - Choose appropriate entityTypes for better organization
+            - Include 2-5 concise observations that capture key characteristics
+            - Avoid duplicates - check existing entities first with query_graph
+            - Keep observations factual and informative
+
+        Note: After creating entities, use create_relations to establish connections between them.
+        For additional details later, use add_observations to append more information.
         """
         try:
             if not entities:
@@ -291,18 +356,33 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
 
             # Validate entities and clean observations
             cleaned_entities = []
-            for entity in entities:
+            for i, entity in enumerate(entities):
+                if not isinstance(entity, dict):
+                    return [types.TextContent(type="text", text=f"Error: Entity {i+1} must be an object/dictionary, not {type(entity).__name__}")]
+
                 if 'name' not in entity:
-                    return [types.TextContent(type="text", text="Error: All entities must have a 'name' property")]
+                    return [types.TextContent(type="text", text=f"Error: Entity {i+1} is missing required 'name' field. Expected format: {{'name': 'EntityName', 'entityType': 'Category', 'observations': ['fact1', 'fact2']}}")]
+
                 if 'entityType' not in entity:
-                    return [types.TextContent(type="text", text="Error: All entities must have an 'entityType' property")]
-                if 'observations' not in entity or not isinstance(entity['observations'], list):
-                    return [types.TextContent(type="text", text="Error: All entities must have an 'observations' array")]
+                    return [types.TextContent(type="text", text=f"Error: Entity {i+1} is missing required 'entityType' field. Expected format: {{'name': 'EntityName', 'entityType': 'Category', 'observations': ['fact1', 'fact2']}}")]
+
+                if 'observations' not in entity:
+                    return [types.TextContent(type="text", text=f"Error: Entity {i+1} is missing required 'observations' field. Expected format: {{'name': 'EntityName', 'entityType': 'Category', 'observations': ['fact1', 'fact2']}}")]
+
+                if not isinstance(entity['observations'], list):
+                    return [types.TextContent(type="text", text=f"Error: Entity {i+1} 'observations' must be an array/list of strings, not {type(entity['observations']).__name__}")]
+
+                # Validate that name and entityType are non-empty strings
+                if not isinstance(entity['name'], str) or not entity['name'].strip():
+                    return [types.TextContent(type="text", text=f"Error: Entity {i+1} 'name' must be a non-empty string")]
+
+                if not isinstance(entity['entityType'], str) or not entity['entityType'].strip():
+                    return [types.TextContent(type="text", text=f"Error: Entity {i+1} 'entityType' must be a non-empty string")]
 
                 # Clean the entity - ensure observations are simple strings
                 cleaned_entity = {
-                    'name': str(entity['name']),
-                    'entityType': str(entity['entityType']),
+                    'name': str(entity['name']).strip(),
+                    'entityType': str(entity['entityType']).strip(),
                     'observations': []
                 }
 
@@ -356,21 +436,149 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
 
     async def create_relations(
         self,
-        relations: List[Dict[str, str]] = Field(..., description="An array of relation objects to create")
+        relations: List[Dict[str, str]] = Field(
+            ...,
+            description="""An array of relation objects to create between existing entities. Each relation MUST have exactly these three fields:
+            - from: string (name of the source entity - must already exist in the graph)
+            - to: string (name of the target entity - must already exist in the graph)
+            - relationType: string (type of relationship, use descriptive names in UPPER_CASE)
+
+            REQUIRED FORMAT: [{"from": "SourceEntity", "to": "TargetEntity", "relationType": "RELATIONSHIP_TYPE"}]
+
+            RELATIONSHIP TYPE EXAMPLES:
+            - Technical: "DEPENDS_ON", "IMPLEMENTS", "EXTENDS", "USES", "CONTAINS", "CALLS"
+            - Conceptual: "IS_PART_OF", "IS_A_TYPE_OF", "RELATES_TO", "INFLUENCES", "ENABLES"
+            - Workflow: "PRECEDES", "FOLLOWS", "TRIGGERS", "REQUIRES", "PRODUCES"
+
+            GOOD EXAMPLES:
+            [{"from": "React", "to": "JavaScript", "relationType": "DEPENDS_ON"}]
+            [{"from": "Neural Networks", "to": "Machine Learning", "relationType": "IS_PART_OF"}]
+            [{"from": "Docker", "to": "Containerization", "relationType": "ENABLES"}]
+
+            IMPORTANT:
+            - Both entities must already exist in the graph (use create_entities first if needed)
+            - Use active voice relationships (A USES B, not B IS_USED_BY A)
+            - Relationship types should be descriptive and in UPPER_CASE
+            """
+        )
     ) -> List[types.TextContent]:
-        """Create multiple new relations between entities in the knowledge graph. Relations should be in active voice"""
+        """Create multiple new relations between existing entities in the knowledge graph.
+
+        This tool creates directed relationships between entities that already exist in the graph.
+        Use this after creating entities with create_entities to establish connections between them.
+
+        Args:
+            relations: List of relation objects. Each MUST contain exactly these three fields:
+                - from (str): Name of the source entity (must already exist in the graph)
+                - to (str): Name of the target entity (must already exist in the graph)
+                - relationType (str): Type of relationship in UPPER_CASE (e.g., "USES", "DEPENDS_ON", "IS_PART_OF")
+
+        Returns:
+            Success message with count of relations created, or detailed error message if validation fails
+
+        Common Relationship Types by Category:
+            Technical Dependencies: "DEPENDS_ON", "REQUIRES", "IMPORTS", "CALLS", "IMPLEMENTS"
+            Hierarchical: "IS_PART_OF", "CONTAINS", "IS_A_TYPE_OF", "EXTENDS", "INHERITS_FROM"
+            Functional: "USES", "PROCESSES", "PRODUCES", "TRANSFORMS", "ENABLES", "SUPPORTS"
+            Sequential: "PRECEDES", "FOLLOWS", "TRIGGERS", "LEADS_TO", "RESULTS_IN"
+            Conceptual: "RELATES_TO", "INFLUENCES", "AFFECTS", "SIMILAR_TO", "OPPOSITE_OF"
+
+        Example Usage Patterns:
+
+        1. Technology Stack Relations:
+            [
+                {"from": "React App", "to": "React", "relationType": "USES"},
+                {"from": "React", "to": "JavaScript", "relationType": "DEPENDS_ON"},
+                {"from": "JavaScript", "to": "Node.js Runtime", "relationType": "RUNS_ON"}
+            ]
+
+        2. Conceptual Knowledge Relations:
+            [
+                {"from": "Deep Learning", "to": "Machine Learning", "relationType": "IS_PART_OF"},
+                {"from": "Neural Networks", "to": "Deep Learning", "relationType": "IMPLEMENTS"},
+                {"from": "GPT Models", "to": "Transformer Architecture", "relationType": "BASED_ON"}
+            ]
+
+        3. Process/Workflow Relations:
+            [
+                {"from": "Code Review", "to": "Development", "relationType": "FOLLOWS"},
+                {"from": "Testing", "to": "Code Review", "relationType": "FOLLOWS"},
+                {"from": "Deployment", "to": "Testing", "relationType": "REQUIRES"}
+            ]
+
+        Error Prevention Tips:
+            - Ensure both entities exist before creating relations (check with query_graph or create with create_entities)
+            - Use descriptive relationship types that clearly express the connection
+            - Keep relationships directional and consistent (A USES B, not B IS_USED_BY A)
+            - Validate entity names match exactly (case-sensitive)
+
+        Note: This creates directed relationships. The direction matters: "A DEPENDS_ON B" means A requires B,
+        not that B requires A. If you need bidirectional relationships, create two separate relations.
+        """
         try:
             if not relations:
                 return [types.TextContent(type="text", text="Error: No relations provided")]
 
-            # Validate relations
-            for relation in relations:
+            # Enhanced validation with better error messages
+            for i, relation in enumerate(relations):
+                if not isinstance(relation, dict):
+                    return [types.TextContent(type="text", text=f"Error: Relation {i+1} must be an object/dictionary, not {type(relation).__name__}")]
+
                 if 'from' not in relation:
-                    return [types.TextContent(type="text", text="Error: All relations must have a 'from' property")]
+                    return [types.TextContent(type="text", text=f"Error: Relation {i+1} is missing required 'from' field. Expected format: {{'from': 'SourceEntity', 'to': 'TargetEntity', 'relationType': 'RELATIONSHIP_TYPE'}}")]
+
                 if 'to' not in relation:
-                    return [types.TextContent(type="text", text="Error: All relations must have a 'to' property")]
+                    return [types.TextContent(type="text", text=f"Error: Relation {i+1} is missing required 'to' field. Expected format: {{'from': 'SourceEntity', 'to': 'TargetEntity', 'relationType': 'RELATIONSHIP_TYPE'}}")]
+
                 if 'relationType' not in relation:
-                    return [types.TextContent(type="text", text="Error: All relations must have a 'relationType' property")]
+                    return [types.TextContent(type="text", text=f"Error: Relation {i+1} is missing required 'relationType' field. Expected format: {{'from': 'SourceEntity', 'to': 'TargetEntity', 'relationType': 'RELATIONSHIP_TYPE'}}")]
+
+                # Validate that values are strings and not empty
+                if not isinstance(relation['from'], str) or not relation['from'].strip():
+                    return [types.TextContent(type="text", text=f"Error: Relation {i+1} 'from' field must be a non-empty string")]
+
+                if not isinstance(relation['to'], str) or not relation['to'].strip():
+                    return [types.TextContent(type="text", text=f"Error: Relation {i+1} 'to' field must be a non-empty string")]
+
+                if not isinstance(relation['relationType'], str) or not relation['relationType'].strip():
+                    return [types.TextContent(type="text", text=f"Error: Relation {i+1} 'relationType' field must be a non-empty string")]
+
+            # Pre-validate that all referenced entities exist in the graph
+            entity_names = set()
+            for relation in relations:
+                entity_names.add(relation['from'])
+                entity_names.add(relation['to'])
+
+            # Check which entities exist
+            check_entities_query = """
+            UNWIND $entityNames AS name
+            OPTIONAL MATCH (e:Entity {name: name})
+            RETURN name, e IS NOT NULL AS exists
+            """
+
+            async with safe_neo4j_session(self.driver, self.database) as session:
+                result = await self._safe_execute_read(session, query=check_entities_query, params={"entityNames": list(entity_names)})
+
+                if result is not None:
+                    # Process the results to find missing entities
+                    missing_entities = []
+                    for record in result:
+                        if not record.get("exists", False):
+                            missing_entities.append(record.get("name"))
+
+                    if missing_entities:
+                        missing_list = "', '".join(missing_entities)
+                        example_entity = missing_entities[0] if missing_entities else "EntityName"
+                        return [types.TextContent(
+                            type="text",
+                            text=f"Error: The following entities do not exist in the graph: '{missing_list}'. "
+                                 f"Please create them first using the create_entities tool.\n\n"
+                                 f"Example to create missing entities:\n"
+                                 f"create_entities([{{'name': '{example_entity}', 'entityType': 'Concept', 'observations': ['Description of {example_entity}']}}])\n\n"
+                                 f"Then retry creating the relations."
+                        )]
+                else:
+                    return [types.TextContent(type="text", text="Error: Could not verify entity existence. Please check server logs.")]
 
             # Use simplified approach without dynamic relationship type - most compatible
             simple_query = """
@@ -629,7 +837,26 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             return [types.TextContent(type="text", text=f"Error: {e}")]
 
     async def read_graph(self) -> List[types.TextContent]:
-        """Read the entire knowledge graph"""
+        """Read and display the entire knowledge graph structure.
+
+        This tool retrieves all entities, their observations, and relationships from the knowledge graph
+        and presents them in a structured, readable format. Use this to:
+        - Understand the current state of the knowledge graph
+        - Discover existing entities before creating new ones
+        - Explore relationships between concepts
+        - Get an overview of all available knowledge
+
+        Returns:
+            Formatted text showing all entities with their types, observations, and relationships
+
+        The output includes:
+        - Entity name and type
+        - All observations (facts/descriptions) for each entity
+        - All outgoing relationships from each entity
+
+        This is particularly useful for AI agents to understand the existing knowledge base
+        before making modifications or additions.
+        """
         try:
             # Query to get all entities with their observations and relations
             query = """
