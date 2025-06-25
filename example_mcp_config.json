@@ -1,0 +1,21 @@
+{
+  "mcpServers": {
+    "neocoder": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow",
+        "run",
+        "mcp_neocoder"
+      ],
+      "env": {
+        "NEO4J_URL": "bolt://localhost:7687",
+        "NEO4J_USERNAME": "neo4j",
+        "NEO4J_PASSWORD": "your_neo4j_password_here",
+        "NEO4J_DATABASE": "neo4j",
+        "LOG_LEVEL": "INFO",
+        "MCP_TRANSPORT": "stdio"
+      }
+    }
+  }
+}

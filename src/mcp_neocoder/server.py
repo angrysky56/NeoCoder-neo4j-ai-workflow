@@ -29,13 +29,29 @@ from pydantic import Field
 # Import mixins and core functionality
 from .action_templates import ActionTemplateMixin
 from .cypher_snippets import CypherSnippetMixin
-from .event_loop_manager import initialize_main_loop
+from .event_loop_manager import initialize_main_loop, safe_neo4j_session
 from .init_db import init_db
 from .polymorphic_adapter import PolymorphicAdapterMixin
 from .tool_proposals import ToolProposalMixin
 
-# Configure logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
+# Import process management for cleanup
+from .process_manager import (
+    register_cleanup_handlers,
+    track_driver,
+    untrack_driver,
+    # track_session,
+    # untrack_session, # handled by safe_neo4j_session
+    track_background_task,
+    cleanup_processes_sync,
+    get_cleanup_status
+)
+
+# Configure logging to stderr for MCP servers
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    stream=sys.stderr
+)
 logger = logging.getLogger("mcp_neocoder")
 
 # Type definitions for function return handling
@@ -47,6 +63,13 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
 
     def __init__(self, driver: AsyncDriver, database: str = "neo4j", loop: Optional[asyncio.AbstractEventLoop] = None, *args: Any, **kwargs: Any):
         """Initialize the workflow server with Neo4j connection."""
+        # CRITICAL: Register cleanup handlers first
+        register_cleanup_handlers()
+        logger.info("Cleanup handlers registered")
+
+        # Track the driver for cleanup
+        track_driver(driver)
+
         # Use the provided loop or initialize a new one
         self.loop: asyncio.AbstractEventLoop = loop if loop is not None else initialize_main_loop()
 
@@ -69,13 +92,69 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
         self.initialized_event: asyncio.Event = asyncio.Event()
 
         # Register basic protocol handlers first to ensure responsiveness
-        asyncio.create_task(self._register_basic_handlers())
+        task = asyncio.create_task(self._register_basic_handlers())
+        track_background_task(task)
         logger.info("Basic protocol handlers registered")
 
         # Start full initialization in a separate task to avoid blocking
         # This allows the server to respond to basic requests while
         # initialization is in progress
-        asyncio.create_task(self._initialize_async())
+        init_task = asyncio.create_task(self._initialize_async())
+        track_background_task(init_task)
+
+    def __del__(self):
+        """Destructor to ensure cleanup when server instance is destroyed."""
+        try:
+            if hasattr(self, 'driver'):
+                untrack_driver(self.driver)
+                logger.debug("Untracked driver in destructor")
+        except Exception as e:
+            logger.debug(f"Error in destructor: {e}")
+
+    async def cleanup(self):
+        """Explicit cleanup method for the server."""
+        logger.info("Starting server cleanup...")
+        try:
+            # Stop any running background initialization
+            if hasattr(self, 'initialized_event'):
+                self.initialized_event.set()
+
+            # Cleanup tracked driver
+            if hasattr(self, 'driver'):
+                untrack_driver(self.driver)
+
+            logger.info("Server cleanup completed")
+        except Exception as e:
+            logger.error(f"Error during server cleanup: {e}")
+
+    async def get_cleanup_status(self) -> List[types.TextContent]:
+        """Get current cleanup and resource status for monitoring."""
+        try:
+            status = get_cleanup_status()
+
+            response = "# Resource Management Status\n\n"
+            response += f"- **Running Processes**: {status['running_processes']}\n"
+            response += f"- **Background Tasks**: {status['background_tasks']}\n"
+            response += f"- **Active Drivers**: {status['active_drivers']}\n"
+            response += f"- **Active Sessions**: {status['active_sessions']}\n"
+            response += f"- **Cleanup Registered**: {status['cleanup_registered']}\n"
+
+            if status['process_ids']:
+                response += f"\n**Tracked Process IDs**: {', '.join(status['process_ids'])}\n"
+
+            # Add server-specific info
+            response += "\n## Server Status\n"
+            response += f"- **Initialized**: {self.initialized_event.is_set() if hasattr(self, 'initialized_event') else 'Unknown'}\n"
+            response += f"- **Database**: {self.database}\n"
+
+            if hasattr(self, 'incarnation_registry'):
+                response += f"- **Incarnations Loaded**: {len(self.incarnation_registry)}\n"
+
+            return [types.TextContent(type="text", text=response)]
+
+        except Exception as e:
+            logger.error(f"Error getting cleanup status: {e}")
+            return [types.TextContent(type="text", text=f"Error: {e}")]
 
     async def _initialize_async(self):
         """Execute the complete initialization sequence asynchronously."""
@@ -154,7 +233,6 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
         Returns:
             bool: True if all required components exist
         """
-        from .event_loop_manager import safe_neo4j_session
 
         try:
             async with safe_neo4j_session(self.driver, self.database or "neo4j") as session:
@@ -312,6 +390,13 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
         ]
         for tool in incarnation_tools:
             tool_registry.register_tool(tool, "incarnation")
+
+        # System monitoring tools
+        monitoring_tools = [
+            self.get_cleanup_status
+        ]
+        for tool in monitoring_tools:
+            tool_registry.register_tool(tool, "monitoring")
 
         logger.info("Registered all core tools with ToolRegistry")
 
@@ -851,7 +936,7 @@ This is the default guidance hub. Use the commands above to explore the system's
                     result = await tx.run(query)
                     values = await result.values()
                     return values
-                    
+
                 values = await session.execute_read(read_hub_description)
 
                 if values and len(values) > 0 and values[0][0]:
@@ -1439,9 +1524,9 @@ Each incarnation has its own set of specialized tools alongside the core Neo4j i
                     result = await tx.run(query, {"description": default_description})
                     values = await result.values()
                     return values
-                    
+
                 values = await session.execute_write(create_hub)
-                
+
                 if values and len(values) > 0:
                     logger.info("Successfully created default guidance hub")
                     return [types.TextContent(type="text", text=default_description)]
@@ -1581,6 +1666,9 @@ def create_server(db_url: str, username: str, password: str, database: str = "ne
             connection_acquisition_timeout=driver_config["connection_acquisition_timeout"]
         )
 
+        # Track the driver for cleanup (this will be done again in the server constructor)
+        track_driver(driver)
+
         # 5. Define an async function for all async operations
         async def async_server_setup():
             # 5.1 Verify the driver connection works
@@ -1648,36 +1736,9 @@ def cleanup_zombie_instances():
     Returns:
         int: Number of processes cleaned up
     """
-    logger.info("Checking for zombie server instances...")
-
-    # In a real implementation, this would find and terminate orphaned processes
-    # by looking for MCP server processes with the same module name
-    try:
-        # For now, just perform basic port check for common conflicts
-        import socket
-
-        # Check if the TCP port for Neo4j is in use (typical Neo4j Bolt port)
-        neo4j_port = int(os.environ.get("NEO4J_PORT", "7687"))
-
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            # Set a short timeout
-            sock.settimeout(0.1)
-
-            # Try to connect to the port
-            result = sock.connect_ex(('127.0.0.1', neo4j_port))
-
-            if result != 0:
-                logger.warning(f"Neo4j port {neo4j_port} appears to be closed. Is Neo4j running?")
-        except Exception as port_err:
-            logger.debug(f"Port check error: {str(port_err)}")
-        finally:
-            sock.close()
-
-        return 0  # No actual zombies cleaned up in this implementation
-    except Exception as e:
-        logger.warning(f"Error checking for zombie instances: {str(e)}")
-        return 0
+    # Use the new process manager cleanup
+    from .process_manager import cleanup_zombie_instances as cleanup_zombies
+    return cleanup_zombies()
 
 def main():
     """Main entry point for the MCP server.
@@ -1690,6 +1751,7 @@ def main():
 
     It includes proper error handling and logging at each stage.
     """
+    server = None
     try:
         # 1. Initial setup - clean up zombie instances and load config
         logger.info("Starting NeoCoder Neo4j Workflow Server")
@@ -1735,40 +1797,35 @@ def main():
             # 6. Run the server with the configured transport
             transport = os.environ.get("MCP_TRANSPORT", "stdio")
 
-            # Make sure any pending coroutines are dealt with
-            pending_tasks = asyncio.all_tasks(loop)
-            if pending_tasks:
-                logger.info(f"Waiting for {len(pending_tasks)} pending initialization tasks to complete...")
-                try:
-                    # METHODOLOGICAL CORRECTION: Check if loop is running before run_until_complete
-                    if loop.is_running():
-                        logger.warning("Cannot wait for pending tasks - loop is already running")
-                        logger.info("Pending tasks will complete naturally in running loop")
-                    else:
-                        # Give pending tasks a chance to complete but don't block indefinitely
-                        loop.run_until_complete(asyncio.wait(pending_tasks, timeout=5))
-                        logger.info("Pending tasks completed successfully")
-                except Exception as pending_err:
-                    logger.warning(f"Some initialization tasks didn't complete: {pending_err}")
-
-
-
             # Run the server - this should block until termination
             server.run(transport=transport)
 
         except Exception as server_err:
-
             logger.error(f"Server creation or execution failed: {str(server_err)}")
             logger.debug(f"Error details: {traceback.format_exc()}")
             sys.exit(1)
 
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
-        sys.exit(0)
     except Exception as e:
         logger.error(f"Unhandled exception in main: {str(e)}")
         logger.debug(f"Error details: {traceback.format_exc()}")
         sys.exit(1)
+    finally:
+        # CRITICAL: Always cleanup resources
+        logger.info("Performing final cleanup...")
+        try:
+            if server:
+                # Cleanup the server instance
+                loop = asyncio.get_event_loop()
+                if not loop.is_closed():
+                    loop.run_until_complete(server.cleanup())
+        except Exception as cleanup_err:
+            logger.error(f"Error during server cleanup: {cleanup_err}")
+
+        # Final process cleanup
+        cleanup_processes_sync()
+        logger.info("Final cleanup completed")
 
 
 # Test functions to verify server operation

@@ -36,6 +36,26 @@ NeoCoder implements a revolutionary **Context-Augmented Reasoning** system that 
 ⚡ **F-Contraction Processing**: Dynamically merge similar concepts while preserving provenance
 🎯 **Context-Augmented Reasoning**: Generate insights impossible with single data sources
 📊 **Full Audit Trails**: Complete tracking of knowledge synthesis and workflow execution
+🛡️ **Production-Ready Process Management**: Automatic cleanup, signal handling, and resource tracking to prevent process leaks
+🔧 **Enhanced Tool Handling**: Robust async initialization with proper background task management
+
+## Process Management & Reliability
+
+NeoCoder implements comprehensive process management following MCP best practices:
+
+- **Signal Handlers**: Proper SIGTERM/SIGINT handling for graceful shutdowns
+- **Resource Tracking**: Automatic tracking of processes, Neo4j connections, and background tasks
+- **Zombie Cleanup**: Active detection and cleanup of orphaned server instances
+- **Memory Management**: Prevention of resource leaks through proper cleanup patterns
+- **Background Task Management**: Safe handling of async initialization and concurrent operations
+- **Connection Pooling**: Efficient Neo4j driver management with automatic cleanup
+
+### Monitoring Commands
+
+Use these tools to monitor server health:
+
+- `get_cleanup_status()` - View resource usage and cleanup status
+- `check_connection()` - Verify Neo4j connectivity and permissions
 
 ## Quick Start
 

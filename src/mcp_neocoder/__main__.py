@@ -17,22 +17,17 @@ logger = logging.getLogger("mcp_neocoder")
 
 def main():
     """Main entry point for the NeoCoder package."""
-    import signal
-    import sys
-
-    # Define signal handlers before anything else
-    def signal_handler(sig, frame):
-        """Handle termination signals gracefully."""
-        logger.info(f"Received signal {sig}, shutting down NeoCoder...")
-        sys.exit(0)
-
-    # Register signal handlers
-    signal.signal(signal.SIGINT, signal_handler)
-    signal.signal(signal.SIGTERM, signal_handler)
+    # Register cleanup handlers early
+    try:
+        from .process_manager import register_cleanup_handlers
+        register_cleanup_handlers()
+        logger.info("Process cleanup handlers registered")
+    except Exception as e:
+        logger.error(f"Failed to register cleanup handlers: {e}")
 
     # Check for existing instances and clean up if needed
     try:
-        from .server import cleanup_zombie_instances
+        from .process_manager import cleanup_zombie_instances
         cleanup_zombie_instances()
     except Exception as e:
         logger.warning(f"Failed to clean up zombie instances: {e}")
@@ -85,7 +80,7 @@ def main():
         logger.info("Starting NeoCoder MCP Server")
         if hasattr(args, 'force_clean') and args.force_clean:
             try:
-                from .server import cleanup_zombie_instances
+                from .process_manager import cleanup_zombie_instances
                 cleanup_zombie_instances()
             except Exception as e:
                 logger.warning(f"Failed to force clean instances: {e}")
@@ -95,7 +90,7 @@ def main():
         init_db_main()
     elif args.command == "cleanup":
         logger.info("Cleaning up server instances")
-        from .server import cleanup_zombie_instances
+        from .process_manager import cleanup_zombie_instances
         cleanup_zombie_instances()
         logger.info("Cleanup complete")
     else:

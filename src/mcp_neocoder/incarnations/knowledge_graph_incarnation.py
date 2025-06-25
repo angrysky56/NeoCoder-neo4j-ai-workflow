@@ -31,7 +31,7 @@ class KnowledgeGraphIncarnation(BaseIncarnation):
     version = "1.0.0"
 
     # Explicitly define which methods should be registered as tools
-    _tool_methods = ["create_entities", "create_relations", "add_observations",
+    _tool_methods = ["create_entities", "create_relations", "add_observations", "add_single_observation",
                      "delete_entities", "delete_observations", "delete_relations",
                      "read_graph", "search_nodes", "open_nodes"]
 
@@ -248,14 +248,48 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
 
     async def create_entities(
         self,
-        entities: List[Dict[str, Any]] = Field(..., description="An array of entity objects to create")
+        entities: List[Dict[str, Any]] = Field(
+            ...,
+            description="""An array of entity objects to create. Each entity should have:
+            - name: string (unique name for the entity)
+            - entityType: string (type/category of the entity)
+            - observations: array of strings (simple text observations)
+
+            Example: [{"name": "Deep Learning", "entityType": "Technology", "observations": ["Uses neural networks", "Requires large datasets"]}]
+
+            Note: observations should be an array of simple strings, not complex objects.
+            """
+        )
     ) -> List[types.TextContent]:
-        """Create multiple new entities in the knowledge graph"""
+        """Create multiple new entities in the knowledge graph.
+
+        Args:
+            entities: List of entity objects. Each should contain:
+                - name (str): Unique name for the entity
+                - entityType (str): Type/category of the entity
+                - observations (List[str]): Array of simple text observations
+
+        Returns:
+            Success/error message about the operation
+
+        Example usage:
+            entities = [
+                {
+                    "name": "Deep Learning Models",
+                    "entityType": "Technology",
+                    "observations": ["Uses neural networks", "Trained with gradient descent"]
+                }
+            ]
+
+        Note: For complex observations, create entities with observations: []
+        and then use add_observations() separately.
+        """
         try:
             if not entities:
                 return [types.TextContent(type="text", text="Error: No entities provided")]
 
-            # Validate entities
+            # Validate entities and clean observations
+            cleaned_entities = []
             for entity in entities:
                 if 'name' not in entity:
                     return [types.TextContent(type="text", text="Error: All entities must have a 'name' property")]
@@ -264,25 +298,49 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                 if 'observations' not in entity or not isinstance(entity['observations'], list):
                     return [types.TextContent(type="text", text="Error: All entities must have an 'observations' array")]
 
+                # Clean the entity - ensure observations are simple strings
+                cleaned_entity = {
+                    'name': str(entity['name']),
+                    'entityType': str(entity['entityType']),
+                    'observations': []
+                }
+
+                # Process observations - convert complex objects to strings if needed
+                for obs in entity['observations']:
+                    if isinstance(obs, str):
+                        # Simple string - use as-is
+                        cleaned_entity['observations'].append(obs)
+                    elif isinstance(obs, dict) and 'content' in obs:
+                        # Complex object with content - extract the content
+                        cleaned_entity['observations'].append(str(obs['content']))
+                    elif obs is not None:
+                        # Any other type - convert to string
+                        cleaned_entity['observations'].append(str(obs))
+                    # Skip None values
+
+                cleaned_entities.append(cleaned_entity)
+
             # Build the Cypher query for creating entities with proper labels
+            # Use FOREACH to handle empty observations arrays gracefully
             query = """
             UNWIND $entities AS entity
             MERGE (e:Entity {name: entity.name})
             ON CREATE SET e.entityType = entity.entityType
             WITH e, entity
-            UNWIND entity.observations AS obs
-            CREATE (o:Observation {content: obs, timestamp: datetime()})
-            CREATE (e)-[:HAS_OBSERVATION]->(o)
+            FOREACH (obs IN entity.observations |
+                CREATE (o:Observation {content: obs, timestamp: datetime()})
+                CREATE (e)-[:HAS_OBSERVATION]->(o)
+            )
             RETURN count(e) AS entityCount
             """
 
-            # First get a count of the entities to be created for the response message
-            entity_count = len(entities)
-            observation_count = sum(len(entity.get('observations', [])) for entity in entities)
+            # Get counts for the response message (use cleaned entities)
+            entity_count = len(cleaned_entities)
+            observation_count = sum(len(entity.get('observations', [])) for entity in cleaned_entities)
 
             # Execute the query using our safe execution method
             async with self.driver.session(database=self.database) as session:
-                success = await self._safe_execute_write(session, query, {"entities": entities})
+                success = await self._safe_execute_write(session, query, {"entities": cleaned_entities})
 
                 if success:
                     # Give feedback based on the intended operation, not the actual results
@@ -342,21 +400,49 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
 
     async def add_observations(
         self,
-        observations: List[Dict[str, Any]] = Field(..., description="An array of observations to add to existing entities")
+        observations: List[Dict[str, Any]] = Field(
+            ...,
+            description="""An array of observations to add to existing entities. Each observation should have:
+            - entityName: string (name of the entity to add observations to)
+            - contents: array of strings (the observation content strings to add)
+
+            Example: [{"entityName": "MyEntity", "contents": ["First observation", "Second observation"]}]
+            """
+        )
     ) -> List[types.TextContent]:
-        """Add new observations to existing entities in the knowledge graph"""
+        """Add new observations to existing entities in the knowledge graph.
+
+        Args:
+            observations: List of observation objects. Each should contain:
+                - entityName (str): Name of the entity to add observations to
+                - contents (List[str]): Array of observation content strings
+
+        Returns:
+            Success/error message about the operation
+
+        Example usage:
+            observations = [
+                {
+                    "entityName": "Deep Learning Models",
+                    "contents": ["Machine learning models that use neural networks", "Often trained with SGD"]
+                }
+            ]
+        """
         try:
             if not observations:
                 return [types.TextContent(type="text", text="Error: No observations provided")]
 
             # Validate observations
-            for observation in observations:
+            for i, observation in enumerate(observations):
                 if 'entityName' not in observation:
-                    return [types.TextContent(type="text", text="Error: All observations must have an 'entityName' property")]
+                    return [types.TextContent(type="text", text=f"Error: Observation {i+1} must have an 'entityName' property")]
                 if 'contents' not in observation or not isinstance(observation['contents'], list):
-                    return [types.TextContent(type="text", text="Error: All observations must have a 'contents' array")]
+                    return [types.TextContent(
+                        type="text",
+                        text=f"Error: Observation {i+1} must have a 'contents' array. Expected format: {{'entityName': 'EntityName', 'contents': ['observation1', 'observation2']}}"
+                    )]
                 if not observation['contents']:
-                    return [types.TextContent(type="text", text="Error: All observations must have at least one content item")]
+                    return [types.TextContent(type="text", text=f"Error: Observation {i+1} must have at least one content item in the 'contents' array")]
 
             # Build the Cypher query
             query = """
@@ -387,6 +473,28 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
             logger.error(f"Error in add_observations: {e}")
             return [types.TextContent(type="text", text=f"Error: {e}")]
 
+    async def add_single_observation(
+        self,
+        entityName: str = Field(..., description="Name of the entity to add the observation to"),
+        content: str = Field(..., description="The observation content to add")
+    ) -> List[types.TextContent]:
+        """Add a single observation to an existing entity (convenience method).
+
+        This is a simpler version of add_observations for adding just one observation.
+
+        Args:
+            entityName: Name of the entity to add the observation to
+            content: The observation content string
+
+        Returns:
+            Success/error message about the operation
+        """
+        # Use the main add_observations method
+        return await self.add_observations([{
+            "entityName": entityName,
+            "contents": [content]
+        }])
+
     async def delete_entities(
         self,
         entityNames: List[str] = Field(..., description="An array of entity names to delete")
@@ -411,7 +519,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                     result = await tx.run(query, {"entityNames": entityNames})
                     # Get the data within the transaction scope
                     records = await result.data()
-                    
+
                     if records and len(records) > 0:
                         return records[0].get("deletedEntities", 0)
                     return 0
