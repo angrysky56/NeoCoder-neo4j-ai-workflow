@@ -29,36 +29,26 @@ class CodingIncarnation(BaseIncarnation, ActionTemplateMixin):
     description = "Original NeoCoder for AI-assisted coding workflows"
     version = "1.0.0"
 
-    # Explicitly define which methods should be registered as tools
-    _tool_methods = [
-        "list_action_templates",
-        "get_action_template",
-        "get_best_practices",
-        "add_template_feedback",
-        "get_project",
-        "list_projects",
-        "log_workflow_execution",
-        "get_workflow_history"
-    ]
+    # Only register coding-specific tools here (if any in the future)
+    _tool_methods = []
 
-    # Schema queries for Neo4j setup
+    # Only include coding-specific schema queries (project, workflow, file, directory)
     schema_queries = [
+        # Drop any existing conflicting indexes before creating constraints
+        "DROP INDEX file_path IF EXISTS",
+        
         # Project constraints
         "CREATE CONSTRAINT project_id IF NOT EXISTS FOR (p:Project) REQUIRE p.id IS UNIQUE",
-
-        # Action template constraints
-        "CREATE CONSTRAINT template_keyword IF NOT EXISTS FOR (t:ActionTemplate) REQUIRE t.keyword IS UNIQUE",
 
         # Workflow execution constraints
         "CREATE CONSTRAINT workflow_id IF NOT EXISTS FOR (w:WorkflowExecution) REQUIRE w.id IS UNIQUE",
 
-        # File and directory constraints
-        "CREATE CONSTRAINT file_path IF NOT EXISTS FOR (f:File) REQUIRE f.path IS UNIQUE",
-        "CREATE CONSTRAINT dir_path IF NOT EXISTS FOR (d:Directory) REQUIRE d.path IS UNIQUE",
+        # File and directory constraints (project-scoped to allow multiple projects)
+        "CREATE CONSTRAINT unique_file_path IF NOT EXISTS FOR (f:File) REQUIRE (f.project_id, f.path) IS UNIQUE",
+        "CREATE CONSTRAINT unique_dir_path IF NOT EXISTS FOR (d:Directory) REQUIRE (d.project_id, d.path) IS UNIQUE",
 
         # Indexes for efficient querying
         "CREATE INDEX project_name IF NOT EXISTS FOR (p:Project) ON (p.name)",
-        "CREATE INDEX template_current IF NOT EXISTS FOR (t:ActionTemplate) ON (t.isCurrent)",
         "CREATE INDEX workflow_timestamp IF NOT EXISTS FOR (w:WorkflowExecution) ON (w.timestamp)",
         "CREATE INDEX file_name IF NOT EXISTS FOR (f:File) ON (f.name)",
         "CREATE INDEX dir_name IF NOT EXISTS FOR (d:Directory) ON (d.name)"
@@ -293,7 +283,8 @@ Remember: The key to NeoCoder is following structured workflows that ensure qual
                         t.created = datetime(),
                         t.updated = datetime()
                     """
-                    await session.execute_write(lambda tx: tx.run(query, template))
+                    from typing import cast, LiteralString
+                    await session.execute_write(lambda tx: tx.run(cast(LiteralString, query), template))
                     logger.info(f"Created action template: {template['keyword']}")
         except Exception as e:
             logger.error(f"Error creating action templates: {e}")

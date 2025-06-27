@@ -1,0 +1,247 @@
+# LV Framework Configuration
+# =========================
+# Central configuration file for Lotka-Volterra Ecosystem Intelligence Framework
+
+# Database Configuration
+[database.neo4j]
+uri = "bolt://localhost:7687"
+username = "neo4j"
+password = "lv_password_2024"
+database = "neo4j"
+max_connection_lifetime = 3600
+max_connection_pool_size = 50
+connection_acquisition_timeout = 60
+
+[database.qdrant]
+host = "localhost"
+port = 6333
+grpc_port = 6334
+prefer_grpc = false
+timeout = 60
+# Optional API key for production
+# api_key = "your_qdrant_api_key"
+
+# LV Ecosystem Parameters
+[lv_ecosystem]
+# Mathematical parameters
+max_iterations = 10
+damping_factor = 0.15
+convergence_threshold = 1e-6
+
+# Entropy thresholds for behavioral adaptation
+entropy_low_threshold = 0.3
+entropy_high_threshold = 0.6
+
+# Default embedding model
+embedder_model = "all-MiniLM-L6-v2"
+# Alternative models:
+# embedder_model = "all-mpnet-base-v2"  # Higher quality, slower
+# embedder_model = "all-distilroberta-v1"  # Balanced performance
+
+# Growth Rate Weights by Entropy Level
+[lv_ecosystem.weights.low_entropy]
+# Precision mode: High confidence, factual optimization
+quality = 0.9
+novelty = 0.0
+bias = 0.05
+cost = 0.05
+
+[lv_ecosystem.weights.medium_entropy]
+# Balanced mode: Exploration + exploitation
+quality = 0.6
+novelty = 0.3
+bias = 0.05
+cost = 0.05
+
+[lv_ecosystem.weights.high_entropy]
+# Creativity mode: Maximum diversity
+quality = 0.2
+novelty = 0.7
+bias = 0.05
+cost = 0.05
+
+# Alpha Matrix Weights (Interaction Matrix)
+[lv_ecosystem.alpha_weights]
+# Relative importance of different competition factors
+semantic = 0.6      # Semantic similarity competition
+niche = 0.3         # Niche-based inhibition
+task = 0.1          # Task-specific penalties
+
+# Niche Inhibition Values
+[lv_ecosystem.niche_inhibition]
+same_niche_high_similarity = -1.5     # Strong competition
+same_niche_low_similarity = -0.7      # Moderate competition
+different_niches = 0.0                # No competition
+preferred_to_nonpreferred = -1.2      # Dominance effect
+nonpreferred_to_preferred = 0.0       # Asymmetric exclusion
+
+# Quality Assessment Configuration
+[quality_assessment]
+# Grammar and coherence weights
+grammar_weight = 0.4
+coherence_weight = 0.3
+factual_weight = 0.3
+
+# Quality thresholds
+minimum_quality_threshold = 0.3
+high_quality_threshold = 0.8
+
+# Novelty Assessment Configuration
+[novelty_assessment]
+# Similarity search parameters
+similarity_search_limit = 5
+novelty_threshold = 0.7
+historical_window_size = 1000
+
+# Bias Mitigation Configuration
+[bias_mitigation]
+# Bias detection sensitivity
+bias_detection_threshold = 0.6
+fairness_classifier_enabled = true
+
+# Protected attributes for bias detection
+protected_attributes = [
+    "gender",
+    "race", 
+    "age",
+    "religion",
+    "political_affiliation"
+]
+
+# Performance Configuration
+[performance]
+# Caching settings
+enable_embedding_cache = true
+cache_size_limit = 10000
+cache_ttl_seconds = 3600
+
+# Parallel processing
+max_concurrent_candidates = 20
+enable_gpu_acceleration = true
+gpu_batch_size = 32
+
+# Memory management
+max_memory_usage_mb = 2048
+garbage_collection_threshold = 0.8
+
+# Logging Configuration
+[logging]
+level = "INFO"
+# Levels: DEBUG, INFO, WARNING, ERROR, CRITICAL
+
+# Log format
+format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+
+# File logging
+enable_file_logging = true
+log_file_path = "logs/lv_framework.log"
+max_log_file_size_mb = 100
+log_file_backup_count = 5
+
+# Specific logger levels
+[logging.loggers]
+"mcp_neocoder.lv_ecosystem" = "INFO"
+"mcp_neocoder.lv_templates" = "INFO"
+"mcp_neocoder.lv_integration" = "INFO"
+"neo4j" = "WARNING"
+"qdrant_client" = "WARNING"
+"sentence_transformers" = "WARNING"
+
+# Monitoring and Metrics
+[monitoring]
+# Enable metrics collection
+enable_metrics = true
+metrics_export_interval = 60  # seconds
+
+# Metrics to track
+track_diversity_metrics = true
+track_convergence_metrics = true
+track_performance_metrics = true
+track_quality_metrics = true
+
+# Prometheus integration (if available)
+prometheus_enabled = false
+prometheus_port = 8000
+
+# Development Configuration
+[development]
+# Development mode settings
+debug_mode = false
+enable_profiling = false
+save_intermediate_results = false
+
+# Testing configuration
+mock_databases = false
+test_data_size = 100
+enable_benchmarking = false
+
+# Advanced Features
+[advanced]
+# Experimental features (use with caution)
+enable_adaptive_weights = false
+enable_meta_learning = false
+enable_ensemble_selection = false
+
+# Hardware optimization
+auto_detect_hardware = true
+prefer_cpu = false
+nvidia_gpu_memory_fraction = 0.8
+
+# Custom Extensions
+[extensions]
+# Custom entropy estimators
+custom_entropy_estimator = null
+
+# Custom quality assessors  
+custom_quality_assessor = null
+
+# Custom novelty calculators
+custom_novelty_calculator = null
+
+# Plugin system
+enable_plugins = false
+plugin_directory = "plugins/"
+
+# Integration Settings
+[integration.neocoder]
+# NeoCoder-specific settings
+auto_enhance_templates = true
+enhancement_threshold = 0.4  # Entropy threshold for auto-enhancement
+preserve_original_templates = true
+
+# Template-specific settings
+[integration.neocoder.templates]
+KNOWLEDGE_EXTRACT = { entropy_boost = 0.1, max_strategies = 5 }
+KNOWLEDGE_QUERY = { entropy_boost = 0.2, max_strategies = 4 }
+FEATURE = { entropy_boost = 0.0, max_strategies = 3 }
+FIX = { entropy_boost = -0.1, max_strategies = 2 }
+
+# Security Settings
+[security]
+# API security
+enable_api_authentication = false
+api_key_header = "X-API-Key"
+rate_limiting_enabled = false
+max_requests_per_minute = 60
+
+# Database security
+encrypt_database_connections = true
+validate_ssl_certificates = true
+
+# Data privacy
+anonymize_logs = true
+data_retention_days = 90
+
+# Backup and Recovery
+[backup]
+# Automatic backup settings
+enable_automatic_backup = false
+backup_interval_hours = 24
+backup_retention_days = 30
+backup_directory = "backups/"
+
+# What to backup
+backup_neo4j_data = true
+backup_qdrant_data = true
+backup_configuration = true
+backup_logs = false

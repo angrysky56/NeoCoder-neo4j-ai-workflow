@@ -19,8 +19,6 @@ NeoCoder implements a revolutionary **Context-Augmented Reasoning** system that 
 3. **MCP Orchestration** - Intelligent routing between data sources with synthesis and citation
 4. **F-Contraction Synthesis** - Dynamic knowledge merging that preserves source attribution
 
-[QDRANT feature requires my qdrant-enhanced mcp server installed in your client as well](https://github.com/angrysky56/mcp-server-qdrant-enhanced)
-
 ### **Key Capabilities:**
 
 - **Hybrid Knowledge Reasoning**: Seamlessly combine structured facts with semantic context
@@ -38,6 +36,9 @@ NeoCoder implements a revolutionary **Context-Augmented Reasoning** system that 
 📊 **Full Audit Trails**: Complete tracking of knowledge synthesis and workflow execution
 🛡️ **Production-Ready Process Management**: Automatic cleanup, signal handling, and resource tracking to prevent process leaks
 🔧 **Enhanced Tool Handling**: Robust async initialization with proper background task management
+
+New from an idea I had-
+ **Lotka-Volterra Ecological Framework** integrated into Knowledge Graph Incarnation
 
 ## Process Management & Reliability
 
@@ -66,75 +67,154 @@ Use these tools to monitor server health:
 - **Python 3.10+**: For running the MCP server
 - **uv**: The Python package manager for MCP servers
 - **Claude Desktop**: For using with Claude AI
+
+- **Optional for more utility**
 - [MCP-Desktop-Commander](https://github.com/wonderwhy-er/DesktopCommanderMCP): Invaluable for CLI and filesystem operations
-- [For Code Analysis Incarnation: AST/ASG](https://github.com/angrysky56/ast-mcp-server)
-- [For Enhanced Memory: Qdrant MCP Server](https://github.com/calclavia/mcp-server-qdrant): Enhanced vector database integration
+- [For Code Analysis Incarnation: AST/ASG](https://github.com/angrysky56/ast-mcp-server): Currently needs development and an incarnation re-write
+- [QDRANT feature requires my qdrant-enhanced mcp server installed in your client as well](https://github.com/angrysky56/
+mcp-server-qdrant-enhanced)
+- [wolframalpha-llm-mcp for the Lotka-Volterra Ecosystem and generally enhanced abilities- really nice!](https://github.com/Garoth/wolframalpha-llm-mcp)
+
+- Get a free API key from WolframAlpha:
+To get a free API key (AppID) for Wolfram|Alpha, you need to sign up for a Wolfram ID and then register an application on the Wolfram|Alpha Developer Portal.
+Here's the step-by-step process:
+Create a Wolfram ID: If you don't already have one, create a Wolfram ID at https://account.wolfram.com/login/create.
+Navigate to the Developer Portal: Once you have a Wolfram ID, sign in to the Wolfram|Alpha Developer Portal https://developer.wolframalpha.com/portal/myapps.
+Sign up for your first AppID: Click on the "Sign up to get your first AppID" button.
+Fill out the AppID creation dialog: Provide a name and a simple description for your application.
+Receive your AppID: After filling out the necessary information, you will be presented with your API key, also referred to as an AppID.
+Important Notes:
+The Wolfram|Alpha API is free for non-commercial usage, and you get up to 2,000 requests per month.
+Each application requires its own unique AppID.
+For commercial use or increased usage limits, you may need to enter into a Commercial License Agreement.
+
 ## The MCP server runs the Python code, bridging the gap between the Neo4j graph and the AI assistant ( e.g. Claude)
 
 ![alt text](image-3.png)
 
 ### Installation
 
-1. It should auto-install when using the config.
+#### 1. Clone the repository
+
+```bash
+git clone https://github.com/angrysky56/NeoCoder-neo4j-ai-workflow.git
+cd NeoCoder-neo4j-ai-workflow
+```
+
+#### 2. Set up Python and the virtual environment
+
+Make sure you have [pyenv](https://github.com/pyenv/pyenv) and [uv](https://github.com/astral-sh/uv) installed.
+
+```bash
+pyenv install 3.11.12  # if not already installed
+pyenv local 3.11.12
+uv venv
+source .venv/bin/activate
+```
+
+#### 3. Install dependencies
+
+```bash
+uv pip install -e '.[dev,docs,gpu]'
+```
+#### 4. Start Neo4j and Qdrant
+
+- **Neo4j:**
+  Start your Neo4j server (locally or remote).
+  Default connection: `bolt://localhost:7687`
+
+Neo4j connection parameters:
+- **URL**: `bolt://localhost:7687` (default)
+- **Username**: `neo4j` (default)
+- **Password**: Your Neo4j database password
+- **Database**: `neo4j` (default)
+
+  Set credentials via environment variables if needed:
+  - `NEO4J_URL`
+  - `NEO4J_USERNAME`
+  - `NEO4J_PASSWORD`
+  - `NEO4J_DATABASE`
+
+- **Qdrant:**
+  For persistent Qdrant storage, use this Docker command (recommended):
+
+  ```bash
+  docker run -p 6333:6333 -p 6334:6334 \
+    -v "$(pwd)/qdrant_storage:/qdrant/storage:z" \
+    qdrant/qdrant
+  ```
+
+  This will store Qdrant data in a `qdrant_storage` folder in your project directory.
+
+#### 5. (Optional) VS Code users
+
+- Open the Command Palette (`Ctrl+Shift+P`), select **Python: Select Interpreter**, and choose `.venv/bin/python`.
+
+
+1. It should auto-install when using the config- not sure anymore haven't tried that and some dependencies are rather large.
+
+#### Potential Quickstart- lol sorry
+
+## Recommended: Claude Desktop Integration:
+
+   Configure Claude Desktop by adding the following to your
+`claude-app-config.json`:
+
+```json
+{
+  "mcpServers": {
+    "neocoder": {
+      "command": "uv",
+      "args": [
+        "--directory",
+        "/path/to/your/NeoCoder-neo4j-ai-workflow/src/mcp_neocoder",
+        "run",
+        "mcp_neocoder"
+      ],
+      "env": {
+        "NEO4J_URL": "bolt://localhost:7687",
+        "NEO4J_USERNAME": "neo4j",
+        "NEO4J_PASSWORD": "<YOUR_NEO4J_PASSWORD>",
+        "NEO4J_DATABASE": "neo4j"
+      }
+    }
+  }
+}
+```
+
+   **Important**: The password in this configuration must match your
+Neo4j database password.
 
 Otherwise- Install dependencies:
+**Quick Troubleshooting:**
 
-   ```bash
-   uv venv
-   source .venv/bin/activate
-   # On Windows use `venv\Scripts\activate`
-   uv pip install -r requirements.txt
-   ```
+- If you see errors about missing packages, double-check that your `.venv` is activated and you are using the correct Python version.
+- If you need to reset your environment, you can remove `.venv` and repeat the steps above.
 
-If it doesn't work maybe try:
-   ```bash
-   pip install -e .
-   ```
+---
 
-2. Neo4j connection parameters:
-   - **URL**: `bolt://localhost:7687` (default)
-   - **Username**: `neo4j` (default)
-   - **Password**: Your Neo4j database password
-   - **Database**: `neo4j` (default)
+**You are now ready to use NeoCoder with full Neo4j and Qdrant hybrid Lotka-Volterra Ecosystem reasoning!**
 
-   These can be overridden with environment variables:
-   - `NEO4J_URL`
-   - `NEO4J_USERNAME`
-   - `NEO4J_PASSWORD`
-   - `NEO4J_DATABASE`
-
-3. Claude Desktop Integration:
-
-   Configure Claude Desktop by adding the following to your `claude-app-config.json`:
-
-   ```json
-   {
-     "mcpServers": {
-       "neocoder": {
-         "command": "uv",
-         "args": [
-           "--directory",
-           "/path/to/your/NeoCoder-neo4j-ai-workflow/src/mcp_neocoder",
-           "run",
-           "mcp_neocoder"
-         ],
-         "env": {
-           "NEO4J_URL": "bolt://localhost:7687",
-           "NEO4J_USERNAME": "neo4j",
-           "NEO4J_PASSWORD": "<YOUR_NEO4J_PASSWORD>",
-           "NEO4J_DATABASE": "neo4j"
-         }
-       }
-     }
-   }
-   ```
-
-   **Important**: The password in this configuration must match your Neo4j database password.
 
 ## Suggested system prompt
 
 ```plaintext
-> **System Instruction:** You are an AI assistant integrated with a sophisticated hybrid reasoning system that combines Neo4j knowledge graphs, Qdrant vector databases, and MCP orchestration for advanced knowledge management and workflow execution.
+> **System Instruction:** You are an AI assistant integrated with a Neo4j knowledge graph that defines our standard procedures and tracks project changes.
+>
+> **Your Core Interaction Loop:**
+> 1.  **Identify Task & Keyword:** Determine the coding action required (e.g., fix a bug -> `FIX`).
+> 2.  **Consult the Hub:** If unsure about keywords or process, start by querying `:AiGuidanceHub {id: 'main_hub'}` for guidance and links to best practices or other guides.
+> 3.  **Retrieve Instructions:** Formulate a Cypher query to fetch the `steps` from the current `:ActionTemplate` matching the keyword (e.g., `MATCH (t:ActionTemplate {keyword: 'FIX', isCurrent: true}) RETURN t.steps`). Execute this query.
+> 4.  **Execute Guided Workflow:** Follow the retrieved `steps` meticulously. This includes reviewing project READMEs, implementing changes, and critically:
+> 5.  **Perform Verification:** Execute the testing steps defined in the template. **ALL required tests MUST pass before you consider the task complete.**
+> 6.  **Record Completion (Post-Testing):** Only if tests pass, formulate and execute the Cypher query specified in the template to create a `:WorkflowExecution` node, linking it appropriately. Do NOT record if tests failed.
+> 7.  **Finalize Updates:** Update the project's README content (in Neo4j or the file) as per the template's instructions.
+>
+> **Strict Rule:** Always prioritize instructions retrieved from the Neo4j graph over your general knowledge for workflow procedures. Use the graph as your single source of truth for *how* tasks are done here.
+
+---
+
+> **knowledge_graph_incarnation with integrated Lotka Volterra Special System Instruction:** You are an AI assistant integrated with a sophisticated hybrid reasoning system that combines Neo4j knowledge graphs, Qdrant vector databases, and MCP orchestration for advanced knowledge management and workflow execution.
 >
 > **Your Core Capabilities:**
 > 1. **Standard Coding Workflows:** Use Neo4j-guided templates for structured development tasks
@@ -162,6 +242,29 @@ If it doesn't work maybe try:
 > - Every claim must include proper source citations
 > - Use incarnation-specific tools and templates as single source of truth for procedures
 > - Apply F-Contraction principles when processing multi-source information
+
+---
+
+Instructions for WolframAlpha use
+- WolframAlpha understands natural language queries about entities in chemistry, physics, geography, history, art, astronomy, and more.
+- WolframAlpha performs mathematical calculations, date and unit conversions, formula solving, etc.
+- Convert inputs to simplified keyword queries whenever possible (e.g. convert "how many people live in France" to "France population").
+- Send queries in English only; translate non-English queries before sending, then respond in the original language.
+- Display image URLs with Markdown syntax: ![URL]
+- ALWAYS use this exponent notation: `6*10^14`, NEVER `6e14`.
+- ALWAYS use {"input": query} structure for queries to Wolfram endpoints; `query` must ONLY be a single-line string.
+- ALWAYS use proper Markdown formatting for all math, scientific, and chemical formulas, symbols, etc.:  '$$\n[expression]\n$$' for standalone cases and '\( [expression] \)' when inline.
+- Never mention your knowledge cutoff date; Wolfram may return more recent data.
+- Use ONLY single-letter variable names, with or without integer subscript (e.g., n, n1, n_1).
+- Use named physical constants (e.g., 'speed of light') without numerical substitution.
+- Include a space between compound units (e.g., "Ω m" for "ohm*meter").
+- To solve for a variable in an equation with units, consider solving a corresponding equation without units; exclude counting units (e.g., books), include genuine units (e.g., kg).
+- If data for multiple properties is needed, make separate calls for each property.
+- If a WolframAlpha result is not relevant to the query:
+ -- If Wolfram provides multiple 'Assumptions' for a query, choose the more relevant one(s) without explaining the initial result. If you are unsure, ask the user to choose.
+ -- Re-send the exact same 'input' with NO modifications, and add the 'assumption' parameter, formatted as a list, with the relevant values.
+ -- ONLY simplify or rephrase the initial query if a more relevant 'Assumption' or other input suggestions are not provided.
+ -- Do not explain each step unless user input is needed. Proceed directly to making a better API call based on the available assumptions.
 ```
 
 ## Multiple Incarnations

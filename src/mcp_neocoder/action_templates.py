@@ -20,10 +20,12 @@ class ActionTemplateMixin:
     """Mixin class providing action template functionality for the Neo4jWorkflowServer."""
 
     # Schema queries for Neo4j setup
+    # Patch: Drop any conflicting index on ActionTemplate.keyword before creating uniqueness constraint
     schema_queries = [
-        # Action template constraints
+        # Drop index if it exists (Neo4j 5+ syntax)
+        "CALL db.indexes() YIELD name, entityType, labelsOrTypes, properties WHERE entityType = 'NODE' AND 'ActionTemplate' IN labelsOrTypes AND 'keyword' IN properties AND name CONTAINS 'index' WITH name CALL { WITH name CALL db.index.drop(name) YIELD name AS dropped RETURN dropped } RETURN *",
+        # Action template uniqueness constraint
         "CREATE CONSTRAINT IF NOT EXISTS FOR (t:ActionTemplate) REQUIRE t.keyword IS UNIQUE",
-
         # Indexes for efficient querying
         "CREATE INDEX IF NOT EXISTS FOR (t:ActionTemplate) ON (t.isCurrent)",
     ]

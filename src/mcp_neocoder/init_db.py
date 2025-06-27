@@ -5,7 +5,6 @@ This script initializes the Neo4j database with the necessary schemas for each i
 It creates the base nodes and relationships needed for the system to function properly.
 """
 
-import asyncio
 import logging
 import os
 import sys
@@ -94,7 +93,8 @@ async def init_base_schema(driver: AsyncDriver, database: str = "neo4j"):
     try:
         async with safe_neo4j_session(driver, database) as session:
             for query in base_schema_queries:
-                await session.run(query)  # type: ignore[arg-type]
+                from typing import cast, LiteralString
+                await session.run(cast(LiteralString, query))
         logger.info("Base schema initialized successfully")
     except Exception as e:
         logger.error(f"Error initializing base schema: {e}")
@@ -253,7 +253,8 @@ async def create_main_guidance_hub(driver: AsyncDriver, database: str = "neo4j")
 Welcome to the NeoCoder Polymorphic Framework. This system can transform between multiple incarnations to support different use cases:
 
 ## Default Available Incarnation Templates
-- **base_incarnation**: The original NeoCoder for AI-assisted coding
+- **base_incarnation**: The base NeoCoder incarnation, providing core functionality.
+- **coding_incarnation**: The default coding incarnation, focused on AI-assisted coding tasks.
 - **data_analysis_incarnation**: Data Analysis Incarnation
 - **decision_incarnation**: Decision Support System
 - **knowledge_graph_incarnation**: Knowledge Graph Incarnation
@@ -320,46 +321,6 @@ async def create_dynamic_links_between_hubs(driver: AsyncDriver, database: str =
     except Exception as e:
         logger.error(f"Error creating hub links: {e}")
         raise
-
-
-async def create_links_between_hubs(driver: AsyncDriver, database: str = "neo4j"):
-    """Create relationships between the main hub and incarnation-specific hubs (legacy version).
-    This is kept for backward compatibility but we should prefer create_dynamic_links_between_hubs.
-    """
-    logger.info("Creating links between predefined hubs...")
-
-    # Links to incarnation hubs
-    query = """
-    MATCH (main:AiGuidanceHub {id: 'main_hub'})
-
-    OPTIONAL MATCH (research:AiGuidanceHub {id: 'research_hub'})
-    OPTIONAL MATCH (decision:AiGuidanceHub {id: 'decision_hub'})
-    OPTIONAL MATCH (learning:AiGuidanceHub {id: 'learning_hub'})
-    OPTIONAL MATCH (simulation:AiGuidanceHub {id: 'simulation_hub'})
-
-    FOREACH(x IN CASE WHEN research IS NOT NULL THEN [1] ELSE [] END |
-        MERGE (main)-[:HAS_INCARNATION {type: 'research_orchestration'}]->(research))
-
-    FOREACH(x IN CASE WHEN decision IS NOT NULL THEN [1] ELSE [] END |
-        MERGE (main)-[:HAS_INCARNATION {type: 'decision_support'}]->(decision))
-
-    FOREACH(x IN CASE WHEN learning IS NOT NULL THEN [1] ELSE [] END |
-        MERGE (main)-[:HAS_INCARNATION {type: 'continuous_learning'}]->(learning))
-
-    FOREACH(x IN CASE WHEN simulation IS NOT NULL THEN [1] ELSE [] END |
-        MERGE (main)-[:HAS_INCARNATION {type: 'complex_system'}]->(simulation))
-
-    RETURN main
-    """
-
-    try:
-        async with safe_neo4j_session(driver, database) as session:
-            await session.run(query)
-        logger.info("Hub links created successfully")
-    except Exception as e:
-        logger.error(f"Error creating hub links: {e}")
-        raise
-
 
 async def init_db(incarnations: Optional[List[str]] = None):
     """Initialize the database with the schemas for the specified incarnations."""
@@ -476,8 +437,33 @@ def main():
                 logger.error(f"Valid types are: {', '.join(available_types)}")
                 sys.exit(1)
 
-    # Run the initialization
-    asyncio.run(init_db(incarnations_to_init))
+    # Robust event loop handling for asyncio (fixes 'Future attached to a different loop' errors)
+    try:
+        import asyncio
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
+
+        if loop and loop.is_running():
+            # If already running (e.g., in Jupyter, VS Code, or nested async), create a task and wait for it
+            task = loop.create_task(init_db(incarnations_to_init))
+            # If in a REPL, we can't block, so use add_done_callback to log result
+            def _log_result(fut):
+                try:
+                    result = fut.result()
+                    logger.info(f"Database initialization result: {result}")
+                except Exception as e:
+                    logger.error(f"Database initialization failed: {e}")
+            task.add_done_callback(_log_result)
+            # If possible, run until complete (only if not in a REPL)
+            if hasattr(loop, 'run_until_complete'):
+                loop.run_until_complete(task)
+        else:
+            asyncio.run(init_db(incarnations_to_init))
+    except Exception as e:
+        logger.error(f"Error running database initialization: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

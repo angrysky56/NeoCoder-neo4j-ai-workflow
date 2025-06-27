@@ -56,9 +56,14 @@ logger = logging.getLogger("mcp_neocoder")
 
 # Type definitions for function return handling
 T = TypeVar('T')
-
+def async_to_sync(func: Awaitable[T]) -> T:
+    """Run an async function in a synchronous context."""
+    loop = asyncio.get_event_loop()
+    return loop.run_until_complete(func)
 
 class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolProposalMixin, ActionTemplateMixin):
+    # Qdrant client for vector search (optional, injected at startup)
+    qdrant_client: Optional[Any] = None
     """Server for Neo4j-guided AI workflow with polymorphic incarnation support."""
 
     def __init__(self, driver: AsyncDriver, database: str = "neo4j", loop: Optional[asyncio.AbstractEventLoop] = None, *args: Any, **kwargs: Any):
@@ -1669,6 +1674,15 @@ def create_server(db_url: str, username: str, password: str, database: str = "ne
         # Track the driver for cleanup (this will be done again in the server constructor)
         track_driver(driver)
 
+        # 4.5. Qdrant integration: ensure Qdrant is available and get client
+        try:
+            from .qdrant_utils import get_qdrant_client
+            qdrant_client = get_qdrant_client()
+            logger.info("Qdrant client initialized successfully")
+        except Exception as qdrant_err:
+            logger.warning(f"Qdrant not available or failed to initialize: {qdrant_err}")
+            qdrant_client = None
+
         # 5. Define an async function for all async operations
         async def async_server_setup():
             # 5.1 Verify the driver connection works
@@ -1676,9 +1690,7 @@ def create_server(db_url: str, username: str, password: str, database: str = "ne
                 async with safe_neo4j_session(driver, database) as session:
                     result = await session.run("RETURN 1 as n")
                     data = await result.data()
-                    connection_ok = bool(data and data[0]["n"] == 1)
-
-                    if not connection_ok:
+                    if not data or data[0]["n"] != 1:
                         raise RuntimeError("Driver verification failed: unexpected response")
 
                     logger.info("Neo4j driver connection verified successfully")
@@ -1686,8 +1698,14 @@ def create_server(db_url: str, username: str, password: str, database: str = "ne
                 logger.error(f"Driver verification failed: {str(e)}")
                 raise RuntimeError(f"Could not connect to Neo4j: {str(e)}")
 
-            # 5.2 Create the server instance
+            # 5.2 Create the server instance, passing qdrant_client if needed
             server = Neo4jWorkflowServer(driver, database, loop)
+            # If your server or vector-enabled classes need the client, set it here:
+            if qdrant_client is not None:
+                try:
+                    server.qdrant_client = qdrant_client
+                except Exception as e:
+                    logger.warning(f"Failed to set qdrant_client on server: {e}")
             logger.info("Neo4jWorkflowServer created successfully")
 
             # Wait for server to complete initialization
@@ -1720,6 +1738,12 @@ def create_server(db_url: str, username: str, password: str, database: str = "ne
 
             # Create the server instance directly without async setup
             server = Neo4jWorkflowServer(driver, database, loop)
+            # Set qdrant_client if available
+            if qdrant_client is not None:
+                try:
+                    server.qdrant_client = qdrant_client
+                except Exception as e:
+                    logger.warning(f"Failed to set qdrant_client on server: {e}")
             logger.info("Neo4jWorkflowServer created with deferred initialization")
 
             # The server will initialize itself asynchronously in its __init__ method

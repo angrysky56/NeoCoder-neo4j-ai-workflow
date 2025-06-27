@@ -118,7 +118,110 @@ class KnowledgeGraphIncarnation(BaseIncarnation):
             # Indexes for efficient querying
             "CREATE INDEX knowledge_entity_type IF NOT EXISTS FOR (e:Entity) ON (e.entityType)",
             "CREATE FULLTEXT INDEX entity_observation_fulltext IF NOT EXISTS FOR (o:Observation) ON EACH [o.content]",
-            "CREATE FULLTEXT INDEX entity_name_fulltext IF NOT EXISTS FOR (e:Entity) ON EACH [e.name]"
+            "CREATE FULLTEXT INDEX entity_name_fulltext IF NOT EXISTS FOR (e:Entity) ON EACH [e.name]",
+
+            # LV-Enhanced Knowledge Graph Guidance Hub Creation
+            """
+            MERGE (hub:AiGuidanceHub {id: 'knowledge_graph_hub'})
+            SET hub.description = "
+# Knowledge Graph Management System with LV Ecosystem Intelligence
+
+Welcome to the Knowledge Graph Management System powered by the NeoCoder framework with Lotka-Volterra Ecosystem Intelligence integration.
+
+## 🧬 LV-Enhanced Knowledge Operations
+
+### When to Use LV Enhancement
+
+**Entropy-Based Decision Making:**
+1. **Calculate entropy** using `EntropyEstimator.estimate_prompt_entropy(query)`
+2. **Decision logic:**
+   - entropy ≤ 0.4 → Use standard knowledge operations
+   - entropy > 0.4 → Use LV-enhanced operations for diversity preservation
+
+### LV-Enhanced Templates Available
+
+#### 🔍 **KNOWLEDGE_QUERY_LV** - Multi-Perspective Knowledge Search
+- **Use when:** Complex queries requiring diverse perspectives  
+- **Entropy threshold:** > 0.4
+- **Template:** `get_action_template(keyword='KNOWLEDGE_QUERY_LV')`
+- **Real Implementation:** Calls `NeoCoder_LV_Integration.enhance_existing_template('KNOWLEDGE_QUERY', context)`
+
+#### 📚 **KNOWLEDGE_EXTRACT_LV** - Diversity-Preserving Knowledge Extraction  
+- **Use when:** Extracting knowledge from multi-domain documents
+- **Entropy threshold:** > 0.4  
+- **Template:** `get_action_template(keyword='KNOWLEDGE_EXTRACT_LV')`
+- **Real Implementation:** Uses LV ecosystem dynamics for strategy diversity
+
+#### ⚙️ **LV_SELECT** - Generic LV Enhancement
+- **Use when:** Any workflow needs diversity preservation
+- **Entropy threshold:** > 0.4
+- **Template:** `get_action_template(keyword='LV_SELECT')`
+- **Real Implementation:** Applies Lotka-Volterra dynamics to any template
+
+### 🧪 LV Integration Workflow
+
+**Step 1: Initialize LV System**
+```python
+from mcp_neocoder.lv_integration import NeoCoder_LV_Integration
+lv_system = NeoCoder_LV_Integration(neo4j_session, qdrant_client)
+```
+
+**Step 2: Calculate Real Entropy** 
+```python
+entropy = lv_system.entropy_estimator.estimate_prompt_entropy(user_query)
+```
+
+**Step 3: Apply Decision Logic**
+- If entropy > 0.4: Use LV-enhanced template  
+- If entropy ≤ 0.4: Use standard knowledge operations
+
+**Step 4: Execute Real LV Enhancement**
+```python
+# Real LV execution (not simulation)
+results = await lv_system.enhance_existing_template(template_keyword, context)
+diversity_score = results['diversity_metrics']['semantic_diversity']
+```
+
+**Step 5: Validate Results**
+- Verify diversity_score > 0.7
+- Check that multiple perspectives are included
+- Ensure mathematical stability (negative eigenvalues)
+
+## 📊 Standard Knowledge Operations
+
+### Core Knowledge Graph Tools
+- **Entity Management:** `create_entities()`, `add_observations()`
+- **Relationship Management:** `create_relations()`  
+- **Knowledge Discovery:** `search_nodes()`, `open_nodes()`, `read_graph()`
+
+### Enhanced Hybrid Operations  
+- **F-Contraction Synthesis:** Merge Neo4j structured facts with Qdrant semantic context
+- **Citation Tracking:** Full source attribution across graph and vector databases
+- **Dynamic Knowledge Updates:** Real-time knowledge graph evolution
+
+## 🎯 Decision Framework
+
+**Low Entropy Queries (≤ 0.4):**
+- Factual lookups: `search_nodes(query='specific_entity')`
+- Simple relationships: `create_relations([{from: 'A', to: 'B', relationType: 'RELATES_TO'}])`
+- Direct entity creation: `create_entities([{name: 'Entity', entityType: 'Type', observations: ['fact']}])`
+
+**High Entropy Queries (> 0.4):**
+- Complex analysis: Use `KNOWLEDGE_QUERY_LV` template
+- Multi-domain extraction: Use `KNOWLEDGE_EXTRACT_LV` template  
+- Creative knowledge synthesis: Use `LV_SELECT` template
+
+## ⚡ Performance Notes
+
+- **Real LV computation** uses SentenceTransformer embeddings and numpy eigenvalue analysis
+- **CUDA acceleration** available for GPU-enabled systems
+- **Mathematical validation** through eigenvalue stability checking
+- **Diversity metrics** computed using real semantic analysis
+
+Remember: This system uses **actual Lotka-Volterra mathematical dynamics**, not simulations. All diversity scores and ecosystem metrics are computed using real mathematical models.
+"
+            RETURN hub
+            """
         ]
 
         try:

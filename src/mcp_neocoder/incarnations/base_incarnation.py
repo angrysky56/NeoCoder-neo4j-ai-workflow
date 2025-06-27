@@ -10,7 +10,12 @@ discovered and loaded without requiring central registration of types.
 
 import json
 import logging
-from typing import List, cast, LiteralString
+from typing import List, cast
+try:
+    from typing import LiteralString
+except ImportError:
+    # Fallback for Python < 3.11
+    LiteralString = str
 
 import mcp.types as types
 from neo4j import AsyncDriver, AsyncManagedTransaction
@@ -28,7 +33,8 @@ class BaseIncarnation(ActionTemplateMixin):
     description = "Base incarnation class"
 
     # Optional schema creation scripts, format: List of Cypher queries to execute
-    schema_queries: List[str] = []
+    # Use ActionTemplateMixin's schema_queries for ActionTemplate constraints/indexes
+    schema_queries: List[str] = ActionTemplateMixin.schema_queries.copy()
 
     # Hub content - default guidance hub text for this incarnation
     hub_content: str = """
@@ -38,13 +44,20 @@ Welcome to this incarnation of the NeoCoder framework.
 This is a default hub that should be overridden by each incarnation.
     """
 
-    # Optional list of tool method names - can be defined by subclasses
-    # to explicitly declare which methods should be registered as tools
-    # Format: list[str] with method names to be registered as tools
+    # Register all general-purpose tools in the base incarnation
     _tool_methods: List[str] = [
+        # Action templates
         "list_action_templates",
         "get_action_template",
         "add_template_feedback",
+        # Project management
+        "get_project",
+        "list_projects",
+        # Workflow tracking
+        "log_workflow_execution",
+        "get_workflow_history",
+        # Best practices
+        "get_best_practices",
     ]
 
     def __init__(self, driver: AsyncDriver, database: str = "neo4j"):

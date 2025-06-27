@@ -32,10 +32,12 @@ def main():
     except Exception as e:
         logger.warning(f"Failed to clean up zombie instances: {e}")
 
-    parser = argparse.ArgumentParser(description="NeoCoder Neo4j-Guided AI Coding Workflow")
+    parser = argparse.ArgumentParser(
+        description="NeoCoder Neo4j-Guided AI Coding Workflow (default: server if no command specified)"
+    )
 
     # Create subparsers for different commands
-    subparsers = parser.add_subparsers(dest="command", help="Command to execute")
+    subparsers = parser.add_subparsers(dest="command")
 
     # Server command
     server_parser = subparsers.add_parser("server", help="Run the MCP server")
@@ -65,15 +67,17 @@ def main():
     logger.info(f"NEO4J_PASSWORD from environment: {'Set' if os.environ.get('NEO4J_PASSWORD') else 'Not set'}")
     logger.info(f"NEO4J_DATABASE from environment: {os.environ.get('NEO4J_DATABASE', 'Not set')}")
 
-    # Set environment variables for database connection
-    if hasattr(args, 'db_url') and args.db_url:
-        os.environ["NEO4J_URL"] = args.db_url
-    if hasattr(args, 'username') and args.username:
-        os.environ["NEO4J_USERNAME"] = args.username
-    if hasattr(args, 'password') and args.password:
-        os.environ["NEO4J_PASSWORD"] = args.password
-    if hasattr(args, 'database') and args.database:
-        os.environ["NEO4J_DATABASE"] = args.database
+    # Set environment variables for database connection (only if those attributes exist)
+    for arg_name, env_name in [
+        ("db_url", "NEO4J_URL"),
+        ("username", "NEO4J_USERNAME"),
+        ("password", "NEO4J_PASSWORD"),
+        ("database", "NEO4J_DATABASE")
+    ]:
+        if hasattr(args, arg_name):
+            value = getattr(args, arg_name)
+            if value is not None:
+                os.environ[env_name] = value
 
     # Execute the appropriate command
     if args.command == "server":

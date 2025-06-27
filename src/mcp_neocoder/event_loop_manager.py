@@ -128,18 +128,22 @@ async def run_in_main_loop(coro):
     """
     Run a coroutine in the main event loop.
 
+    Args:
+        coro: An awaitable or coroutine object to be executed.
+
     This is useful for operations that must run in the same loop context
     as the Neo4j driver initialization.
     """
+    global _MAIN_LOOP
     main_loop = get_main_loop()
     if main_loop is None:
         # Initialize if not done yet
         main_loop = initialize_main_loop()
-
-    current_loop = None
     try:
         current_loop = asyncio.get_running_loop()
     except RuntimeError:
+        logger.error("No running event loop in current thread. Refusing to create a new event loop to avoid conflicts. Please ensure this function is called from within an existing event loop context.")
+        raise RuntimeError("No running event loop in current thread. Please call this function from within an existing event loop.")
         # Not running in an event loop - create one
         current_loop = asyncio.new_event_loop()
         asyncio.set_event_loop(current_loop)
@@ -161,32 +165,15 @@ async def run_in_main_loop(coro):
                 return result
             except asyncio.TimeoutError:
                 logger.error("Timeout while waiting for coroutine result from main loop")
-                # Fall back to running in current loop - may cause loop errors but at least won't hang
                 logger.warning("Fallback: Running in current loop after timeout")
-                return await coro
-            except Exception as e:
-                logger.error(f"Failed to run coroutine in main loop: {e}")
-                # Try a different approach
-                logger.warning("Attempting fallback execution method")
-                return await coro
-        else:
-            # Main loop is not running, we can execute the coroutine in it
-            logger.info("Main loop is not running, will execute coroutine in it")
-            try:
-                # Run the coroutine directly in the main loop
-                if not main_loop.is_closed():
-                    # Safest way to run in the main loop when it's not running
-                    fut = asyncio.run_coroutine_threadsafe(coro, main_loop)
-                    return fut.result(timeout=30)
-                else:
-                    logger.error("Main loop is closed, creating new loop")
-                    # If main loop is closed, create a new one and execute there
-                    new_loop = asyncio.new_event_loop()
-                    global _MAIN_LOOP
-                    _MAIN_LOOP = new_loop  # Update the global main loop
-                    asyncio.set_event_loop(new_loop)
-                    return await coro  # Run in the new loop
+                # WARNING: Awaiting the coroutine here may cause 'attached to a different loop' errors.
+                raise RuntimeError(
+                    "Failed to execute coroutine in the main event loop due to timeout. "
+                    "Attempting to await the coroutine in the current loop may cause 'attached to a different loop' errors. "
+                    "Please check event loop usage and ensure coroutines are bound to the correct loop."
+                )
             except Exception as e:
                 logger.error(f"Error running in main loop: {e}")
                 logger.warning("Falling back to current loop as last resort")
+                return await coro
                 return await coro

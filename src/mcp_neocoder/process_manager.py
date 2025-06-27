@@ -21,12 +21,12 @@ logger = logging.getLogger("mcp_neocoder")
 
 # Timeout configurations for different scenarios
 TIMEOUTS = {
-    "tool_operation": 300.0,  # 5 minutes for tool operations (generous)
+    "tool_operation": 900.0,  # 15 minutes for tool operations (generous)
     "shutdown_task_cancel": 10.0,  # 10 seconds for task cancellation during shutdown
     "shutdown_process_terminate": 15.0,  # 15 seconds for process termination
     "shutdown_process_kill": 5.0,  # 5 seconds after SIGKILL
     "shutdown_cleanup_total": 30.0,  # 30 seconds total for full cleanup
-    "subprocess_default": 60.0,  # 1 minute default for subprocesses
+    "subprocess_default": 600.0,  # 10 minutes default for subprocesses
 }
 
 # Global tracking dictionaries for cleanup
@@ -143,97 +143,127 @@ def untrack_session(session: Any) -> None:
 
 
 async def cleanup_processes() -> None:
-    """Clean up all running processes and background tasks."""
+    """Clean up all running processes, background tasks, Neo4j sessions, and Neo4j drivers.
+
+    This function ensures that all tracked subprocesses, asyncio tasks, Neo4j sessions, and drivers
+    are properly terminated or closed to prevent resource leaks during shutdown.
+    """
     global _shutdown_in_progress
     _shutdown_in_progress = True
 
     logger.info("Starting process cleanup...")
 
+    # Handle tool operations with more grace
     with cleanup_lock:
-        # Handle tool operations with more grace
-        tool_count = len(tool_operations)
-        if tool_count > 0:
-            logger.info(f"Waiting for {tool_count} tool operations to complete...")
+        tool_tasks = list(tool_operations)
+        tool_count = len(tool_tasks)
+    if tool_count > 0:
+        logger.info(f"Waiting for {tool_count} tool operations to complete...")
 
-            # Give tool operations extra time to finish gracefully
-            tool_tasks = list(tool_operations)
-            for task in tool_tasks:
-                if not task.done():
-                    try:
-                        # Wait longer for tool operations (they might be doing important work)
-                        await asyncio.wait_for(task, timeout=TIMEOUTS["shutdown_task_cancel"])
-                        logger.info("Tool operation completed gracefully during shutdown")
-                    except asyncio.TimeoutError:
-                        logger.warning(f"Tool operation didn't complete in {TIMEOUTS['shutdown_task_cancel']}s, cancelling")
-                        task.cancel()
-                        try:
-                            await asyncio.wait_for(task, timeout=2.0)
-                        except (asyncio.CancelledError, asyncio.TimeoutError):
-                            pass
-                    except Exception as e:
-                        logger.error(f"Error waiting for tool operation: {e}")
-
-            tool_operations.clear()
-
-        # Cancel remaining background tasks (non-tool operations)
-        remaining_tasks = background_tasks - tool_operations
-        task_count = len(remaining_tasks)
-        if task_count > 0:
-            logger.info(f"Cancelling {task_count} background tasks")
-            for task in list(remaining_tasks):
-                if not task.done():
+        for task in tool_tasks:
+            if not task.done():
+                try:
+                    # Wait longer for tool operations (they might be doing important work)
+                    await asyncio.wait_for(task, timeout=TIMEOUTS["shutdown_task_cancel"])
+                    logger.info("Tool operation completed gracefully during shutdown")
+                except asyncio.TimeoutError:
+                    logger.warning(f"Tool operation didn't complete in {TIMEOUTS['shutdown_task_cancel']}s, cancelling")
                     task.cancel()
                     try:
                         await asyncio.wait_for(task, timeout=2.0)
                     except (asyncio.CancelledError, asyncio.TimeoutError):
                         pass
+                except Exception as e:
+                    logger.error(f"Error waiting for tool operation: {e}")
+
+        with cleanup_lock:
+            for task in tool_tasks:
+                tool_operations.discard(task)
+
+    # Cancel remaining background tasks (non-tool operations)
+    with cleanup_lock:
+        remaining_tasks = background_tasks - tool_operations
+        task_list = list(remaining_tasks)
+        task_count = len(task_list)
+    if task_count > 0:
+        logger.info(f"Cancelling {task_count} background tasks")
+        for task in task_list:
+            if not task.done():
+                task.cancel()
+                try:
+                    await asyncio.wait_for(task, timeout=2.0)
+                except (asyncio.CancelledError, asyncio.TimeoutError):
+                    pass
+        with cleanup_lock:
+            for task in task_list:
+                background_tasks.discard(task)
             background_tasks.clear()
 
-        # Terminate all processes (with longer timeout for graceful shutdown)
-        process_count = len(running_processes)
-        if process_count > 0:
-            logger.info(f"Terminating {process_count} running processes")
-            for job_id, process in list(running_processes.items()):
-                if process and process.poll() is None:
-                    logger.info(f"Terminating process {job_id} (PID: {process.pid})")
-                    try:
-                        process.terminate()
-                        try:
-                            process.wait(timeout=TIMEOUTS["shutdown_process_terminate"])
-                            logger.info(f"Process {job_id} terminated gracefully")
-                        except subprocess.TimeoutExpired:
-                            logger.warning(f"Process {job_id} did not terminate, killing")
-                            process.kill()
-                            process.wait(timeout=TIMEOUTS["shutdown_process_kill"])
-                    except Exception as e:
-                        logger.error(f"Error terminating process {job_id}: {e}")
-            running_processes.clear()
-
-        # Close Neo4j sessions
-        session_count = len(active_sessions)
-        if session_count > 0:
-            logger.info(f"Closing {session_count} Neo4j sessions")
-            for session in list(active_sessions):
+    # Terminate all processes (with longer timeout for graceful shutdown)
+    with cleanup_lock:
+        processes = list(running_processes.items())
+        process_count = len(processes)
+    if process_count > 0:
+        logger.info(f"Terminating {process_count} running processes")
+        for job_id, process in processes:
+            if process and process.poll() is None:
+                logger.info(f"Terminating process {job_id} (PID: {process.pid})")
                 try:
-                    if hasattr(session, 'close'):
-                        if asyncio.iscoroutinefunction(session.close):
-                            await session.close()
-                        else:
-                            session.close()
+                    process.terminate()
+                    try:
+                        process.wait(timeout=TIMEOUTS["shutdown_process_terminate"])
+                        logger.info(f"Process {job_id} terminated gracefully")
+                    except subprocess.TimeoutExpired:
+                        logger.warning(f"Process {job_id} did not terminate, killing")
+                        process.kill()
+                        process.wait(timeout=TIMEOUTS["shutdown_process_kill"])
                 except Exception as e:
-                    logger.error(f"Error closing session: {e}")
+                    logger.error(f"Error terminating process {job_id}: {e}")
+        with cleanup_lock:
+            running_processes.clear()
+    # Close Neo4j sessions
+    with cleanup_lock:
+        sessions = list(active_sessions)
+        session_count = len(sessions)
+    if session_count > 0:
+        logger.info(f"Closing {session_count} Neo4j sessions")
+        for session in sessions:
+            try:
+                if hasattr(session, 'close'):
+                    if asyncio.iscoroutinefunction(session.close):
+                        try:
+                            await session.close()
+                        except Exception as e:
+                            # Ignore errors if session is already closed
+                            if "closed" in str(e).lower():
+                                logger.debug(f"Session already closed: {e}")
+                            else:
+                                logger.error(f"Error closing session: {e}")
+                    else:
+                        try:
+                            session.close()
+                        except Exception as e:
+                            if "closed" in str(e).lower():
+                                logger.debug(f"Session already closed: {e}")
+                            else:
+                                logger.error(f"Error closing session: {e}")
+            except Exception as e:
+                logger.error(f"Unexpected error closing session: {e}")
+        with cleanup_lock:
             active_sessions.clear()
 
-        # Close Neo4j drivers
-        driver_count = len(active_drivers)
-        if driver_count > 0:
-            logger.info(f"Closing {driver_count} Neo4j drivers")
-            for driver in list(active_drivers):
-                try:
-                    await driver.close()
-                    logger.debug("Neo4j driver closed successfully")
-                except Exception as e:
-                    logger.error(f"Error closing Neo4j driver: {e}")
+    with cleanup_lock:
+        drivers = list(active_drivers)
+        driver_count = len(drivers)
+    if driver_count > 0:
+        logger.info(f"Closing {driver_count} Neo4j drivers")
+        for driver in drivers:
+            try:
+                await driver.close()
+                logger.debug("Neo4j driver closed successfully")
+            except Exception as e:
+                logger.error(f"Error closing Neo4j driver: {e}")
+        with cleanup_lock:
             active_drivers.clear()
 
     logger.info("Process cleanup completed")

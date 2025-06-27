@@ -1,0 +1,138 @@
+# LV Framework Docker Compose Configuration
+# =========================================
+# Easy setup for Neo4j and Qdrant databases
+
+version: '3.8'
+
+services:
+  # Neo4j Graph Database
+  neo4j-lv:
+    image: neo4j:5.0
+    container_name: neo4j-lv
+    ports:
+      - "7474:7474"    # Web interface
+      - "7687:7687"    # Bolt protocol
+    environment:
+      NEO4J_AUTH: neo4j/lv_password_2024
+      NEO4J_PLUGINS: '["apoc", "graph-data-science"]'
+      NEO4J_dbms_security_procedures_unrestricted: "apoc.*,gds.*"
+      NEO4J_dbms_security_procedures_allowlist: "apoc.*,gds.*"
+      NEO4J_dbms_memory_heap_initial__size: 512m
+      NEO4J_dbms_memory_heap_max__size: 2g
+      NEO4J_dbms_memory_pagecache_size: 1g
+    volumes:
+      - neo4j-lv-data:/data
+      - neo4j-lv-logs:/logs
+      - neo4j-lv-import:/var/lib/neo4j/import
+      - neo4j-lv-plugins:/plugins
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "cypher-shell", "-u", "neo4j", "-p", "lv_password_2024", "RETURN 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 40s
+
+  # Qdrant Vector Database  
+  qdrant-lv:
+    image: qdrant/qdrant:latest
+    container_name: qdrant-lv
+    ports:
+      - "6333:6333"    # REST API
+      - "6334:6334"    # gRPC API
+    environment:
+      QDRANT__SERVICE__HTTP_PORT: 6333
+      QDRANT__SERVICE__GRPC_PORT: 6334
+      QDRANT__LOG_LEVEL: INFO
+    volumes:
+      - qdrant-lv-data:/qdrant/storage
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--spider", "http://localhost:6333/collections"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # Optional: Redis for caching (if needed for high-performance scenarios)
+  redis-lv:
+    image: redis:7-alpine
+    container_name: redis-lv
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass lv_redis_2024
+    volumes:
+      - redis-lv-data:/data
+    restart: unless-stopped
+    profiles:
+      - cache
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
+  # Optional: Grafana for monitoring LV ecosystem
+  grafana-lv:
+    image: grafana/grafana:latest
+    container_name: grafana-lv
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: lv_grafana_2024
+      GF_USERS_ALLOW_SIGN_UP: false
+    volumes:
+      - grafana-lv-data:/var/lib/grafana
+      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
+    restart: unless-stopped
+    profiles:
+      - monitoring
+    depends_on:
+      - neo4j-lv
+      - qdrant-lv
+
+  # Optional: Prometheus for metrics collection
+  prometheus-lv:
+    image: prom/prometheus:latest
+    container_name: prometheus-lv
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-lv-data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--storage.tsdb.retention.time=200h'
+      - '--web.enable-lifecycle'
+    restart: unless-stopped
+    profiles:
+      - monitoring
+
+# Named volumes for data persistence
+volumes:
+  neo4j-lv-data:
+    driver: local
+  neo4j-lv-logs:
+    driver: local
+  neo4j-lv-import:
+    driver: local
+  neo4j-lv-plugins:
+    driver: local
+  qdrant-lv-data:
+    driver: local
+  redis-lv-data:
+    driver: local
+  grafana-lv-data:
+    driver: local
+  prometheus-lv-data:
+    driver: local
+
+# Network configuration
+networks:
+  default:
+    name: lv-network
+    driver: bridge

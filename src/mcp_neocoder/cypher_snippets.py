@@ -11,7 +11,7 @@ from typing import List, Optional
 
 import mcp.types as types
 from .event_loop_manager import safe_neo4j_session
-from pydantic import Field
+# from pydantic import Field
 from neo4j import AsyncManagedTransaction, AsyncDriver
 
 logger = logging.getLogger("mcp_neocoder.cypher_snippets")
@@ -19,12 +19,18 @@ logger = logging.getLogger("mcp_neocoder.cypher_snippets")
 
 class CypherSnippetMixin:
     """Mixin class providing Cypher snippet functionality for the Neo4jWorkflowServer."""
-    driver: AsyncDriver
-    database: Optional[str]
 
     def __init__(self, database: Optional[str] = None, driver: Optional[AsyncDriver] = None, *args, **kwargs):
-        """Initialize cypher snippet mixin with keyword arguments for inheritance compatibility."""
-        # Only set if not already set by a parent class
+        """
+        Initialize cypher snippet mixin with keyword arguments for inheritance compatibility.
+
+        Args:
+            database: Optional[str] - The Neo4j database name.
+            driver: AsyncDriver - The Neo4j async driver instance.
+        """
+        # Expected instance attributes:
+        #   self.driver: AsyncDriver
+        #   self.database: Optional[str]
         if not hasattr(self, 'database'):
             self.database = database
         if not hasattr(self, 'driver'):
@@ -78,22 +84,10 @@ class CypherSnippetMixin:
 
     async def list_cypher_snippets(
         self,
-        limit: int = Field(
-            20,
-            description="Maximum number of snippets to return"
-        ),
-        offset: int = Field(
-            0,
-            description="Number of snippets to skip"
-        ),
-        tag: Optional[str] = Field(
-            None,
-            description="Filter by a specific tag"
-        ),
-        since_version: Optional[float] = Field(
-            None,
-            description="Filter snippets based on Neo4j version"
-        )
+        limit: int = 20,
+        offset: int = 0,
+        tag: Optional[str] = None,
+        since_version: Optional[float] = None
     ) -> List[types.TextContent]:
         """List all available Cypher snippets with optional filtering."""
         # Ensure limit and offset are integers
@@ -131,7 +125,7 @@ class CypherSnippetMixin:
         """
 
         try:
-            async with safe_neo4j_session(self.driver, self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database or "") as session:
                 results_json = await session.execute_read(
                     self._read_query,
                     query,
@@ -159,7 +153,7 @@ class CypherSnippetMixin:
                                 snippet.get('id', 'N/A'),
                                 snippet.get('name', 'N/A'),
                                 snippet.get('since', 'N/A'),
-                                snippet.get('description', 'N/A')
+                                snippet.get('since', 'N/A') if isinstance(snippet.get('since', None), (str, float, int)) else 'N/A',
                             )
                         )
 
@@ -197,10 +191,7 @@ class CypherSnippetMixin:
             ]
     async def get_cypher_snippet(
         self,
-        id: str = Field(
-            ...,
-            description="The ID of the Cypher snippet to retrieve"
-        )
+        id: str
     ) -> List[types.TextContent]:
         """Get a specific Cypher snippet by ID."""
         query = """
@@ -217,7 +208,7 @@ class CypherSnippetMixin:
         """
 
         try:
-            async with safe_neo4j_session(self.driver, self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database or "") as session:
                 results_json = await session.execute_read(
                     self._read_query,
                     query,
@@ -230,7 +221,7 @@ class CypherSnippetMixin:
                     text = f"# Cypher Snippet: {snippet.get('name', id)}\n\n"
                     text += f"**ID:** `{snippet.get('id', id)}`\n"
                     text += f"**Neo4j Version:** {snippet.get('since', 'N/A')}\n"
-
+                    text += f"**Neo4j Version:** {snippet.get('since', 'N/A') if isinstance(snippet.get('since', None), (str, float, int)) else 'N/A'}\n"
                     if snippet.get('tags'):
                         tags = snippet.get('tags', [])
                         tag_links = [f'`{tag}`' for tag in tags]
@@ -271,18 +262,9 @@ class CypherSnippetMixin:
 
     async def search_cypher_snippets(
         self,
-        query_text: str = Field(
-            ...,
-            description="Search text to match against snippet content"
-        ),
-        search_type: str = Field(
-            "text",
-            description="Search type: 'text', 'fulltext', or 'tag'"
-        ),
-        limit: int = Field(
-            10,
-            description="Maximum number of results to return"
-        )
+        query_text: str,
+        search_type: str = "text",
+        limit: int = 10
     ) -> List[types.TextContent]:
         """Search for Cypher snippets by keyword, tag, or pattern."""
         # Ensure limit is an integer
@@ -341,7 +323,7 @@ class CypherSnippetMixin:
             return [types.TextContent(type="text", text=error_msg)]
 
         try:
-            async with safe_neo4j_session(self.driver, self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database or "") as session:
                 results_json = await session.execute_read(
                     self._read_query,
                     query,
@@ -390,37 +372,17 @@ class CypherSnippetMixin:
 
     async def create_cypher_snippet(
         self,
-        id: str = Field(
-            ...,
-            description="Unique identifier for the snippet"
-        ),
-        name: str = Field(
-            ...,
-            description="Display name for the snippet"
-        ),
-        syntax: str = Field(
-            ...,
-            description="The Cypher syntax pattern"
-        ),
-        description: str = Field(
-            ...,
-            description="Description of what the snippet does"
-        ),
-        example: Optional[str] = Field(
-            None,
-            description="An example usage of the syntax"
-        ),
-        since: Optional[float] = Field(
-            None,
-            description="Neo4j version since the syntax is supported"
-        ),
-        tags: Optional[List[str]] = Field(
-            None,
-            description="Tags for categorizing the snippet"
-        )
+        id: str,
+        name: str,
+        syntax: str,
+        description: str,
+        example: Optional[str] = None,
+        since: Optional[float] = None,
+        tags: Optional[List[str]] = None
     ) -> List[types.TextContent]:
         """Add a new Cypher snippet to the database."""
         snippet_tags = tags or []
+        snippet_since = since or 5.0  # Default to Neo4j 5.0 if not specified
         snippet_since = since or 5.0  # Default to Neo4j 5.0 if not specified
 
         query = """
@@ -437,10 +399,9 @@ class CypherSnippetMixin:
             "name": name,
             "syntax": syntax,
             "description": description,
-            "since": str(snippet_since),  # Convert float to string
+            "since": float(snippet_since),  # Always store as float
             "tags": snippet_tags
         }
-
         if example:
             query += ", c.example = $example"
             params["example"] = example
@@ -454,9 +415,9 @@ class CypherSnippetMixin:
         """
 
         try:
-            async with safe_neo4j_session(self.driver, self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database or "") as session:
                 results_json = await session.execute_write(
-                    self._read_query,
+                    self._write,
                     query,
                     params
                 )
@@ -481,34 +442,13 @@ class CypherSnippetMixin:
 
     async def update_cypher_snippet(
         self,
-        id: str = Field(
-            ...,
-            description="ID of the snippet to update"
-        ),
-        name: Optional[str] = Field(
-            None,
-            description="New display name"
-        ),
-        syntax: Optional[str] = Field(
-            None,
-            description="New syntax pattern"
-        ),
-        description: Optional[str] = Field(
-            None,
-            description="New description"
-        ),
-        example: Optional[str] = Field(
-            None,
-            description="New example"
-        ),
-        since: Optional[float] = Field(
-            None,
-            description="Neo4j version update"
-        ),
-        tags: Optional[List[str]] = Field(
-            None,
-            description="New tags (replaces existing tags)"
-        )
+        id: str,
+        name: Optional[str] = None,
+        syntax: Optional[str] = None,
+        description: Optional[str] = None,
+        example: Optional[str] = None,
+        since: Optional[float] = None,
+        tags: Optional[List[str]] = None
     ) -> List[types.TextContent]:
         """Update an existing Cypher snippet."""
         # Build dynamic SET clause based on provided parameters
@@ -533,8 +473,7 @@ class CypherSnippetMixin:
 
         if since is not None:
             set_clauses.append("c.since = $since")
-            params["since"] = str(since)  # Convert float to string
-
+            params["since"] = float(since)  # Always store as float
         # Build the query
         query = f"""
         MATCH (c:CypherSnippet {{id: $id}})
@@ -559,9 +498,9 @@ class CypherSnippetMixin:
         """
 
         try:
-            async with safe_neo4j_session(self.driver, self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database or "") as session:
                 results_json = await session.execute_write(
-                    self._read_query,
+                    self._write,
                     query,
                     params
                 )
@@ -583,10 +522,7 @@ class CypherSnippetMixin:
 
     async def delete_cypher_snippet(
         self,
-        id: str = Field(
-            ...,
-            description="ID of the snippet to delete"
-        )
+        id: str
     ) -> List[types.TextContent]:
         """Delete a Cypher snippet from the database."""
         query = """
@@ -597,9 +533,9 @@ class CypherSnippetMixin:
         """
 
         try:
-            async with safe_neo4j_session(self.driver, self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database or "") as session:
                 results_json = await session.execute_write(
-                    self._read_query,
+                    self._write,
                     query,
                     {"id": id}
                 )
@@ -627,7 +563,7 @@ class CypherSnippetMixin:
         """
 
         try:
-            async with safe_neo4j_session(self.driver, self.database) as session:
+            async with safe_neo4j_session(self.driver, self.database or "") as session:
                 results_json = await session.execute_read(
                     self._read_query,
                     query,

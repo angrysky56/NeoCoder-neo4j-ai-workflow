@@ -56,8 +56,8 @@ class CodeAnalysisIncarnation(BaseIncarnation):
 
     # Schema queries for Neo4j setup
     schema_queries = [
-        # CodeFile constraints
-        "CREATE CONSTRAINT code_file_path IF NOT EXISTS FOR (f:CodeFile) REQUIRE f.path IS UNIQUE",
+        # CodeFile constraints (project-scoped to allow multiple projects)
+        "CREATE CONSTRAINT code_file_path IF NOT EXISTS FOR (f:CodeFile) REQUIRE (f.project_id, f.path) IS UNIQUE",
 
         # AST nodes
         "CREATE CONSTRAINT ast_node_id IF NOT EXISTS FOR (n:ASTNode) REQUIRE n.id IS UNIQUE",

@@ -17,20 +17,75 @@ classifiers = [
     "Operating System :: OS Independent",
     "Development Status :: 3 - Alpha",
 ]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
+    "aiofiles>=23.0.0",
+    "async-contextlib>=0.1.0",
+    "fastmcp",
+    "httpx>=0.24.0",
+    "jsonschema>=4.17.0",
+    "loguru>=0.7.0",
     "matplotlib>=3.10.3",
     "mcp[cli]>=1.6.0",
-    "neo4j>=5.0.0",
+    "memory-profiler>=0.60.0",
+    "neo4j>=5.22.0",
+    "neo4j-rust-ext",
+    "nltk>=3.8.0",
+    "numba>=0.57.0",
+    "numpy>=2.2.6",
+    "openpyxl>=3.1.0",
     "pandas>=2.3.0",
     "plotly>=6.1.2",
     "psutil>=7.0.0",
-    "pydantic>=2.0.0",
+    "pydantic>=2.11.3",
+    "python-dateutil>=2.8.0",
+    "python-dotenv>=1.0.0",
+    "pytz>=2023.3",
     "pyyaml>=6.0.2",
+    "qdrant-client>=1.14.3",
+    "requests>=2.28.0",
+    "rich>=13.0.0",
     "scikit-learn>=1.7.0",
     "scipy>=1.15.3",
     "seaborn>=0.13.2",
+    "sentence-transformers>=4.1.0",
+    "spacy>=3.4.0",
+    "statsmodels>=0.14.0",
     "tabulate>=0.9.0",
+    "torch>=2.0.0; sys_platform != 'darwin' or platform_machine != 'arm64'",
+    "torch>=2.0.0,<2.1.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "torchvision>=0.15.0; sys_platform != 'darwin' or platform_machine != 'arm64'",
+    "torchvision>=0.15.0,<0.16.0; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "transformers>=4.20.0",
+    "types-tabulate",
+    "xlsxwriter>=3.1.0",
+    "faiss-cpu>=1.7.0; sys_platform != 'linux'",
+]
+
+[project.optional-dependencies]
+dev = [
+    "black>=23.0.0",
+    "flake8>=6.0.0",
+    "isort>=5.12.0",
+    "ipywidgets>=8.0.0",
+    "jupyter>=1.0.0",
+    "line-profiler>=4.0.0",
+    "mypy>=1.0.0",
+    "notebook>=6.5.0",
+    "pre-commit>=3.0.0",
+    "py-spy>=0.3.14",
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "pytest-cov>=4.0.0",
+]
+docs = [
+    "myst-parser>=0.18.0",
+    "sphinx>=5.0.0",
+    "sphinx-rtd-theme>=1.2.0",
+]
+gpu = [
+    "cupy-cuda11x>=11.0.0",
+    "nvidia-ml-py>=11.0.0",
 ]
 
 # This creates the mcp_neocoder executable
@@ -41,3 +96,63 @@ mcp_neocoder = "mcp_neocoder.__main__:main"
 [tool.setuptools]
 package-dir = {"" = "src"}
 packages = ["mcp_neocoder"]
+
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = "-ra -q --cov=src/mcp_neocoder --cov-report=term-missing --cov-report=html"
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "gpu: marks tests that require GPU",
+]
+
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["mcp_neocoder"]
+
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+
+[[tool.mypy.overrides]]
+module = [
+    "neo4j.*",
+    "qdrant_client.*",
+    "sentence_transformers.*",
+    "numpy.*",
+    "scipy.*",
+]
+ignore_missing_imports = true
