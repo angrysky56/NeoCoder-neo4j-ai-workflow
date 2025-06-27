@@ -68,24 +68,36 @@ Use these tools to monitor server health:
 - **uv**: The Python package manager for MCP servers
 - **Claude Desktop**: For using with Claude AI
 
-- **Optional for more utility**
 - [MCP-Desktop-Commander](https://github.com/wonderwhy-er/DesktopCommanderMCP): Invaluable for CLI and filesystem operations
+
+- For the Lotka-Volterra Ecosystem and generally enhanced abilities-
+
+- [wolframalpha-llm-mcp](https://github.com/Garoth/wolframalpha-llm-mcp): really nice!
+
+- [mcp-server-qdrant-enhanced](https://github.com/angrysky56/mcp-server-qdrant-enhanced): My qdrant-enhanced mcp server
+
+- **WIP- Optional for more utility**
+
 - [For Code Analysis Incarnation: AST/ASG](https://github.com/angrysky56/ast-mcp-server): Currently needs development and an incarnation re-write
-- [QDRANT feature requires my qdrant-enhanced mcp server installed in your client as well](https://github.com/angrysky56/mcp-server-qdrant-enhanced)
-- [wolframalpha-llm-mcp for the Lotka-Volterra Ecosystem and generally enhanced abilities- really nice!](https://github.com/Garoth/wolframalpha-llm-mcp)
+
 
 - Get a free API key from WolframAlpha:
+
 To get a free API key (AppID) for Wolfram|Alpha, you need to sign up for a Wolfram ID and then register an application on the Wolfram|Alpha Developer Portal.
-Here's the step-by-step process:
-Create a Wolfram ID: If you don't already have one, create a Wolfram ID at https://account.wolfram.com/login/create.
-Navigate to the Developer Portal: Once you have a Wolfram ID, sign in to the Wolfram|Alpha Developer Portal https://developer.wolframalpha.com/portal/myapps.
+
+Create a Wolfram ID: If you don't already have one, create a Wolfram ID at https://account.wolfram.com/login/create
+
+Navigate to the Developer Portal: Once you have a Wolfram ID, sign in to the Wolfram|Alpha Developer Portal https://developer.wolframalpha.com/portal/myapps
+
 Sign up for your first AppID: Click on the "Sign up to get your first AppID" button.
+
 Fill out the AppID creation dialog: Provide a name and a simple description for your application.
+
 Receive your AppID: After filling out the necessary information, you will be presented with your API key, also referred to as an AppID.
-Important Notes:
+
 The Wolfram|Alpha API is free for non-commercial usage, and you get up to 2,000 requests per month.
+
 Each application requires its own unique AppID.
-For commercial use or increased usage limits, you may need to enter into a Commercial License Agreement.
 
 ## The MCP server runs the Python code, bridging the gap between the Neo4j graph and the AI assistant ( e.g. Claude)
 
