@@ -71,8 +71,7 @@ Use these tools to monitor server health:
 - **Optional for more utility**
 - [MCP-Desktop-Commander](https://github.com/wonderwhy-er/DesktopCommanderMCP): Invaluable for CLI and filesystem operations
 - [For Code Analysis Incarnation: AST/ASG](https://github.com/angrysky56/ast-mcp-server): Currently needs development and an incarnation re-write
-- [QDRANT feature requires my qdrant-enhanced mcp server installed in your client as well](https://github.com/angrysky56/
-mcp-server-qdrant-enhanced)
+- [QDRANT feature requires my qdrant-enhanced mcp server installed in your client as well](https://github.com/angrysky56/mcp-server-qdrant-enhanced)
 - [wolframalpha-llm-mcp for the Lotka-Volterra Ecosystem and generally enhanced abilities- really nice!](https://github.com/Garoth/wolframalpha-llm-mcp)
 
 - Get a free API key from WolframAlpha:
