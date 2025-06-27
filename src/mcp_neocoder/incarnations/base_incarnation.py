@@ -34,15 +34,85 @@ class BaseIncarnation(ActionTemplateMixin):
 
     # Optional schema creation scripts, format: List of Cypher queries to execute
     # Use ActionTemplateMixin's schema_queries for ActionTemplate constraints/indexes
-    schema_queries: List[str] = ActionTemplateMixin.schema_queries.copy()
+    from typing import Tuple
 
-    # Hub content - default guidance hub text for this incarnation
+    schema_queries: Tuple[str, ...] = tuple(ActionTemplateMixin.schema_queries)
+
+    # Hub content - comprehensive guidance hub for universal access
     hub_content: str = """
-# Default Incarnation Hub
+# NeoCoder Universal Base Guidance Hub
 
-Welcome to this incarnation of the NeoCoder framework.
-This is a default hub that should be overridden by each incarnation.
-    """
+Welcome to the NeoCoder Neo4j-Guided AI Workflow System. This guidance is universally available across all incarnations.
+
+## 🎯 Core System Architecture
+
+### Universal Base Capabilities (Inherited by All Incarnations)
+- **Action Templates**: `list_action_templates()`, `get_action_template(keyword)`
+- **Project Management**: `get_project()`, `list_projects()`
+- **Workflow Tracking**: `log_workflow_execution()`, `get_workflow_history()`
+- **Best Practices**: `get_best_practices()`
+- **Template Feedback**: `add_template_feedback()`
+
+## 🔧 Adding Tools to NeoCoder (Simple Process)
+
+### Method 1: Direct Addition to Incarnation Class
+Add async methods with proper signatures to incarnation files:
+
+```python
+async def your_tool_name(
+    self,
+    param1: str = Field(..., description="Parameter description"),
+    param2: Optional[int] = Field(None, description="Optional parameter")
+) -> List[types.TextContent]:
+    \"\"\"Tool description for automatic registration\"\"\"
+    try:
+        # Tool implementation here
+        result = "Your tool result"
+        return [types.TextContent(type="text", text=result)]
+    except Exception as e:
+        return [types.TextContent(type="text", text=f"Error: {e}")]
+```
+
+**Key Requirements:**
+- Must be `async def` method
+- Must return `List[types.TextContent]`
+- Use `Field(...)` for parameter descriptions
+- Include docstring for automatic discovery
+
+### Method 2: Using ToolProposalMixin
+All incarnations include `propose_tool()` for systematic requests:
+```python
+await propose_tool(
+    name="tool_name",
+    description="What the tool does",
+    parameters=[{"name": "param1", "type": "str", "description": "param desc"}],
+    rationale="Why this tool is needed"
+)
+```
+
+## 🔍 Available Incarnations
+Each provides specialized tools while inheriting base functionality:
+- **coding**: Original NeoCoder workflows and development tools
+- **knowledge_graph**: Entity/relationship management, graph operations
+- **research_orchestration**: Scientific workflows, hypothesis testing
+- **data_analysis**: Data exploration, visualization, statistical analysis
+- **decision_support**: Structured decision-making, alternatives analysis
+- **code_analysis**: AST/ASG analysis, code metrics, documentation
+
+## 🧬 LV Framework (Lotka-Volterra Ecosystem Intelligence)
+Available templates for diversity preservation:
+- `KNOWLEDGE_EXTRACT_LV`: Multi-strategy knowledge extraction
+- `KNOWLEDGE_QUERY_LV`: Multi-perspective information synthesis
+- `LV_SELECT`: Generic LV enhancement for any workflow
+
+## 📊 System Usage
+- Switch incarnations: `switch_incarnation(incarnation_type="...")`
+- List available incarnations: `list_incarnations()`
+- Check system health: `check_connection()`
+- Get incarnation guidance: `get_guidance_hub()`
+
+**Remember**: The system is designed for simplicity. Tool addition should be straightforward through inheritance patterns and automatic discovery.
+"""
 
     # Register all general-purpose tools in the base incarnation
     _tool_methods: List[str] = [
@@ -58,6 +128,8 @@ This is a default hub that should be overridden by each incarnation.
         "get_workflow_history",
         # Best practices
         "get_best_practices",
+        # Universal guidance access
+        "get_base_guidance",
     ]
 
     def __init__(self, driver: AsyncDriver, database: str = "neo4j"):
@@ -75,7 +147,7 @@ This is a default hub that should be overridden by each incarnation.
                 async with safe_neo4j_session(self.driver, self.database) as session:
                     # Execute each constraint/index query individually
                     for query in self.schema_queries:
-                        await session.execute_write(lambda tx: tx.run(query))  # type: ignore
+                        await session.execute_write(lambda tx: tx.run(query).consume())  # type: ignore
 
                 # Create guidance hub if needed
                 await self.ensure_hub_exists()
@@ -97,23 +169,39 @@ This is a default hub that should be overridden by each incarnation.
 
         hub_id = f"{self.name}_hub"
 
-        query = """
-        MERGE (hub:AiGuidanceHub {id: $hub_id})
-        ON CREATE SET hub.description = $description
+        # Also ensure universal base_hub exists for cross-incarnation access
+        base_hub_query = """
+        MERGE (hub:AiGuidanceHub {id: 'base_hub'})
+        ON CREATE SET hub.description = $description,
+                      hub.created_at = datetime(),
+                      hub.updated_at = datetime()
+        ON MATCH SET hub.updated_at = datetime()
         RETURN hub
         """
 
-        params = {
-            "hub_id": hub_id,
-            "description": self.hub_content
-        }
+        incarnation_hub_query = """
+        MERGE (hub:AiGuidanceHub {id: $hub_id})
+        ON CREATE SET hub.description = $description,
+                      hub.created_at = datetime(),
+                      hub.updated_at = datetime()
+        ON MATCH SET hub.updated_at = datetime()
+        RETURN hub
+        """
 
         try:
             async with safe_neo4j_session(self.driver, self.database) as session:
-                await session.execute_write(lambda tx: tx.run(query, params))
-                logger.info(f"Ensured hub exists for {self.name}")
+                # Create universal base hub
+                await session.execute_write(lambda tx: tx.run(base_hub_query, {"description": self.hub_content}))
+
+                # Create incarnation-specific hub
+                await session.execute_write(lambda tx: tx.run(incarnation_hub_query, {
+                    "hub_id": hub_id,
+                    "description": self.hub_content
+                }))
+
+                logger.info(f"Ensured base_hub and {self.name}_hub exist")
         except Exception as e:
-            logger.error(f"Error creating hub for {self.name}: {e}")
+            logger.error(f"Error creating hubs for {self.name}: {e}")
             raise
 
     async def get_guidance_hub(self) -> List[types.TextContent]:
@@ -123,14 +211,16 @@ This is a default hub that should be overridden by each incarnation.
         hub_id = f"{self.name}_hub"
 
         query = """
-        MATCH (hub:AiGuidanceHub {{id: $hub_id}})
+        MATCH (hub:AiGuidanceHub {id: $hub_id})
         RETURN hub.description AS description
         """
 
         try:
             async with safe_neo4j_session(self.driver, self.database) as session:
-                results_json = await session.execute_read(lambda tx: self._read_query(tx, query, {"hub_id": hub_id}))  # type: ignore
-                results = json.loads(results_json)
+                results = await session.execute_read(
+                    lambda tx: self._read_query(tx, query, {"hub_id": hub_id})
+                )
+                results = json.loads(results)
 
                 if results and len(results) > 0:
                     return [types.TextContent(type="text", text=results[0]["description"])]
@@ -141,6 +231,31 @@ This is a default hub that should be overridden by each incarnation.
                     return await self.get_guidance_hub()
         except Exception as e:
             logger.error(f"Error retrieving guidance hub for {self.name}: {e}")
+            return [types.TextContent(type="text", text=f"Error: {e}")]
+
+    async def get_base_guidance(self) -> List[types.TextContent]:
+        """Get the universal base guidance hub content available to all incarnations."""
+        from ..event_loop_manager import safe_neo4j_session
+
+        query = """
+        MATCH (hub:AiGuidanceHub {id: 'base_hub'})
+        RETURN hub.description AS description
+        """
+
+        try:
+            async with safe_neo4j_session(self.driver, self.database) as session:
+                results = await session.execute_read(lambda tx: self._read_query(tx, query, {}))
+                results = json.loads(results)
+
+                if results and len(results) > 0:
+                    return [types.TextContent(type="text", text=results[0]["description"])]
+                else:
+                    # If base hub doesn't exist, create it
+                    await self.ensure_hub_exists()
+                    # Try again
+                    return await self.get_base_guidance()
+        except Exception as e:
+            logger.error(f"Error retrieving base guidance hub: {e}")
             return [types.TextContent(type="text", text=f"Error: {e}")]
 
     def list_tool_methods(self):
@@ -242,21 +357,31 @@ This is a default hub that should be overridden by each incarnation.
 
     async def _read_query(self, tx: AsyncManagedTransaction, query: str, params: dict) -> str:
         """Execute a read query and return results as JSON string."""
-        result = await tx.run(cast(LiteralString, query), params)
-        records = await result.data()  # Use .data() instead of .to_eager_result().records
-        return json.dumps(records, default=str)
+        # Ensure params is a dict, even if None is passed
+        if params is None:
+            params = {}
+        result = await tx.run(cast(LiteralString, query), params)  # type: ignore
+        records = await result.data()
+        return json.dumps(records)
 
     async def _write(self, tx: AsyncManagedTransaction, query: str, params: dict):
-        """Execute a write query and return results as JSON string."""
-        result = await tx.run(cast(LiteralString, query), params or {})
+        """Execute a write query and return the summary object."""
+        # Ensure params is a dict, even if None is passed
+        if params is None:
+            params = {}
+        result = await tx.run(cast(LiteralString, query), params)  # type: ignore
         summary = await result.consume()
         return summary
 
     async def safe_session(self):
-        """Get a safe Neo4j session that handles event loop issues.
+        """
+        Return a context manager for an async Neo4j session that handles event loop issues.
 
         This is a convenience method that incarnations can use to get a session
         that properly handles asyncio event loop management.
+
+        Returns:
+            An async context manager yielding a Neo4j session.
 
         Usage:
             async with self.safe_session() as session:
