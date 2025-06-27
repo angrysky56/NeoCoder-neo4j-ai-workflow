@@ -81,7 +81,7 @@ Use these tools to monitor server health:
 - [For Code Analysis Incarnation: AST/ASG](https://github.com/angrysky56/ast-mcp-server): Currently needs development and an incarnation re-write
 
 
-#### Get a free API key from WolframAlpha:
+- Get a free API key from WolframAlpha:
 
 To get a free API key (AppID) for Wolfram|Alpha, you need to sign up for a Wolfram ID and then register an application on the Wolfram|Alpha Developer Portal.
 
