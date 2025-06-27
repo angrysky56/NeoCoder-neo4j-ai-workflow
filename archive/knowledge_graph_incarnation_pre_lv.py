@@ -6,7 +6,7 @@ Manage and analyze knowledge graphs
 
 import json
 import logging
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, List
 
 import mcp.types as types
 from pydantic import Field
@@ -141,22 +141,22 @@ Welcome to the Knowledge Graph Management System powered by the NeoCoder framewo
 ### LV-Enhanced Templates Available
 
 #### 🔍 **KNOWLEDGE_QUERY_LV** - Multi-Perspective Knowledge Search
-- **Use when:** Complex queries requiring diverse perspectives
+- **Use when:** Complex queries requiring diverse perspectives  
 - **Entropy threshold:** > 0.4
 - **Template:** `get_action_template(keyword='KNOWLEDGE_QUERY_LV')`
-- **Implementation:** Calls `NeoCoder_LV_Integration.enhance_existing_template('KNOWLEDGE_QUERY', context)`
+- **Real Implementation:** Calls `NeoCoder_LV_Integration.enhance_existing_template('KNOWLEDGE_QUERY', context)`
 
-#### 📚 **KNOWLEDGE_EXTRACT_LV** - Diversity-Preserving Knowledge Extraction
+#### 📚 **KNOWLEDGE_EXTRACT_LV** - Diversity-Preserving Knowledge Extraction  
 - **Use when:** Extracting knowledge from multi-domain documents
-- **Entropy threshold:** > 0.4
+- **Entropy threshold:** > 0.4  
 - **Template:** `get_action_template(keyword='KNOWLEDGE_EXTRACT_LV')`
-- **Implementation:** Uses LV ecosystem dynamics for strategy diversity
+- **Real Implementation:** Uses LV ecosystem dynamics for strategy diversity
 
 #### ⚙️ **LV_SELECT** - Generic LV Enhancement
 - **Use when:** Any workflow needs diversity preservation
 - **Entropy threshold:** > 0.4
 - **Template:** `get_action_template(keyword='LV_SELECT')`
-- **Implementation:** Applies Lotka-Volterra dynamics to any template
+- **Real Implementation:** Applies Lotka-Volterra dynamics to any template
 
 ### 🧪 LV Integration Workflow
 
@@ -166,13 +166,13 @@ from mcp_neocoder.lv_integration import NeoCoder_LV_Integration
 lv_system = NeoCoder_LV_Integration(neo4j_session, qdrant_client)
 ```
 
-**Step 2: Calculate Real Entropy**
+**Step 2: Calculate Real Entropy** 
 ```python
 entropy = lv_system.entropy_estimator.estimate_prompt_entropy(user_query)
 ```
 
 **Step 3: Apply Decision Logic**
-- If entropy > 0.4: Use LV-enhanced template
+- If entropy > 0.4: Use LV-enhanced template  
 - If entropy ≤ 0.4: Use standard knowledge operations
 
 **Step 4: Execute Real LV Enhancement**
@@ -191,10 +191,10 @@ diversity_score = results['diversity_metrics']['semantic_diversity']
 
 ### Core Knowledge Graph Tools
 - **Entity Management:** `create_entities()`, `add_observations()`
-- **Relationship Management:** `create_relations()`
+- **Relationship Management:** `create_relations()`  
 - **Knowledge Discovery:** `search_nodes()`, `open_nodes()`, `read_graph()`
 
-### Enhanced Hybrid Operations
+### Enhanced Hybrid Operations  
 - **F-Contraction Synthesis:** Merge Neo4j structured facts with Qdrant semantic context
 - **Citation Tracking:** Full source attribution across graph and vector databases
 - **Dynamic Knowledge Updates:** Real-time knowledge graph evolution
@@ -208,7 +208,7 @@ diversity_score = results['diversity_metrics']['semantic_diversity']
 
 **High Entropy Queries (> 0.4):**
 - Complex analysis: Use `KNOWLEDGE_QUERY_LV` template
-- Multi-domain extraction: Use `KNOWLEDGE_EXTRACT_LV` template
+- Multi-domain extraction: Use `KNOWLEDGE_EXTRACT_LV` template  
 - Creative knowledge synthesis: Use `LV_SELECT` template
 
 ## ⚡ Performance Notes
@@ -1190,11 +1190,10 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
 
         except Exception as e:
             logger.error(f"Error in open_nodes: {e}")
-            return [types.TextContent(type="text", text=f"Error retrieving entity details: {e}")]
 
     # ============= LV FRAMEWORK TOOLS =============
     # Added by add_lv_tools.py
-
+    
     async def test_lv_framework(
         self,
         test_case: str = Field(
@@ -1211,29 +1210,29 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                     self.driver,
                     getattr(self, 'qdrant_client', None)
                 )
-
+            
             results = await self._lv_integration.test_lv_framework(test_case)
-
-            response = "# LV Framework Test Results\n\n"
+            
+            response = f"# LV Framework Test Results\n\n"
             response += f"Test Type: {results.get('test_type', 'unknown')}\n"
             response += f"Test Passed: {'✅ Yes' if results.get('test_passed') else '❌ No'}\n\n"
-
+            
             if 'components_tested' in results:
-                response += "## Components Tested\n"
+                response += f"## Components Tested\n"
                 for component in results['components_tested']:
                     response += f"- {component}\n"
                 response += "\n"
-
+            
             if 'errors' in results and results['errors']:
-                response += "## Errors\n"
+                response += f"## Errors\n"
                 for error in results['errors']:
                     response += f"- {error}\n"
-
+                    
             return [types.TextContent(type="text", text=response)]
-
+            
         except Exception as e:
             return [types.TextContent(type="text", text=f"Error testing LV framework: {e}")]
-
+    
     async def estimate_prompt_entropy(
         self,
         prompt: str = Field(..., description="The prompt to analyze for entropy"),
@@ -1245,10 +1244,10 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
         """Estimate the entropy of a prompt to determine if LV enhancement would be beneficial"""
         try:
             from ..lv_ecosystem import EntropyEstimator
-
+            
             estimator = EntropyEstimator()
             entropy = estimator.estimate_prompt_entropy(prompt, context_history)
-
+            
             # Determine behavioral mode
             if entropy < 0.3:
                 mode = "PRECISION MODE"
@@ -1262,7 +1261,7 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                 mode = "CREATIVITY MODE"
                 weights = "Quality: 20%, Novelty: 70%"
                 recommendation = "LV enhancement highly recommended - high uncertainty"
-
+            
             response = f"""# Entropy Analysis
 
 **Prompt:** "{prompt[:100]}{'...' if len(prompt) > 100 else ''}"
@@ -1276,16 +1275,16 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
 
 ## Interpretation
 - Entropy < 0.3: Factual/deterministic queries → Standard execution
-- Entropy 0.3-0.6: Analytical tasks → Balanced LV enhancement
+- Entropy 0.3-0.6: Analytical tasks → Balanced LV enhancement  
 - Entropy > 0.6: Creative/exploratory tasks → Maximum LV diversity
 
 {'**Context History Considered:** Yes' if context_history else '**Note:** No context history provided'}
 """
             return [types.TextContent(type="text", text=response)]
-
+            
         except Exception as e:
             return [types.TextContent(type="text", text=f"Error estimating entropy: {e}")]
-
+    
     async def enhance_template_with_lv(
         self,
         template_keyword: str = Field(..., description="Template keyword (e.g., 'FIX', 'FEATURE')"),
@@ -1303,39 +1302,39 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                     self.driver,
                     getattr(self, 'qdrant_client', None)
                 )
-
+            
             # Build context
             full_context = context or {}
             full_context['prompt'] = prompt
-
+            
             # Enhance the template
             results = await self._lv_integration.enhance_existing_template(
                 template_keyword,
                 full_context
             )
-
-            response = "# LV-Enhanced Template Execution\n\n"
+            
+            response = f"# LV-Enhanced Template Execution\n\n"
             response += f"**Template:** {template_keyword}\n"
             response += f"**Entropy:** {results.get('entropy', 'N/A')}\n"
             response += f"**Enhanced:** {'Yes' if results.get('enhanced_execution') else 'No'}\n\n"
-
+            
             if 'strategies_used' in results:
                 response += "## Strategies Applied\n"
                 for strategy in results['strategies_used']:
                     response += f"- {strategy}\n"
                 response += "\n"
-
+            
             if 'lv_analysis' in results:
                 analysis = results['lv_analysis']
-                response += "## LV Analysis\n"
+                response += f"## LV Analysis\n"
                 response += f"- Diversity Score: {analysis.get('diversity_metrics', {}).get('semantic_diversity', 'N/A')}\n"
                 response += f"- Convergence Iterations: {analysis.get('convergence_iterations', 'N/A')}\n"
-
+                
             return [types.TextContent(type="text", text=response)]
-
+            
         except Exception as e:
             return [types.TextContent(type="text", text=f"Error enhancing template: {e}")]
-
+    
     async def get_lv_dashboard(self) -> List[types.TextContent]:
         """Get LV ecosystem monitoring dashboard data"""
         try:
@@ -1345,34 +1344,34 @@ Each entity in the system has proper Neo4j labels for efficient querying and vis
                     self.driver,
                     getattr(self, 'qdrant_client', None)
                 )
-
+            
             dashboard = await self._lv_integration.create_lv_dashboard_data()
-
+            
             response = "# 🧬 LV Ecosystem Dashboard\n\n"
-
+            
             if 'error' in dashboard:
                 response += f"Error: {dashboard['error']}\n"
                 return [types.TextContent(type="text", text=response)]
-
+            
             response += f"**Status:** {dashboard.get('status', 'unknown')}\n"
             response += f"**Total Executions:** {dashboard.get('total_lv_executions', 0)}\n\n"
-
+            
             if 'performance_metrics' in dashboard:
                 metrics = dashboard['performance_metrics']
                 response += "## Performance Metrics\n"
                 response += f"- Average Convergence: {metrics.get('average_convergence_iterations', 'N/A')} iterations\n"
                 response += f"- Stability Rate: {metrics.get('stability_rate', 'N/A')}\n"
                 response += f"- Diversity Preservation: {metrics.get('diversity_preservation_score', 'N/A')}\n\n"
-
+            
             if 'entropy_distribution' in dashboard:
                 dist = dashboard['entropy_distribution']
                 response += "## Entropy Distribution\n"
                 response += f"- Low Entropy: {dist.get('low_entropy_percentage', 0):.0%}\n"
                 response += f"- Medium Entropy: {dist.get('medium_entropy_percentage', 0):.0%}\n"
                 response += f"- High Entropy: {dist.get('high_entropy_percentage', 0):.0%}\n"
-
+            
             return [types.TextContent(type="text", text=response)]
-
+            
         except Exception as e:
             return [types.TextContent(type="text", text=f"Error generating dashboard: {e}")]
 
