@@ -466,7 +466,7 @@ class Neo4jWorkflowServer(PolymorphicAdapterMixin, CypherSnippetMixin, ToolPropo
                 name_str = name.value if hasattr(name, 'value') and not isinstance(name, str) else str(name)
 
                 logger.info(f"Attempting to register incarnation: {name_str} ({inc_class.__name__})")
-                self.register_incarnation(inc_class, name_str)
+                self.register_incarnation(name_str, inc_class)
                 logger.info(f"Registered incarnation: {name_str} ({inc_class.__name__})")
                 incarnation_count += 1
 
@@ -1570,7 +1570,7 @@ Each incarnation has its own set of specialized tools alongside the core Neo4j i
             # Register discovered incarnations with this server
             for inc_type, inc_class in global_registry.incarnations.items():
                 logger.info(f"Auto-registering incarnation {inc_type} ({inc_class.__name__})")
-                self.register_incarnation(inc_class, inc_type)
+                self.register_incarnation(inc_type, inc_class)
 
             # Register core tools
             self._register_core_tools()
