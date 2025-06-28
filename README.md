@@ -76,8 +76,10 @@ Use these tools to monitor server health:
 
 - [mcp-server-qdrant-enhanced](https://github.com/angrysky56/mcp-server-qdrant-enhanced): My qdrant-enhanced mcp server
 
-- **WIP- Optional for more utility**
+- **Optional for more utility**
+- [arxiv-mcp-server](https://github.com/blazickjp/arxiv-mcp-server)
 
+**This incarnation is still being developed**
 - [For Code Analysis Incarnation: AST/ASG](https://github.com/angrysky56/ast-mcp-server): Currently needs development and an incarnation re-write
 
 
@@ -201,7 +203,15 @@ Otherwise- Install dependencies:
 
 - If you see errors about missing packages, double-check that your `.venv` is activated and you are using the correct Python version.
 - If you need to reset your environment, you can remove `.venv` and repeat the steps above.
+- Can't conect to DB? Install neo4j Desktop and QDRANT. Make sure they are running. NEO4J requires a password set.
 
+```bash
+docker pull qdrant/qdrant
+
+docker run -p 6333:6333 -p 6334:6334 \
+    -v "$(pwd)/qdrant_storage:/qdrant/storage:z" \
+    qdrant/qdrant
+```
 ---
 
 **You are now ready to use NeoCoder with full Neo4j and Qdrant hybrid Lotka-Volterra Ecosystem reasoning!**
@@ -213,7 +223,7 @@ Otherwise- Install dependencies:
 > **System Instruction:** You are an AI assistant integrated with a Neo4j knowledge graph that defines our standard procedures and tracks project changes.
 >
 > **Your Core Interaction Loop:**
-> 1.  **Identify Task & Keyword:** Determine the coding action required (e.g., fix a bug -> `FIX`).
+> 1.  **Identify Task & Keyword:** Determine the action required (e.g., fix a bug -> `FIX`).
 > 2.  **Consult the Hub:** If unsure about keywords or process, start by querying `:AiGuidanceHub {id: 'main_hub'}` for guidance and links to best practices or other guides.
 > 3.  **Retrieve Instructions:** Formulate a Cypher query to fetch the `steps` from the current `:ActionTemplate` matching the keyword (e.g., `MATCH (t:ActionTemplate {keyword: 'FIX', isCurrent: true}) RETURN t.steps`). Execute this query.
 > 4.  **Execute Guided Workflow:** Follow the retrieved `steps` meticulously. This includes reviewing project READMEs, implementing changes, and critically:
