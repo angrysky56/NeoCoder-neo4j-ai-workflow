@@ -1720,44 +1720,39 @@ def create_server(db_url: str, username: str, password: str, database: str = "ne
             return server
 
         # 6. Run the async setup with proper error handling
-        # The key insight: if we're called from within an async context,
-        # we need to avoid deadlocks by not blocking the event loop
+        # SIMPLIFIED APPROACH: Always create server directly in current context
+        # This avoids the complex event loop juggling that was causing Future conflicts
         try:
             current_loop = asyncio.get_running_loop()
-            same_loop = current_loop is loop
+            logger.info("Current event loop detected - creating server directly")
         except RuntimeError:
             # No running loop
             current_loop = None
-            same_loop = False
+            logger.info("No running event loop - will create server with async setup")
 
-        if same_loop:
-            # We're in the same event loop - this is the problematic case
-            # Instead of trying to run async operations synchronously,
-            # we'll create a minimal server instance and let it initialize asynchronously
-            logger.info("Same event loop detected - creating server with deferred initialization")
+        if current_loop:
+            # We're in a running event loop - create server directly
+            # Let the server initialize itself asynchronously to avoid deadlocks
+            logger.info("Creating server with direct initialization")
+            
+            # Note: Skip driver verification here since we're in a sync context
+            # The server will verify the connection during its async initialization
+            logger.info("Skipping sync driver verification - will be done during async init")
 
-            # Create the server instance directly without async setup
+            # Create the server instance
             server = Neo4jWorkflowServer(driver, database, loop)
-            # Set qdrant_client if available
             if qdrant_client is not None:
                 try:
                     server.qdrant_client = qdrant_client
                 except Exception as e:
                     logger.warning(f"Failed to set qdrant_client on server: {e}")
-            logger.info("Neo4jWorkflowServer created with deferred initialization")
+            logger.info("Neo4jWorkflowServer created successfully")
 
-            # The server will initialize itself asynchronously in its __init__ method
-            # We don't wait for initialization here to avoid deadlock
-
-        elif current_loop and current_loop is not loop:
-            # Different loops - use run_coroutine_threadsafe
-            logger.info("Different event loops - using run_coroutine_threadsafe pattern")
-            future = asyncio.run_coroutine_threadsafe(async_server_setup(), loop)
-            server = future.result(timeout=60)
-            logger.info("Server initialization completed via threadsafe execution")
+            # Don't wait for initialization to complete here - let it happen asynchronously
+            logger.info("Server created with async initialization in progress")
         else:
             # No running loop - safe to use run_until_complete
-            logger.info("No running loop - using run_until_complete")
+            logger.info("No running loop - using run_until_complete for setup")
             server = loop.run_until_complete(async_server_setup())
 
         return server

@@ -21,17 +21,26 @@ def initialize_main_loop() -> asyncio.AbstractEventLoop:
     global _MAIN_LOOP
 
     try:
-        # Try to get the current event loop
-        loop = asyncio.get_event_loop()
+        # Try to get the current running event loop
+        loop = asyncio.get_running_loop()
+        logger.debug("Found running event loop")
     except RuntimeError:
-        # No event loop exists in this thread, create a new one
-        logger.info("No event loop found in thread, creating a new one")
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
+        # No running event loop, try to get the event loop for this thread
+        try:
+            loop = asyncio.get_event_loop()
+            logger.debug("Found event loop for current thread")
+        except RuntimeError:
+            # No event loop exists in this thread, create a new one
+            logger.info("No event loop found in thread, creating a new one")
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
 
-    # Store as main loop if not already set
+    # Store as main loop if not already set or if we want to update it
     if _MAIN_LOOP is None:
         logger.info("Initializing main event loop for Neo4j operations")
+        _MAIN_LOOP = loop
+    elif _MAIN_LOOP is not loop:
+        logger.warning("Main loop changed, updating reference")
         _MAIN_LOOP = loop
 
     return loop
@@ -113,11 +122,12 @@ async def safe_neo4j_session(driver: AsyncDriver, database: str):
         logger.error(f"Error in Neo4j session: {e}")
         # Add more detailed error context to help with debugging event loop issues
         if "attached to a different loop" in str(e):
-            logger.error("This is likely due to an event loop mismatch issue. Check event loop initialization and usage.")
+            logger.error("Event loop mismatch detected. This is likely due to asyncio objects being used across different event loops.")
+            logger.error("Recommendation: Ensure all Neo4j operations use the same event loop context.")
         elif "Event loop is running" in str(e):
             logger.error("Cannot create new event loop when one is already running.")
         elif "asynchronous context manager protocol" in str(e):
-            logger.error("Driver.session() returned an object that doesn't support async context manager protocol. This is likely a mocking issue or driver problem.")
+            logger.error("Driver.session() returned an object that doesn't support async context manager protocol.")
         raise
     finally:
         # Always untrack the session
@@ -135,45 +145,30 @@ async def run_in_main_loop(coro):
     as the Neo4j driver initialization.
     """
     global _MAIN_LOOP
+    
+    # Ensure we have a main loop reference
     main_loop = get_main_loop()
     if main_loop is None:
-        # Initialize if not done yet
         main_loop = initialize_main_loop()
+    
     try:
         current_loop = asyncio.get_running_loop()
     except RuntimeError:
-        logger.error("No running event loop in current thread. Refusing to create a new event loop to avoid conflicts. Please ensure this function is called from within an existing event loop context.")
-        raise RuntimeError("No running event loop in current thread. Please call this function from within an existing event loop.")
-        # Not running in an event loop - create one
-        current_loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(current_loop)
+        # No running event loop - we can't execute async code here
+        logger.error("No running event loop in current thread. Cannot execute coroutine.")
+        raise RuntimeError("No running event loop in current thread. Please call this function from within an async context.")
 
+    # Check if we're already in the main loop
     if current_loop is main_loop:
-        # Already in the main loop, just await
+        # Already in the main loop, just await directly
         logger.debug("Already in main loop, executing directly")
         return await coro
     else:
-        # Need to run in the main loop
-        if main_loop.is_running():
-            # Handle the complex case where the main loop is already running
-            logger.warning("Main loop is already running in another thread, using run_coroutine_threadsafe")
-            try:
-                # Be very careful with timeout - this is a common source of hangs
-                future = asyncio.run_coroutine_threadsafe(coro, main_loop)
-                result = future.result(timeout=30)  # Increased timeout for complex operations
-                logger.info("Successfully executed in main loop via run_coroutine_threadsafe")
-                return result
-            except asyncio.TimeoutError:
-                logger.error("Timeout while waiting for coroutine result from main loop")
-                logger.warning("Fallback: Running in current loop after timeout")
-                # WARNING: Awaiting the coroutine here may cause 'attached to a different loop' errors.
-                raise RuntimeError(
-                    "Failed to execute coroutine in the main event loop due to timeout. "
-                    "Attempting to await the coroutine in the current loop may cause 'attached to a different loop' errors. "
-                    "Please check event loop usage and ensure coroutines are bound to the correct loop."
-                )
-            except Exception as e:
-                logger.error(f"Error running in main loop: {e}")
-                logger.warning("Falling back to current loop as last resort")
-                return await coro
-                return await coro
+        # We're in a different event loop - this is the problematic case
+        logger.warning("Running coroutine from different event loop than main loop")
+        
+        # IMPORTANT: Instead of trying to run in main loop, just run in current loop
+        # This prevents the "Future attached to different loop" error
+        # The assumption is that if we're already in a running loop, it should work
+        logger.info("Executing coroutine in current running loop to avoid loop conflicts")
+        return await coro
