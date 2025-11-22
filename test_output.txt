@@ -1,0 +1,586 @@
+2025-11-21 16:08:38,580 - INFO - Discovered incarnation type: CODE_ANALYSIS_=code_analysis_
+2025-11-21 16:08:38,580 - INFO - Added simplified alias: CODE=code_analysis_
+2025-11-21 16:08:38,580 - INFO - Discovered incarnation type: CODING_=coding_
+2025-11-21 16:08:38,580 - INFO - Added simplified alias: CODING=coding_
+2025-11-21 16:08:38,580 - INFO - Discovered incarnation type: DATA_ANALYSIS_=data_analysis_
+2025-11-21 16:08:38,580 - INFO - Added simplified alias: DATA=data_analysis_
+2025-11-21 16:08:38,580 - INFO - Discovered incarnation type: DECISION_=decision_
+2025-11-21 16:08:38,580 - INFO - Added simplified alias: DECISION=decision_
+2025-11-21 16:08:38,580 - INFO - Discovered incarnation type: KNOWLEDGE_GRAPH_=knowledge_graph_
+2025-11-21 16:08:38,580 - INFO - Added simplified alias: KNOWLEDGE=knowledge_graph_
+2025-11-21 16:08:38,580 - INFO - Discovered incarnation type: RESEARCH_=research_
+2025-11-21 16:08:38,580 - INFO - Added simplified alias: RESEARCH=research_
+2025-11-21 16:08:38,581 - INFO - Discovered incarnation identifiers: ['code_analysis_', 'coding_', 'data_analysis_', 'decision_', 'knowledge_graph_', 'research_']
+2025-11-21 16:08:38,581 - INFO - Searching for incarnations in: /home/ty/Repositories/NeoCoder-neo4j-ai-workflow/src/mcp_neocoder/incarnations
+2025-11-21 16:08:38,581 - INFO - Found incarnation class via 'name' attribute: CodeAnalysisIncarnation, name: code_analysis
+2025-11-21 16:08:38,581 - INFO - Registered incarnation: code_analysis (CodeAnalysisIncarnation)
+2025-11-21 16:08:38,581 - INFO - Found incarnation class via 'name' attribute: CodingIncarnation, name: coding
+2025-11-21 16:08:38,581 - INFO - Registered incarnation: coding (CodingIncarnation)
+2025-11-21 16:08:39,528 - INFO - Found incarnation class via 'name' attribute: DataAnalysisIncarnation, name: data_analysis
+2025-11-21 16:08:39,528 - INFO - Registered incarnation: data_analysis (DataAnalysisIncarnation)
+2025-11-21 16:08:39,529 - INFO - Found incarnation class via 'name' attribute: DecisionIncarnation, name: decision_support
+2025-11-21 16:08:39,529 - INFO - Registered incarnation: decision_support (DecisionIncarnation)
+2025-11-21 16:08:39,529 - INFO - Found incarnation class via 'name' attribute: KnowledgeGraphIncarnation, name: knowledge_graph
+2025-11-21 16:08:39,529 - INFO - Registered incarnation: knowledge_graph (KnowledgeGraphIncarnation)
+2025-11-21 16:08:39,530 - INFO - Found incarnation class via 'name' attribute: ResearchIncarnation, name: research_orchestration
+2025-11-21 16:08:39,530 - INFO - Registered incarnation: research_orchestration (ResearchIncarnation)
+2025-11-21 16:08:39,531 - INFO - Registered signal handlers for SIGTERM and SIGINT
+2025-11-21 16:08:39,531 - INFO - Registered atexit cleanup handler
+2025-11-21 16:08:39,531 - INFO - Process cleanup handlers registered
+2025-11-21 16:08:39,531 - INFO - Scanning for zombie NeoCoder MCP server instances...
+2025-11-21 16:08:39,601 - INFO - No zombie processes found
+2025-11-21 16:08:39,602 - INFO - NEO4J_URL from environment: bolt://localhost:7687
+2025-11-21 16:08:39,602 - INFO - NEO4J_USERNAME from environment: neo4j
+2025-11-21 16:08:39,602 - INFO - NEO4J_PASSWORD from environment: Set
+2025-11-21 16:08:39,602 - INFO - NEO4J_DATABASE from environment: neo4j
+2025-11-21 16:08:39,602 - INFO - Starting NeoCoder MCP Server
+2025-11-21 16:08:39,602 - INFO - Starting NeoCoder Neo4j Workflow Server
+2025-11-21 16:08:39,602 - INFO - Scanning for zombie NeoCoder MCP server instances...
+2025-11-21 16:08:39,653 - INFO - No zombie processes found
+2025-11-21 16:08:39,654 - INFO - Loaded environment variables from .env file
+2025-11-21 16:08:39,654 - INFO - Set log level to DEBUG
+2025-11-21 16:08:39,654 - INFO - Neo4j connection: bolt://localhost:7687, database: neo4j
+2025-11-21 16:08:39,655 - INFO - Using existing event loop
+2025-11-21 16:08:39,655 - DEBUG - Found event loop for current thread
+2025-11-21 16:08:39,655 - INFO - Initializing main event loop for Neo4j operations
+2025-11-21 16:08:39,655 - INFO - Initialized main event loop for Neo4j operations
+2025-11-21 16:08:39,655 - INFO - Creating Neo4j driver (URL: bolt://localhost:7687, database: neo4j)
+2025-11-21 16:08:39,656 - DEBUG - Tracking Neo4j driver, total: 1
+2025-11-21 16:08:40,312 - INFO - HTTP Request: GET http://localhost:6333 "HTTP/1.1 200 OK"
+2025-11-21 16:08:40,312 - INFO - Qdrant client initialized successfully
+2025-11-21 16:08:40,312 - INFO - No running event loop - will create server with async setup
+2025-11-21 16:08:40,312 - INFO - No running loop - using run_until_complete for setup
+2025-11-21 16:08:40,312 - DEBUG - Tracking Neo4j session, total: 1
+2025-11-21 16:08:40,359 - INFO - Neo4j driver connection verified successfully
+2025-11-21 16:08:40,359 - DEBUG - Untracked Neo4j session, remaining: 0
+2025-11-21 16:08:40,359 - DEBUG - Cleanup handlers already registered
+2025-11-21 16:08:40,359 - INFO - Cleanup handlers registered
+2025-11-21 16:08:40,359 - DEBUG - Tracking Neo4j driver, total: 1
+2025-11-21 16:08:40,365 - INFO - Basic protocol handlers registered
+2025-11-21 16:08:40,365 - INFO - Neo4jWorkflowServer created successfully
+2025-11-21 16:08:40,365 - INFO - Waiting for server initialization to complete...
+2025-11-21 16:08:40,367 - INFO - Registered basic protocol handlers via direct attribute assignment
+2025-11-21 16:08:40,367 - INFO - Checking database initialization status
+2025-11-21 16:08:40,367 - DEBUG - Tracking Neo4j session, total: 1
+2025-11-21 16:08:40,375 - WARNING - Received notification from DBMS server: {severity: WARNING} {code: Neo.ClientNotification.Statement.UnknownLabelWarning} {category: UNRECOGNIZED} {title: The provided label is not in the database.} {description: One of the labels in your query is not available in the database, make sure you didn't misspell it or that the label is available when you run this statement in your application (the missing label name is: ActionTemplate)} {position: line: 1, column: 10, offset: 9} for query: 'MATCH (t:ActionTemplate) RETURN count(t) > 0 as exists'
+2025-11-21 16:08:40,376 - DEBUG - Untracked Neo4j session, remaining: 0
+2025-11-21 16:08:40,376 - INFO - Database needs initialization, running setup
+2025-11-21 16:08:40,376 - INFO - Discovered incarnation name: code_analysis from code_analysis_incarnation.py
+2025-11-21 16:08:40,376 - INFO - Discovered incarnation name: coding from coding_incarnation.py
+2025-11-21 16:08:40,376 - INFO - Discovered incarnation name: data_analysis from data_analysis_incarnation.py
+2025-11-21 16:08:40,376 - INFO - Discovered incarnation name: decision from decision_incarnation.py
+2025-11-21 16:08:40,376 - INFO - Discovered incarnation name: knowledge_graph from knowledge_graph_incarnation.py
+2025-11-21 16:08:40,376 - INFO - Discovered incarnation name: research from research_incarnation.py
+2025-11-21 16:08:40,376 - INFO - Discovered incarnation types: ['code_analysis', 'coding', 'data_analysis', 'decision', 'knowledge_graph', 'research']
+2025-11-21 16:08:40,376 - DEBUG - Tracking Neo4j session, total: 1
+2025-11-21 16:08:40,420 - DEBUG - Untracked Neo4j session, remaining: 0
+2025-11-21 16:08:40,420 - INFO - Successfully connected to Neo4j
+2025-11-21 16:08:40,420 - INFO - Initializing base schema...
+2025-11-21 16:08:40,421 - DEBUG - Tracking Neo4j session, total: 1
+2025-11-21 16:08:40,422 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE CONSTRAINT hub_id IF NOT EXISTS FOR (e:AiGuidanceHub) REQUIRE (e.id) IS UNIQUE` has no effect.} {description: `CONSTRAINT hub_id FOR (e:AiGuidanceHub) REQUIRE (e.id) IS UNIQUE` already exists.} {position: None} for query: 'CREATE CONSTRAINT hub_id IF NOT EXISTS FOR (hub:AiGuidanceHub) REQUIRE hub.id IS UNIQUE'
+2025-11-21 16:08:40,424 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE CONSTRAINT proposal_id IF NOT EXISTS FOR (e:ToolProposal) REQUIRE (e.id) IS UNIQUE` has no effect.} {description: `CONSTRAINT proposal_id FOR (e:ToolProposal) REQUIRE (e.id) IS UNIQUE` already exists.} {position: None} for query: 'CREATE CONSTRAINT proposal_id IF NOT EXISTS FOR (p:ToolProposal) REQUIRE p.id IS UNIQUE'
+2025-11-21 16:08:40,425 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE CONSTRAINT request_id IF NOT EXISTS FOR (e:ToolRequest) REQUIRE (e.id) IS UNIQUE` has no effect.} {description: `CONSTRAINT request_id FOR (e:ToolRequest) REQUIRE (e.id) IS UNIQUE` already exists.} {position: None} for query: 'CREATE CONSTRAINT request_id IF NOT EXISTS FOR (r:ToolRequest) REQUIRE r.id IS UNIQUE'
+2025-11-21 16:08:40,426 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE CONSTRAINT snippet_id IF NOT EXISTS FOR (e:CypherSnippet) REQUIRE (e.id) IS UNIQUE` has no effect.} {description: `CONSTRAINT snippet_id FOR (e:CypherSnippet) REQUIRE (e.id) IS UNIQUE` already exists.} {position: None} for query: 'CREATE CONSTRAINT snippet_id IF NOT EXISTS FOR (s:CypherSnippet) REQUIRE s.id IS UNIQUE'
+2025-11-21 16:08:40,428 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE CONSTRAINT tag_name IF NOT EXISTS FOR (e:Tag) REQUIRE (e.name) IS UNIQUE` has no effect.} {description: `CONSTRAINT tag_name FOR (e:Tag) REQUIRE (e.name) IS UNIQUE` already exists.} {position: None} for query: 'CREATE CONSTRAINT tag_name IF NOT EXISTS FOR (t:Tag) REQUIRE t.name IS UNIQUE'
+2025-11-21 16:08:40,430 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE RANGE INDEX hub_type IF NOT EXISTS FOR (e:AiGuidanceHub) ON (e.type)` has no effect.} {description: `RANGE INDEX hub_type FOR (e:AiGuidanceHub) ON (e.type)` already exists.} {position: None} for query: 'CREATE INDEX hub_type IF NOT EXISTS FOR (hub:AiGuidanceHub) ON (hub.type)'
+2025-11-21 16:08:40,431 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE RANGE INDEX proposal_status IF NOT EXISTS FOR (e:ToolProposal) ON (e.status)` has no effect.} {description: `RANGE INDEX proposal_status FOR (e:ToolProposal) ON (e.status)` already exists.} {position: None} for query: 'CREATE INDEX proposal_status IF NOT EXISTS FOR (p:ToolProposal) ON (p.status)'
+2025-11-21 16:08:40,433 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE RANGE INDEX request_status IF NOT EXISTS FOR (e:ToolRequest) ON (e.status)` has no effect.} {description: `RANGE INDEX request_status FOR (e:ToolRequest) ON (e.status)` already exists.} {position: None} for query: 'CREATE INDEX request_status IF NOT EXISTS FOR (r:ToolRequest) ON (r.status)'
+2025-11-21 16:08:40,434 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE RANGE INDEX snippet_name IF NOT EXISTS FOR (e:CypherSnippet) ON (e.name)` has no effect.} {description: `RANGE INDEX snippet_name FOR (e:CypherSnippet) ON (e.name)` already exists.} {position: None} for query: 'CREATE INDEX snippet_name IF NOT EXISTS FOR (s:CypherSnippet) ON (s.name)'
+2025-11-21 16:08:40,435 - DEBUG - Untracked Neo4j session, remaining: 0
+2025-11-21 16:08:40,435 - INFO - Base schema initialized successfully
+2025-11-21 16:08:40,435 - INFO - Initializing research schema...
+2025-11-21 16:08:40,435 - DEBUG - Tracking Neo4j session, total: 1
+2025-11-21 16:08:40,436 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE CONSTRAINT research_hypothesis_id IF NOT EXISTS FOR (e:Hypothesis) REQUIRE (e.id) IS UNIQUE` has no effect.} {description: `CONSTRAINT research_hypothesis_id FOR (e:Hypothesis) REQUIRE (e.id) IS UNIQUE` already exists.} {position: None} for query: 'CREATE CONSTRAINT research_hypothesis_id IF NOT EXISTS FOR (h:Hypothesis) REQUIRE h.id IS UNIQUE'
+2025-11-21 16:08:40,438 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE CONSTRAINT research_experiment_id IF NOT EXISTS FOR (e:Experiment) REQUIRE (e.id) IS UNIQUE` has no effect.} {description: `CONSTRAINT research_experiment_id FOR (e:Experiment) REQUIRE (e.id) IS UNIQUE` already exists.} {position: None} for query: 'CREATE CONSTRAINT research_experiment_id IF NOT EXISTS FOR (e:Experiment) REQUIRE e.id IS UNIQUE'
+2025-11-21 16:08:40,439 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE CONSTRAINT research_protocol_id IF NOT EXISTS FOR (e:Protocol) REQUIRE (e.id) IS UNIQUE` has no effect.} {description: `CONSTRAINT research_protocol_id FOR (e:Protocol) REQUIRE (e.id) IS UNIQUE` already exists.} {position: None} for query: 'CREATE CONSTRAINT research_protocol_id IF NOT EXISTS FOR (p:Protocol) REQUIRE p.id IS UNIQUE'
+2025-11-21 16:08:40,441 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE CONSTRAINT research_observation_id IF NOT EXISTS FOR (e:Observation) REQUIRE (e.id) IS UNIQUE` has no effect.} {description: `CONSTRAINT research_observation_id FOR (e:Observation) REQUIRE (e.id) IS UNIQUE` already exists.} {position: None} for query: 'CREATE CONSTRAINT research_observation_id IF NOT EXISTS FOR (o:Observation) REQUIRE o.id IS UNIQUE'
+2025-11-21 16:08:40,442 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE CONSTRAINT research_run_id IF NOT EXISTS FOR (e:Run) REQUIRE (e.id) IS UNIQUE` has no effect.} {description: `CONSTRAINT research_run_id FOR (e:Run) REQUIRE (e.id) IS UNIQUE` already exists.} {position: None} for query: 'CREATE CONSTRAINT research_run_id IF NOT EXISTS FOR (r:Run) REQUIRE r.id IS UNIQUE'
+2025-11-21 16:08:40,444 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE RANGE INDEX research_hypothesis_status IF NOT EXISTS FOR (e:Hypothesis) ON (e.status)` has no effect.} {description: `RANGE INDEX research_hypothesis_status FOR (e:Hypothesis) ON (e.status)` already exists.} {position: None} for query: 'CREATE INDEX research_hypothesis_status IF NOT EXISTS FOR (h:Hypothesis) ON (h.status)'
+2025-11-21 16:08:40,445 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE RANGE INDEX research_experiment_status IF NOT EXISTS FOR (e:Experiment) ON (e.status)` has no effect.} {description: `RANGE INDEX research_experiment_status FOR (e:Experiment) ON (e.status)` already exists.} {position: None} for query: 'CREATE INDEX research_experiment_status IF NOT EXISTS FOR (e:Experiment) ON (e.status)'
+2025-11-21 16:08:40,446 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE RANGE INDEX research_protocol_name IF NOT EXISTS FOR (e:Protocol) ON (e.name)` has no effect.} {description: `RANGE INDEX research_protocol_name FOR (e:Protocol) ON (e.name)` already exists.} {position: None} for query: 'CREATE INDEX research_protocol_name IF NOT EXISTS FOR (p:Protocol) ON (p.name)'
+2025-11-21 16:08:40,448 - DEBUG - Untracked Neo4j session, remaining: 0
+2025-11-21 16:08:40,448 - INFO - Research schema initialized successfully
+2025-11-21 16:08:40,448 - INFO - Initializing decision support schema...
+2025-11-21 16:08:40,448 - DEBUG - Tracking Neo4j session, total: 1
+2025-11-21 16:08:40,450 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE CONSTRAINT decision_id IF NOT EXISTS FOR (e:Decision) REQUIRE (e.id) IS UNIQUE` has no effect.} {description: `CONSTRAINT decision_id FOR (e:Decision) REQUIRE (e.id) IS UNIQUE` already exists.} {position: None} for query: 'CREATE CONSTRAINT decision_id IF NOT EXISTS FOR (d:Decision) REQUIRE d.id IS UNIQUE'
+2025-11-21 16:08:40,451 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE CONSTRAINT alternative_id IF NOT EXISTS FOR (e:Alternative) REQUIRE (e.id) IS UNIQUE` has no effect.} {description: `CONSTRAINT alternative_id FOR (e:Alternative) REQUIRE (e.id) IS UNIQUE` already exists.} {position: None} for query: 'CREATE CONSTRAINT alternative_id IF NOT EXISTS FOR (a:Alternative) REQUIRE a.id IS UNIQUE'
+2025-11-21 16:08:40,452 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE CONSTRAINT metric_id IF NOT EXISTS FOR (e:Metric) REQUIRE (e.id) IS UNIQUE` has no effect.} {description: `CONSTRAINT metric_id FOR (e:Metric) REQUIRE (e.id) IS UNIQUE` already exists.} {position: None} for query: 'CREATE CONSTRAINT metric_id IF NOT EXISTS FOR (m:Metric) REQUIRE m.id IS UNIQUE'
+2025-11-21 16:08:40,454 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE CONSTRAINT evidence_id IF NOT EXISTS FOR (e:Evidence) REQUIRE (e.id) IS UNIQUE` has no effect.} {description: `CONSTRAINT evidence_id FOR (e:Evidence) REQUIRE (e.id) IS UNIQUE` already exists.} {position: None} for query: 'CREATE CONSTRAINT evidence_id IF NOT EXISTS FOR (e:Evidence) REQUIRE e.id IS UNIQUE'
+2025-11-21 16:08:40,455 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE RANGE INDEX decision_status IF NOT EXISTS FOR (e:Decision) ON (e.status)` has no effect.} {description: `RANGE INDEX decision_status FOR (e:Decision) ON (e.status)` already exists.} {position: None} for query: 'CREATE INDEX decision_status IF NOT EXISTS FOR (d:Decision) ON (d.status)'
+2025-11-21 16:08:40,456 - INFO - Received notification from DBMS server: {severity: INFORMATION} {code: Neo.ClientNotification.Schema.IndexOrConstraintAlreadyExists} {category: SCHEMA} {title: `CREATE RANGE INDEX alternative_name IF NOT EXISTS FOR (e:Alternative) ON (e.name)` has no effect.} {description: `RANGE INDEX alternative_name FOR (e:Alternative) ON (e.name)` already exists.} {position: None} for query: 'CREATE INDEX alternative_name IF NOT EXISTS FOR (a:Alternative) ON (a.name)'
+2025-11-21 16:08:40,458 - DEBUG - Untracked Neo4j session, remaining: 0
+2025-11-21 16:08:40,458 - INFO - Decision schema initialized successfully
+2025-11-21 16:08:40,458 - INFO - Creating basic schema for incarnation: code_analysis
+2025-11-21 16:08:40,459 - DEBUG - Tracking Neo4j session, total: 1
+2025-11-21 16:08:40,460 - INFO - Created hub for code_analysis
+2025-11-21 16:08:40,461 - DEBUG - Untracked Neo4j session, remaining: 0
+2025-11-21 16:08:40,461 - INFO - Creating basic schema for incarnation: coding
+2025-11-21 16:08:40,461 - DEBUG - Tracking Neo4j session, total: 1
+2025-11-21 16:08:40,462 - INFO - Created hub for coding
+2025-11-21 16:08:40,463 - DEBUG - Untracked Neo4j session, remaining: 0
+2025-11-21 16:08:40,463 - INFO - Creating basic schema for incarnation: data_analysis
+2025-11-21 16:08:40,463 - DEBUG - Tracking Neo4j session, total: 1
+2025-11-21 16:08:40,464 - INFO - Created hub for data_analysis
+2025-11-21 16:08:40,465 - DEBUG - Untracked Neo4j session, remaining: 0
+2025-11-21 16:08:40,465 - INFO - Creating basic schema for incarnation: knowledge_graph
+2025-11-21 16:08:40,465 - DEBUG - Tracking Neo4j session, total: 1
+2025-11-21 16:08:40,466 - INFO - Created hub for knowledge_graph
+2025-11-21 16:08:40,467 - DEBUG - Untracked Neo4j session, remaining: 0
+2025-11-21 16:08:40,467 - INFO - Creating main guidance hub...
+2025-11-21 16:08:40,467 - DEBUG - Tracking Neo4j session, total: 1
+2025-11-21 16:08:40,469 - DEBUG - Untracked Neo4j session, remaining: 0
+2025-11-21 16:08:40,469 - INFO - Main guidance hub created successfully
+2025-11-21 16:08:40,469 - INFO - Creating dynamic links between hubs...
+2025-11-21 16:08:40,469 - DEBUG - Tracking Neo4j session, total: 1
+2025-11-21 16:08:40,473 - INFO - Created link for incarnation: code_analysis
+2025-11-21 16:08:40,475 - INFO - Created link for incarnation: coding
+2025-11-21 16:08:40,477 - INFO - Created link for incarnation: data_analysis
+2025-11-21 16:08:40,479 - INFO - Created link for incarnation: decision
+2025-11-21 16:08:40,481 - INFO - Created link for incarnation: knowledge_graph
+2025-11-21 16:08:40,483 - INFO - Created link for incarnation: research
+2025-11-21 16:08:40,484 - DEBUG - Untracked Neo4j session, remaining: 0
+2025-11-21 16:08:40,484 - INFO - Hub links created successfully
+2025-11-21 16:08:40,484 - INFO - Database initialization complete!
+2025-11-21 16:08:40,484 - INFO - Database initialization completed
+2025-11-21 16:08:40,484 - INFO - Database initialization completed successfully
+2025-11-21 16:08:40,484 - INFO - Registered tool 'get_guidance_hub' in category 'navigation'
+2025-11-21 16:08:40,484 - INFO - Registered tool 'list_action_templates' in category 'navigation'
+2025-11-21 16:08:40,484 - INFO - Registered tool 'get_action_template' in category 'navigation'
+2025-11-21 16:08:40,484 - INFO - Registered tool 'get_best_practices' in category 'navigation'
+2025-11-21 16:08:40,484 - INFO - Registered tool 'suggest_tool' in category 'navigation'
+2025-11-21 16:08:40,484 - INFO - Registered tool 'get_project' in category 'project'
+2025-11-21 16:08:40,484 - INFO - Registered tool 'list_projects' in category 'project'
+2025-11-21 16:08:40,484 - INFO - Registered tool 'log_workflow_execution' in category 'workflow'
+2025-11-21 16:08:40,484 - INFO - Registered tool 'get_workflow_history' in category 'workflow'
+2025-11-21 16:08:40,484 - INFO - Registered tool 'add_template_feedback' in category 'workflow'
+2025-11-21 16:08:40,484 - INFO - Registered tool 'run_custom_query' in category 'query'
+2025-11-21 16:08:40,484 - INFO - Registered tool 'write_neo4j_cypher' in category 'query'
+2025-11-21 16:08:40,484 - INFO - Registered tool 'check_connection' in category 'query'
+2025-11-21 16:08:40,484 - INFO - Registered tool 'list_cypher_snippets' in category 'cypher'
+2025-11-21 16:08:40,484 - INFO - Registered tool 'get_cypher_snippet' in category 'cypher'
+2025-11-21 16:08:40,484 - INFO - Registered tool 'search_cypher_snippets' in category 'cypher'
+2025-11-21 16:08:40,484 - INFO - Registered tool 'create_cypher_snippet' in category 'cypher'
+2025-11-21 16:08:40,484 - INFO - Registered tool 'update_cypher_snippet' in category 'cypher'
+2025-11-21 16:08:40,484 - INFO - Registered tool 'delete_cypher_snippet' in category 'cypher'
+2025-11-21 16:08:40,484 - INFO - Registered tool 'get_cypher_tags' in category 'cypher'
+2025-11-21 16:08:40,484 - INFO - Registered tool 'propose_tool' in category 'proposal'
+2025-11-21 16:08:40,485 - INFO - Registered tool 'request_tool' in category 'proposal'
+2025-11-21 16:08:40,485 - INFO - Registered tool 'get_tool_proposal' in category 'proposal'
+2025-11-21 16:08:40,485 - INFO - Registered tool 'get_tool_request' in category 'proposal'
+2025-11-21 16:08:40,485 - INFO - Registered tool 'list_tool_proposals' in category 'proposal'
+2025-11-21 16:08:40,485 - INFO - Registered tool 'list_tool_requests' in category 'proposal'
+2025-11-21 16:08:40,485 - INFO - Registered tool 'get_current_incarnation' in category 'incarnation'
+2025-11-21 16:08:40,485 - INFO - Registered tool 'list_incarnations' in category 'incarnation'
+2025-11-21 16:08:40,485 - INFO - Registered tool 'switch_incarnation' in category 'incarnation'
+2025-11-21 16:08:40,485 - INFO - Registered tool 'get_cleanup_status' in category 'monitoring'
+2025-11-21 16:08:40,485 - INFO - Registered all core tools with ToolRegistry
+2025-11-21 16:08:40,485 - INFO - Core tools registered
+2025-11-21 16:08:40,485 - INFO - Discovering available incarnation classes
+2025-11-21 16:08:40,485 - INFO - Discovered incarnation type: CODE_ANALYSIS_=code_analysis_
+2025-11-21 16:08:40,485 - INFO - Added simplified alias: CODE=code_analysis_
+2025-11-21 16:08:40,485 - INFO - Discovered incarnation type: CODING_=coding_
+2025-11-21 16:08:40,485 - INFO - Added simplified alias: CODING=coding_
+2025-11-21 16:08:40,485 - INFO - Discovered incarnation type: DATA_ANALYSIS_=data_analysis_
+2025-11-21 16:08:40,485 - INFO - Added simplified alias: DATA=data_analysis_
+2025-11-21 16:08:40,485 - INFO - Discovered incarnation type: DECISION_=decision_
+2025-11-21 16:08:40,485 - INFO - Added simplified alias: DECISION=decision_
+2025-11-21 16:08:40,485 - INFO - Discovered incarnation type: KNOWLEDGE_GRAPH_=knowledge_graph_
+2025-11-21 16:08:40,485 - INFO - Added simplified alias: KNOWLEDGE=knowledge_graph_
+2025-11-21 16:08:40,485 - INFO - Discovered incarnation type: RESEARCH_=research_
+2025-11-21 16:08:40,485 - INFO - Added simplified alias: RESEARCH=research_
+2025-11-21 16:08:40,485 - INFO - Discovered incarnation identifiers: ['code_analysis_', 'coding_', 'data_analysis_', 'decision_', 'knowledge_graph_', 'research_']
+2025-11-21 16:08:40,485 - INFO - Searching for incarnations in: /home/ty/Repositories/NeoCoder-neo4j-ai-workflow/src/mcp_neocoder/incarnations
+2025-11-21 16:08:40,485 - DEBUG - Module code_analysis_incarnation already loaded, skipping
+2025-11-21 16:08:40,485 - DEBUG - Module coding_incarnation already loaded, skipping
+2025-11-21 16:08:40,485 - DEBUG - Module data_analysis_incarnation already loaded, skipping
+2025-11-21 16:08:40,485 - DEBUG - Module decision_incarnation already loaded, skipping
+2025-11-21 16:08:40,485 - DEBUG - Module knowledge_graph_incarnation already loaded, skipping
+2025-11-21 16:08:40,485 - DEBUG - Module research_incarnation already loaded, skipping
+2025-11-21 16:08:40,485 - INFO - Registering 6 incarnations with server
+2025-11-21 16:08:40,485 - INFO - Attempting to register incarnation: code_analysis (CodeAnalysisIncarnation)
+2025-11-21 16:08:40,485 - INFO - Registered incarnation: code_analysis -> CodeAnalysisIncarnation
+2025-11-21 16:08:40,485 - INFO - Registered incarnation: code_analysis (CodeAnalysisIncarnation)
+2025-11-21 16:08:40,485 - INFO - Created instance of CodeAnalysisIncarnation
+2025-11-21 16:08:40,485 - DEBUG - Checking methods in CodeAnalysisIncarnation
+2025-11-21 16:08:40,485 - INFO - Using predefined tool list for CodeAnalysisIncarnation: ['analyze_codebase', 'analyze_file', 'compare_versions', 'find_code_smells', 'generate_documentation', 'explore_code_structure', 'search_code_constructs']
+2025-11-21 16:08:40,485 - INFO - Found 7 tool methods in code_analysis (will register later)
+2025-11-21 16:08:40,485 - INFO - Attempting to register incarnation: coding (CodingIncarnation)
+2025-11-21 16:08:40,485 - INFO - Registered incarnation: coding -> CodingIncarnation
+2025-11-21 16:08:40,485 - INFO - Registered incarnation: coding (CodingIncarnation)
+2025-11-21 16:08:40,485 - INFO - Created instance of CodingIncarnation
+2025-11-21 16:08:40,485 - DEBUG - Checking methods in CodingIncarnation
+2025-11-21 16:08:40,485 - INFO - Using predefined tool list for CodingIncarnation: []
+2025-11-21 16:08:40,485 - INFO - Found 0 tool methods in coding (will register later)
+2025-11-21 16:08:40,485 - INFO - Attempting to register incarnation: data_analysis (DataAnalysisIncarnation)
+2025-11-21 16:08:40,485 - INFO - Registered incarnation: data_analysis -> DataAnalysisIncarnation
+2025-11-21 16:08:40,485 - INFO - Registered incarnation: data_analysis (DataAnalysisIncarnation)
+2025-11-21 16:08:40,486 - INFO - Created instance of DataAnalysisIncarnation
+2025-11-21 16:08:40,486 - INFO - Found 16 tool methods in data_analysis (will register later)
+2025-11-21 16:08:40,486 - INFO - Attempting to register incarnation: decision_support (DecisionIncarnation)
+2025-11-21 16:08:40,486 - INFO - Registered incarnation: decision_support -> DecisionIncarnation
+2025-11-21 16:08:40,486 - INFO - Registered incarnation: decision_support (DecisionIncarnation)
+2025-11-21 16:08:40,486 - INFO - Created instance of DecisionIncarnation
+2025-11-21 16:08:40,486 - DEBUG - Checking methods in DecisionIncarnation
+2025-11-21 16:08:40,486 - INFO - Using predefined tool list for DecisionIncarnation: ['create_decision', 'list_decisions', 'get_decision', 'add_alternative', 'add_metric', 'add_evidence']
+2025-11-21 16:08:40,486 - INFO - Found 6 tool methods in decision_support (will register later)
+2025-11-21 16:08:40,486 - INFO - Attempting to register incarnation: knowledge_graph (KnowledgeGraphIncarnation)
+2025-11-21 16:08:40,486 - INFO - Registered incarnation: knowledge_graph -> KnowledgeGraphIncarnation
+2025-11-21 16:08:40,486 - INFO - Registered incarnation: knowledge_graph (KnowledgeGraphIncarnation)
+2025-11-21 16:08:40,486 - INFO - Created instance of KnowledgeGraphIncarnation
+2025-11-21 16:08:40,486 - DEBUG - Checking methods in KnowledgeGraphIncarnation
+2025-11-21 16:08:40,486 - INFO - Using predefined tool list for KnowledgeGraphIncarnation: ['create_entities', 'create_relations', 'add_observations', 'add_single_observation', 'delete_entities', 'delete_observations', 'delete_relations', 'read_graph', 'search_nodes', 'open_nodes']
+2025-11-21 16:08:40,486 - INFO - Found 10 tool methods in knowledge_graph (will register later)
+2025-11-21 16:08:40,486 - INFO - Attempting to register incarnation: research_orchestration (ResearchIncarnation)
+2025-11-21 16:08:40,486 - INFO - Registered incarnation: research_orchestration -> ResearchIncarnation
+2025-11-21 16:08:40,486 - INFO - Registered incarnation: research_orchestration (ResearchIncarnation)
+2025-11-21 16:08:40,486 - INFO - Created instance of ResearchIncarnation
+2025-11-21 16:08:40,486 - DEBUG - Checking methods in ResearchIncarnation
+2025-11-21 16:08:40,486 - INFO - Using predefined tool list for ResearchIncarnation: ['register_hypothesis', 'list_hypotheses', 'get_hypothesis', 'update_hypothesis', 'create_protocol', 'list_protocols', 'get_protocol', 'create_experiment', 'list_experiments', 'get_experiment', 'update_experiment', 'record_observation', 'list_observations', 'compute_statistics', 'create_publication_draft']
+2025-11-21 16:08:40,486 - INFO - Found 15 tool methods in research_orchestration (will register later)
+2025-11-21 16:08:40,486 - INFO - Loaded 6 incarnations successfully
+2025-11-21 16:08:40,486 - INFO - Incarnations loaded
+2025-11-21 16:08:40,486 - INFO - Registering tools from all incarnations...
+2025-11-21 16:08:40,486 - INFO - Registering core tools with MCP server...
+2025-11-21 16:08:40,486 - DEBUG - Tools available for registration: ['get_guidance_hub', 'list_action_templates', 'get_action_template', 'get_best_practices', 'suggest_tool', 'get_project', 'list_projects', 'log_workflow_execution', 'get_workflow_history', 'add_template_feedback', 'run_custom_query', 'write_neo4j_cypher', 'check_connection', 'list_cypher_snippets', 'get_cypher_snippet', 'search_cypher_snippets', 'create_cypher_snippet', 'update_cypher_snippet', 'delete_cypher_snippet', 'get_cypher_tags', 'propose_tool', 'request_tool', 'get_tool_proposal', 'get_tool_request', 'list_tool_proposals', 'list_tool_requests', 'get_current_incarnation', 'list_incarnations', 'switch_incarnation', 'get_cleanup_status']
+2025-11-21 16:08:40,487 - INFO - Added tool 'get_guidance_hub' to MCP server
+2025-11-21 16:08:40,488 - INFO - Added tool 'list_action_templates' to MCP server
+2025-11-21 16:08:40,488 - INFO - Added tool 'get_action_template' to MCP server
+2025-11-21 16:08:40,489 - INFO - Added tool 'get_best_practices' to MCP server
+2025-11-21 16:08:40,490 - INFO - Added tool 'suggest_tool' to MCP server
+2025-11-21 16:08:40,490 - INFO - Added tool 'get_project' to MCP server
+2025-11-21 16:08:40,491 - INFO - Added tool 'list_projects' to MCP server
+2025-11-21 16:08:40,493 - INFO - Added tool 'log_workflow_execution' to MCP server
+2025-11-21 16:08:40,494 - INFO - Added tool 'get_workflow_history' to MCP server
+2025-11-21 16:08:40,495 - INFO - Added tool 'add_template_feedback' to MCP server
+2025-11-21 16:08:40,496 - INFO - Added tool 'run_custom_query' to MCP server
+2025-11-21 16:08:40,497 - INFO - Added tool 'write_neo4j_cypher' to MCP server
+2025-11-21 16:08:40,497 - INFO - Added tool 'check_connection' to MCP server
+2025-11-21 16:08:40,498 - INFO - Added tool 'list_cypher_snippets' to MCP server
+2025-11-21 16:08:40,499 - INFO - Added tool 'get_cypher_snippet' to MCP server
+2025-11-21 16:08:40,500 - INFO - Added tool 'search_cypher_snippets' to MCP server
+2025-11-21 16:08:40,501 - INFO - Added tool 'create_cypher_snippet' to MCP server
+2025-11-21 16:08:40,503 - INFO - Added tool 'update_cypher_snippet' to MCP server
+2025-11-21 16:08:40,503 - INFO - Added tool 'delete_cypher_snippet' to MCP server
+2025-11-21 16:08:40,504 - INFO - Added tool 'get_cypher_tags' to MCP server
+2025-11-21 16:08:40,505 - INFO - Added tool 'propose_tool' to MCP server
+2025-11-21 16:08:40,506 - INFO - Added tool 'request_tool' to MCP server
+2025-11-21 16:08:40,507 - INFO - Added tool 'get_tool_proposal' to MCP server
+2025-11-21 16:08:40,507 - INFO - Added tool 'get_tool_request' to MCP server
+2025-11-21 16:08:40,508 - INFO - Added tool 'list_tool_proposals' to MCP server
+2025-11-21 16:08:40,509 - INFO - Added tool 'list_tool_requests' to MCP server
+2025-11-21 16:08:40,510 - INFO - Added tool 'get_current_incarnation' to MCP server
+2025-11-21 16:08:40,510 - INFO - Added tool 'list_incarnations' to MCP server
+2025-11-21 16:08:40,510 - INFO - Added tool 'switch_incarnation' to MCP server
+2025-11-21 16:08:40,511 - INFO - Added tool 'get_cleanup_status' to MCP server
+2025-11-21 16:08:40,511 - INFO - Registered 30 core tools with MCP server
+2025-11-21 16:08:40,511 - INFO - Processing 6 incarnation types
+2025-11-21 16:08:40,511 - INFO - Processing incarnation: code_analysis
+2025-11-21 16:08:40,511 - INFO - Registering tools from code_analysis incarnation
+2025-11-21 16:08:40,511 - DEBUG - Checking methods in CodeAnalysisIncarnation
+2025-11-21 16:08:40,511 - INFO - Using predefined tool list for CodeAnalysisIncarnation: ['analyze_codebase', 'analyze_file', 'compare_versions', 'find_code_smells', 'generate_documentation', 'explore_code_structure', 'search_code_constructs']
+2025-11-21 16:08:40,511 - INFO - Found 7 tools via list_tool_methods: ['analyze_codebase', 'analyze_file', 'compare_versions', 'find_code_smells', 'generate_documentation', 'explore_code_structure', 'search_code_constructs']
+2025-11-21 16:08:40,511 - INFO - Registered tool 'analyze_codebase' in category 'code_analysis'
+2025-11-21 16:08:40,511 - INFO - Registered tool 'analyze_file' in category 'code_analysis'
+2025-11-21 16:08:40,511 - INFO - Registered tool 'compare_versions' in category 'code_analysis'
+2025-11-21 16:08:40,511 - INFO - Registered tool 'find_code_smells' in category 'code_analysis'
+2025-11-21 16:08:40,511 - INFO - Registered tool 'generate_documentation' in category 'code_analysis'
+2025-11-21 16:08:40,511 - INFO - Registered tool 'explore_code_structure' in category 'code_analysis'
+2025-11-21 16:08:40,511 - INFO - Registered tool 'search_code_constructs' in category 'code_analysis'
+2025-11-21 16:08:40,511 - INFO - Registered 7 tools from class CodeAnalysisIncarnation
+2025-11-21 16:08:40,511 - INFO - Found 7 tools in code_analysis incarnation
+2025-11-21 16:08:40,511 - INFO - Tools in category code_analysis: {'search_code_constructs', 'explore_code_structure', 'compare_versions', 'analyze_codebase', 'generate_documentation', 'find_code_smells', 'analyze_file'}
+2025-11-21 16:08:40,512 - INFO - Added tool 'search_code_constructs' from code_analysis to MCP server
+2025-11-21 16:08:40,513 - INFO - Added tool 'explore_code_structure' from code_analysis to MCP server
+2025-11-21 16:08:40,514 - INFO - Added tool 'compare_versions' from code_analysis to MCP server
+2025-11-21 16:08:40,515 - INFO - Added tool 'analyze_codebase' from code_analysis to MCP server
+2025-11-21 16:08:40,516 - INFO - Added tool 'generate_documentation' from code_analysis to MCP server
+2025-11-21 16:08:40,517 - INFO - Added tool 'find_code_smells' from code_analysis to MCP server
+2025-11-21 16:08:40,518 - INFO - Added tool 'analyze_file' from code_analysis to MCP server
+2025-11-21 16:08:40,518 - INFO - Successfully registered 7 tools from code_analysis incarnation
+2025-11-21 16:08:40,518 - INFO - Registered 7 tools from code_analysis incarnation
+2025-11-21 16:08:40,518 - INFO - Processing incarnation: coding
+2025-11-21 16:08:40,518 - INFO - Registering tools from coding incarnation
+2025-11-21 16:08:40,518 - DEBUG - Checking methods in CodingIncarnation
+2025-11-21 16:08:40,518 - INFO - Using predefined tool list for CodingIncarnation: []
+2025-11-21 16:08:40,518 - INFO - Found 0 tools via list_tool_methods: []
+2025-11-21 16:08:40,518 - INFO - Registered 0 tools from class CodingIncarnation
+2025-11-21 16:08:40,519 - INFO - Found 0 tools in coding incarnation
+2025-11-21 16:08:40,519 - INFO - Attempting direct method inspection for coding
+2025-11-21 16:08:40,519 - INFO - Found potential tool method: add_template_feedback
+2025-11-21 16:08:40,519 - DEBUG - Tool 'add_template_feedback' already registered, skipping.
+2025-11-21 16:08:40,519 - INFO - Found potential tool method: get_action_template
+2025-11-21 16:08:40,519 - DEBUG - Tool 'get_action_template' already registered, skipping.
+2025-11-21 16:08:40,519 - INFO - Found potential tool method: get_base_guidance
+2025-11-21 16:08:40,519 - INFO - Registered tool 'get_base_guidance' in category 'coding'
+2025-11-21 16:08:40,519 - INFO - Found potential tool method: get_best_practices
+2025-11-21 16:08:40,519 - DEBUG - Tool 'get_best_practices' already registered, skipping.
+2025-11-21 16:08:40,519 - INFO - Found potential tool method: get_project
+2025-11-21 16:08:40,519 - DEBUG - Tool 'get_project' already registered, skipping.
+2025-11-21 16:08:40,519 - INFO - Found potential tool method: get_workflow_history
+2025-11-21 16:08:40,519 - DEBUG - Tool 'get_workflow_history' already registered, skipping.
+2025-11-21 16:08:40,519 - INFO - Found potential tool method: list_action_templates
+2025-11-21 16:08:40,519 - DEBUG - Tool 'list_action_templates' already registered, skipping.
+2025-11-21 16:08:40,519 - INFO - Found potential tool method: list_projects
+2025-11-21 16:08:40,519 - DEBUG - Tool 'list_projects' already registered, skipping.
+2025-11-21 16:08:40,519 - INFO - Found potential tool method: log_workflow_execution
+2025-11-21 16:08:40,519 - DEBUG - Tool 'log_workflow_execution' already registered, skipping.
+2025-11-21 16:08:40,519 - INFO - Tools in category coding: {'get_base_guidance'}
+2025-11-21 16:08:40,520 - INFO - Added tool 'get_base_guidance' from coding to MCP server
+2025-11-21 16:08:40,520 - INFO - Successfully registered 1 tools from coding incarnation
+2025-11-21 16:08:40,520 - INFO - Registered 1 tools from coding incarnation
+2025-11-21 16:08:40,520 - INFO - Processing incarnation: data_analysis
+2025-11-21 16:08:40,520 - INFO - Registering tools from data_analysis incarnation
+2025-11-21 16:08:40,520 - INFO - Found 16 tools via list_tool_methods: ['load_dataset', 'explore_dataset', 'profile_data', 'calculate_statistics', 'analyze_correlations', 'filter_data', 'aggregate_data', 'compare_datasets', 'export_results', 'list_datasets', 'get_analysis_history', 'visualize_data', 'detect_anomalies', 'cluster_analysis', 'time_series_analysis', 'generate_insights']
+2025-11-21 16:08:40,520 - INFO - Registered tool 'load_dataset' in category 'data_analysis'
+2025-11-21 16:08:40,520 - INFO - Registered tool 'explore_dataset' in category 'data_analysis'
+2025-11-21 16:08:40,520 - INFO - Registered tool 'profile_data' in category 'data_analysis'
+2025-11-21 16:08:40,520 - INFO - Registered tool 'calculate_statistics' in category 'data_analysis'
+2025-11-21 16:08:40,520 - INFO - Registered tool 'analyze_correlations' in category 'data_analysis'
+2025-11-21 16:08:40,520 - INFO - Registered tool 'filter_data' in category 'data_analysis'
+2025-11-21 16:08:40,520 - INFO - Registered tool 'aggregate_data' in category 'data_analysis'
+2025-11-21 16:08:40,520 - INFO - Registered tool 'compare_datasets' in category 'data_analysis'
+2025-11-21 16:08:40,520 - INFO - Registered tool 'export_results' in category 'data_analysis'
+2025-11-21 16:08:40,520 - INFO - Registered tool 'list_datasets' in category 'data_analysis'
+2025-11-21 16:08:40,520 - INFO - Registered tool 'get_analysis_history' in category 'data_analysis'
+2025-11-21 16:08:40,520 - INFO - Registered tool 'visualize_data' in category 'data_analysis'
+2025-11-21 16:08:40,520 - INFO - Registered tool 'detect_anomalies' in category 'data_analysis'
+2025-11-21 16:08:40,520 - INFO - Registered tool 'cluster_analysis' in category 'data_analysis'
+2025-11-21 16:08:40,520 - INFO - Registered tool 'time_series_analysis' in category 'data_analysis'
+2025-11-21 16:08:40,520 - INFO - Registered tool 'generate_insights' in category 'data_analysis'
+2025-11-21 16:08:40,520 - INFO - Registered 16 tools from class DataAnalysisIncarnation
+2025-11-21 16:08:40,520 - INFO - Found 16 tools in data_analysis incarnation
+2025-11-21 16:08:40,520 - INFO - Tools in category data_analysis: {'profile_data', 'export_results', 'aggregate_data', 'time_series_analysis', 'visualize_data', 'calculate_statistics', 'analyze_correlations', 'list_datasets', 'compare_datasets', 'get_analysis_history', 'generate_insights', 'load_dataset', 'filter_data', 'detect_anomalies', 'cluster_analysis', 'explore_dataset'}
+2025-11-21 16:08:40,521 - INFO - Added tool 'profile_data' from data_analysis to MCP server
+2025-11-21 16:08:40,522 - INFO - Added tool 'export_results' from data_analysis to MCP server
+2025-11-21 16:08:40,522 - INFO - Added tool 'aggregate_data' from data_analysis to MCP server
+2025-11-21 16:08:40,523 - INFO - Added tool 'time_series_analysis' from data_analysis to MCP server
+2025-11-21 16:08:40,525 - INFO - Added tool 'visualize_data' from data_analysis to MCP server
+2025-11-21 16:08:40,526 - INFO - Added tool 'calculate_statistics' from data_analysis to MCP server
+2025-11-21 16:08:40,526 - INFO - Added tool 'analyze_correlations' from data_analysis to MCP server
+2025-11-21 16:08:40,527 - INFO - Added tool 'list_datasets' from data_analysis to MCP server
+2025-11-21 16:08:40,528 - INFO - Added tool 'compare_datasets' from data_analysis to MCP server
+2025-11-21 16:08:40,529 - INFO - Added tool 'get_analysis_history' from data_analysis to MCP server
+2025-11-21 16:08:40,530 - INFO - Added tool 'generate_insights' from data_analysis to MCP server
+2025-11-21 16:08:40,531 - INFO - Added tool 'load_dataset' from data_analysis to MCP server
+2025-11-21 16:08:40,531 - INFO - Added tool 'filter_data' from data_analysis to MCP server
+2025-11-21 16:08:40,532 - INFO - Added tool 'detect_anomalies' from data_analysis to MCP server
+2025-11-21 16:08:40,533 - INFO - Added tool 'cluster_analysis' from data_analysis to MCP server
+2025-11-21 16:08:40,534 - INFO - Added tool 'explore_dataset' from data_analysis to MCP server
+2025-11-21 16:08:40,534 - INFO - Successfully registered 16 tools from data_analysis incarnation
+2025-11-21 16:08:40,534 - INFO - Registered 16 tools from data_analysis incarnation
+2025-11-21 16:08:40,534 - INFO - Processing incarnation: decision_support
+2025-11-21 16:08:40,534 - INFO - Registering tools from decision_support incarnation
+2025-11-21 16:08:40,534 - DEBUG - Checking methods in DecisionIncarnation
+2025-11-21 16:08:40,534 - INFO - Using predefined tool list for DecisionIncarnation: ['create_decision', 'list_decisions', 'get_decision', 'add_alternative', 'add_metric', 'add_evidence']
+2025-11-21 16:08:40,534 - INFO - Found 6 tools via list_tool_methods: ['create_decision', 'list_decisions', 'get_decision', 'add_alternative', 'add_metric', 'add_evidence']
+2025-11-21 16:08:40,534 - INFO - Registered tool 'create_decision' in category 'decision_support'
+2025-11-21 16:08:40,534 - INFO - Registered tool 'list_decisions' in category 'decision_support'
+2025-11-21 16:08:40,534 - INFO - Registered tool 'get_decision' in category 'decision_support'
+2025-11-21 16:08:40,534 - INFO - Registered tool 'add_alternative' in category 'decision_support'
+2025-11-21 16:08:40,534 - INFO - Registered tool 'add_metric' in category 'decision_support'
+2025-11-21 16:08:40,534 - INFO - Registered tool 'add_evidence' in category 'decision_support'
+2025-11-21 16:08:40,534 - INFO - Registered 6 tools from class DecisionIncarnation
+2025-11-21 16:08:40,534 - INFO - Found 6 tools in decision_support incarnation
+2025-11-21 16:08:40,534 - INFO - Tools in category decision_support: {'add_alternative', 'add_metric', 'create_decision', 'get_decision', 'list_decisions', 'add_evidence'}
+2025-11-21 16:08:40,536 - INFO - Added tool 'add_alternative' from decision_support to MCP server
+2025-11-21 16:08:40,537 - INFO - Added tool 'add_metric' from decision_support to MCP server
+2025-11-21 16:08:40,538 - INFO - Added tool 'create_decision' from decision_support to MCP server
+2025-11-21 16:08:40,539 - INFO - Added tool 'get_decision' from decision_support to MCP server
+2025-11-21 16:08:40,540 - INFO - Added tool 'list_decisions' from decision_support to MCP server
+2025-11-21 16:08:40,541 - INFO - Added tool 'add_evidence' from decision_support to MCP server
+2025-11-21 16:08:40,542 - INFO - Successfully registered 6 tools from decision_support incarnation
+2025-11-21 16:08:40,542 - INFO - Registered 6 tools from decision_support incarnation
+2025-11-21 16:08:40,542 - INFO - Processing incarnation: knowledge_graph
+2025-11-21 16:08:40,542 - INFO - Registering tools from knowledge_graph incarnation
+2025-11-21 16:08:40,542 - DEBUG - Checking methods in KnowledgeGraphIncarnation
+2025-11-21 16:08:40,542 - INFO - Using predefined tool list for KnowledgeGraphIncarnation: ['create_entities', 'create_relations', 'add_observations', 'add_single_observation', 'delete_entities', 'delete_observations', 'delete_relations', 'read_graph', 'search_nodes', 'open_nodes']
+2025-11-21 16:08:40,542 - INFO - Found 10 tools via list_tool_methods: ['create_entities', 'create_relations', 'add_observations', 'add_single_observation', 'delete_entities', 'delete_observations', 'delete_relations', 'read_graph', 'search_nodes', 'open_nodes']
+2025-11-21 16:08:40,542 - INFO - Registered tool 'create_entities' in category 'knowledge_graph'
+2025-11-21 16:08:40,542 - INFO - Registered tool 'create_relations' in category 'knowledge_graph'
+2025-11-21 16:08:40,542 - INFO - Registered tool 'add_observations' in category 'knowledge_graph'
+2025-11-21 16:08:40,542 - INFO - Registered tool 'add_single_observation' in category 'knowledge_graph'
+2025-11-21 16:08:40,542 - INFO - Registered tool 'delete_entities' in category 'knowledge_graph'
+2025-11-21 16:08:40,542 - INFO - Registered tool 'delete_observations' in category 'knowledge_graph'
+2025-11-21 16:08:40,542 - INFO - Registered tool 'delete_relations' in category 'knowledge_graph'
+2025-11-21 16:08:40,542 - INFO - Registered tool 'read_graph' in category 'knowledge_graph'
+2025-11-21 16:08:40,542 - INFO - Registered tool 'search_nodes' in category 'knowledge_graph'
+2025-11-21 16:08:40,542 - INFO - Registered tool 'open_nodes' in category 'knowledge_graph'
+2025-11-21 16:08:40,542 - INFO - Registered 10 tools from class KnowledgeGraphIncarnation
+2025-11-21 16:08:40,542 - INFO - Found 10 tools in knowledge_graph incarnation
+2025-11-21 16:08:40,542 - INFO - Tools in category knowledge_graph: {'create_relations', 'read_graph', 'open_nodes', 'create_entities', 'add_single_observation', 'delete_observations', 'search_nodes', 'add_observations', 'delete_relations', 'delete_entities'}
+2025-11-21 16:08:40,543 - INFO - Added tool 'create_relations' from knowledge_graph to MCP server
+2025-11-21 16:08:40,543 - INFO - Added tool 'read_graph' from knowledge_graph to MCP server
+2025-11-21 16:08:40,544 - INFO - Added tool 'open_nodes' from knowledge_graph to MCP server
+2025-11-21 16:08:40,544 - INFO - Added tool 'create_entities' from knowledge_graph to MCP server
+2025-11-21 16:08:40,545 - INFO - Added tool 'add_single_observation' from knowledge_graph to MCP server
+2025-11-21 16:08:40,546 - INFO - Added tool 'delete_observations' from knowledge_graph to MCP server
+2025-11-21 16:08:40,546 - INFO - Added tool 'search_nodes' from knowledge_graph to MCP server
+2025-11-21 16:08:40,547 - INFO - Added tool 'add_observations' from knowledge_graph to MCP server
+2025-11-21 16:08:40,547 - INFO - Added tool 'delete_relations' from knowledge_graph to MCP server
+2025-11-21 16:08:40,548 - INFO - Added tool 'delete_entities' from knowledge_graph to MCP server
+2025-11-21 16:08:40,548 - INFO - Successfully registered 10 tools from knowledge_graph incarnation
+2025-11-21 16:08:40,548 - INFO - Registered 10 tools from knowledge_graph incarnation
+2025-11-21 16:08:40,548 - INFO - Processing incarnation: research_orchestration
+2025-11-21 16:08:40,548 - INFO - Registering tools from research_orchestration incarnation
+2025-11-21 16:08:40,548 - DEBUG - Checking methods in ResearchIncarnation
+2025-11-21 16:08:40,548 - INFO - Using predefined tool list for ResearchIncarnation: ['register_hypothesis', 'list_hypotheses', 'get_hypothesis', 'update_hypothesis', 'create_protocol', 'list_protocols', 'get_protocol', 'create_experiment', 'list_experiments', 'get_experiment', 'update_experiment', 'record_observation', 'list_observations', 'compute_statistics', 'create_publication_draft']
+2025-11-21 16:08:40,548 - INFO - Found 15 tools via list_tool_methods: ['register_hypothesis', 'list_hypotheses', 'get_hypothesis', 'update_hypothesis', 'create_protocol', 'list_protocols', 'get_protocol', 'create_experiment', 'list_experiments', 'get_experiment', 'update_experiment', 'record_observation', 'list_observations', 'compute_statistics', 'create_publication_draft']
+2025-11-21 16:08:40,548 - INFO - Registered tool 'register_hypothesis' in category 'research_orchestration'
+2025-11-21 16:08:40,548 - INFO - Registered tool 'list_hypotheses' in category 'research_orchestration'
+2025-11-21 16:08:40,548 - INFO - Registered tool 'get_hypothesis' in category 'research_orchestration'
+2025-11-21 16:08:40,548 - INFO - Registered tool 'update_hypothesis' in category 'research_orchestration'
+2025-11-21 16:08:40,548 - INFO - Registered tool 'create_protocol' in category 'research_orchestration'
+2025-11-21 16:08:40,548 - INFO - Registered tool 'list_protocols' in category 'research_orchestration'
+2025-11-21 16:08:40,548 - INFO - Registered tool 'get_protocol' in category 'research_orchestration'
+2025-11-21 16:08:40,548 - INFO - Registered tool 'create_experiment' in category 'research_orchestration'
+2025-11-21 16:08:40,548 - INFO - Registered tool 'list_experiments' in category 'research_orchestration'
+2025-11-21 16:08:40,548 - INFO - Registered tool 'get_experiment' in category 'research_orchestration'
+2025-11-21 16:08:40,548 - INFO - Registered tool 'update_experiment' in category 'research_orchestration'
+2025-11-21 16:08:40,548 - INFO - Registered tool 'record_observation' in category 'research_orchestration'
+2025-11-21 16:08:40,548 - INFO - Registered tool 'list_observations' in category 'research_orchestration'
+2025-11-21 16:08:40,548 - INFO - Registered tool 'compute_statistics' in category 'research_orchestration'
+2025-11-21 16:08:40,548 - INFO - Registered tool 'create_publication_draft' in category 'research_orchestration'
+2025-11-21 16:08:40,548 - INFO - Registered 15 tools from class ResearchIncarnation
+2025-11-21 16:08:40,548 - INFO - Found 15 tools in research_orchestration incarnation
+2025-11-21 16:08:40,548 - INFO - Tools in category research_orchestration: {'get_experiment', 'create_protocol', 'get_protocol', 'record_observation', 'update_hypothesis', 'list_protocols', 'create_publication_draft', 'update_experiment', 'list_hypotheses', 'list_observations', 'get_hypothesis', 'register_hypothesis', 'compute_statistics', 'list_experiments', 'create_experiment'}
+2025-11-21 16:08:40,549 - INFO - Added tool 'get_experiment' from research_orchestration to MCP server
+2025-11-21 16:08:40,550 - INFO - Added tool 'create_protocol' from research_orchestration to MCP server
+2025-11-21 16:08:40,551 - INFO - Added tool 'get_protocol' from research_orchestration to MCP server
+2025-11-21 16:08:40,552 - INFO - Added tool 'record_observation' from research_orchestration to MCP server
+2025-11-21 16:08:40,554 - INFO - Added tool 'update_hypothesis' from research_orchestration to MCP server
+2025-11-21 16:08:40,554 - INFO - Added tool 'list_protocols' from research_orchestration to MCP server
+2025-11-21 16:08:40,556 - INFO - Added tool 'create_publication_draft' from research_orchestration to MCP server
+2025-11-21 16:08:40,557 - INFO - Added tool 'update_experiment' from research_orchestration to MCP server
+2025-11-21 16:08:40,558 - INFO - Added tool 'list_hypotheses' from research_orchestration to MCP server
+2025-11-21 16:08:40,558 - INFO - Added tool 'list_observations' from research_orchestration to MCP server
+2025-11-21 16:08:40,559 - INFO - Added tool 'get_hypothesis' from research_orchestration to MCP server
+2025-11-21 16:08:40,560 - INFO - Added tool 'register_hypothesis' from research_orchestration to MCP server
+2025-11-21 16:08:40,561 - INFO - Added tool 'compute_statistics' from research_orchestration to MCP server
+2025-11-21 16:08:40,562 - INFO - Added tool 'list_experiments' from research_orchestration to MCP server
+2025-11-21 16:08:40,563 - INFO - Added tool 'create_experiment' from research_orchestration to MCP server
+2025-11-21 16:08:40,563 - INFO - Successfully registered 15 tools from research_orchestration incarnation
+2025-11-21 16:08:40,563 - INFO - Registered 15 tools from research_orchestration incarnation
+2025-11-21 16:08:40,563 - INFO - Tool registration complete. Total tools registered: 85
+2025-11-21 16:08:40,563 - INFO -   - Core tools: 30
+2025-11-21 16:08:40,563 - INFO -   - Incarnation tools: 55
+2025-11-21 16:08:40,563 - INFO - Registered 85 tools from all incarnations
+2025-11-21 16:08:40,563 - INFO - Server initialization completed successfully
+2025-11-21 16:08:40,563 - INFO - Server initialization complete
+2025-11-21 16:08:40,563 - INFO - Server created successfully, starting MCP transport
+2025-11-21 16:08:40,570 - INFO - Processing request of type CallToolRequest
+2025-11-21 16:08:40,570 - DEBUG - Tracking Neo4j session, total: 1
+2025-11-21 16:08:40,571 - ERROR - Read access test failed: Task <Task pending name='Task-311' coro=<StreamReader.read() running at /home/ty/.pyenv/versions/3.11.12/lib/python3.11/asyncio/streams.py:711> cb=[_release_waiter(<Future pendi...ask_wakeup()]>)() at /home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async_compat/shims/__init__.py:38]> got Future <Future pending> attached to a different loop
+2025-11-21 16:08:40,571 - ERROR - Write access test failed: Task <Task pending name='Task-313' coro=<StreamReader.read() running at /home/ty/.pyenv/versions/3.11.12/lib/python3.11/asyncio/streams.py:711> cb=[_release_waiter(<Future pendi...ask_wakeup()]>)() at /home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async_compat/shims/__init__.py:38]> got Future <Future pending> attached to a different loop
+2025-11-21 16:08:40,571 - WARNING - Couldn't get server info: Task <Task pending name='Task-315' coro=<StreamReader.read() running at /home/ty/.pyenv/versions/3.11.12/lib/python3.11/asyncio/streams.py:711> cb=[_release_waiter(<Future pendi...ask_wakeup()]>)() at /home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async_compat/shims/__init__.py:38]> got Future <Future pending> attached to a different loop
+2025-11-21 16:08:40,572 - ERROR - Error in Neo4j session: Task <Task pending name='Task-318' coro=<StreamReader.read() running at /home/ty/.pyenv/versions/3.11.12/lib/python3.11/asyncio/streams.py:711> cb=[_release_waiter(<Future pendi...ask_wakeup()]>)() at /home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async_compat/shims/__init__.py:38]> got Future <Future pending> attached to a different loop
+2025-11-21 16:08:40,572 - ERROR - Event loop mismatch detected. This is likely due to asyncio objects being used across different event loops.
+2025-11-21 16:08:40,572 - ERROR - Recommendation: Ensure all Neo4j operations use the same event loop context.
+2025-11-21 16:08:40,572 - DEBUG - Untracked Neo4j session, remaining: 0
+2025-11-21 16:08:40,572 - ERROR - Connection check error: Task <Task pending name='Task-318' coro=<StreamReader.read() running at /home/ty/.pyenv/versions/3.11.12/lib/python3.11/asyncio/streams.py:711> cb=[_release_waiter(<Future pendi...ask_wakeup()]>)() at /home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async_compat/shims/__init__.py:38]> got Future <Future pending> attached to a different loop
+2025-11-21 16:08:40,575 - ERROR - Error details: Traceback (most recent call last):
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async/work/session.py", line 222, in close
+    await self._connection.fetch_all()
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async/io/_bolt.py", line 879, in fetch_all
+    detail_delta, summary_delta = await self.fetch_message()
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async/io/_bolt.py", line 861, in fetch_message
+    tag, fields = await self.inbox.pop(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async/io/_common.py", line 77, in pop
+    await self._buffer_one_chunk()
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async/io/_common.py", line 54, in _buffer_one_chunk
+    await receive_into_buffer(self._socket, self._buffer, 2)
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async/io/_common.py", line 345, in receive_into_buffer
+    n = await sock.recv_into(
+        ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async_compat/network/_bolt_socket.py", line 156, in recv_into
+    res = await self._wait_for_io(self._reader.read, nbytes)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async_compat/network/_bolt_socket.py", line 116, in _wait_for_io
+    return await wait_for(io_fut, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async_compat/shims/__init__.py", line 118, in wait_for
+    return fut.result()
+           ^^^^^^^^^^^^
+  File "/home/ty/.pyenv/versions/3.11.12/lib/python3.11/asyncio/streams.py", line 711, in read
+    await self._wait_for_data('read')
+  File "/home/ty/.pyenv/versions/3.11.12/lib/python3.11/asyncio/streams.py", line 543, in _wait_for_data
+    await self._waiter
+RuntimeError: Task <Task pending name='Task-316' coro=<StreamReader.read() running at /home/ty/.pyenv/versions/3.11.12/lib/python3.11/asyncio/streams.py:711> cb=[_release_waiter(<Future pendi...ask_wakeup()]>)() at /home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async_compat/shims/__init__.py:38]> got Future <Future pending> attached to a different loop
+
+During handling of the above exception, another exception occurred:
+
+Traceback (most recent call last):
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/src/mcp_neocoder/server.py", line 1091, in check_connection
+    async with safe_neo4j_session(self.driver, self.database or "neo4j") as session:
+  File "/home/ty/.pyenv/versions/3.11.12/lib/python3.11/contextlib.py", line 217, in __aexit__
+    await anext(self.gen)
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/src/mcp_neocoder/event_loop_manager.py", line 118, in safe_neo4j_session
+    async with session_cm as session:
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async/work/session.py", line 130, in __aexit__
+    await self.close()
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async/work/session.py", line 233, in close
+    await self._disconnect()
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async/work/session.py", line 145, in _disconnect
+    return await super()._disconnect(sync=sync)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async/work/workspace.py", line 301, in _disconnect
+    await self._pool.release(self._connection)
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async/io/_pool.py", line 484, in release
+    await connection.reset()
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async/io/_bolt5.py", line 447, in reset
+    await self.fetch_all()
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async/io/_bolt.py", line 879, in fetch_all
+    detail_delta, summary_delta = await self.fetch_message()
+                                  ^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async/io/_bolt.py", line 861, in fetch_message
+    tag, fields = await self.inbox.pop(
+                  ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async/io/_common.py", line 77, in pop
+    await self._buffer_one_chunk()
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async/io/_common.py", line 54, in _buffer_one_chunk
+    await receive_into_buffer(self._socket, self._buffer, 2)
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async/io/_common.py", line 345, in receive_into_buffer
+    n = await sock.recv_into(
+        ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async_compat/network/_bolt_socket.py", line 156, in recv_into
+    res = await self._wait_for_io(self._reader.read, nbytes)
+          ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async_compat/network/_bolt_socket.py", line 116, in _wait_for_io
+    return await wait_for(io_fut, timeout)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async_compat/shims/__init__.py", line 118, in wait_for
+    return fut.result()
+           ^^^^^^^^^^^^
+  File "/home/ty/.pyenv/versions/3.11.12/lib/python3.11/asyncio/streams.py", line 711, in read
+    await self._wait_for_data('read')
+  File "/home/ty/.pyenv/versions/3.11.12/lib/python3.11/asyncio/streams.py", line 543, in _wait_for_data
+    await self._waiter
+RuntimeError: Task <Task pending name='Task-318' coro=<StreamReader.read() running at /home/ty/.pyenv/versions/3.11.12/lib/python3.11/asyncio/streams.py:711> cb=[_release_waiter(<Future pendi...ask_wakeup()]>)() at /home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async_compat/shims/__init__.py:38]> got Future <Future pending> attached to a different loop
+
+Starting server process...
+Sending initialize request...
+Reading initialize response...
+Initialize Response: {"jsonrpc":"2.0","id":0,"result":{"protocolVersion":"2024-11-05","capabilities":{"experimental":{},"prompts":{"listChanged":false},"resources":{"subscribe":false,"listChanged":false},"tools":{"listChanged":false}},"serverInfo":{"name":"mcp-neocoder","version":"1.9.4"}}}
+
+Sending check_connection request...
+Reading check_connection response...
+Check Connection Response: {"jsonrpc":"2.0","id":1,"result":{"content":[{"type":"text","text":"# Neo4j Connection Status\n\n❌ **Connection Failed**\n\nUnable to connect to Neo4j database.\n\n- **Connection:** Not Connected\n- **Database:** neo4j\n- **Read Access:** False\n- **Write Access:** False\n\n## Error Details\n\n```\nTask <Task pending name='Task-318' coro=<StreamReader.read() running at /home/ty/.pyenv/versions/3.11.12/lib/python3.11/asyncio/streams.py:711> cb=[_release_waiter(<Future pendi...ask_wakeup()]>)() at /home/ty/Repositories/NeoCoder-neo4j-ai-workflow/.venv/lib/python3.11/site-packages/neo4j/_async_compat/shims/__init__.py:38]> got Future <Future pending> attached to a different loop\n```\nThis error may help with troubleshooting database connection issues.\n\n## Connection Settings\n\n- **URL:** bolt://localhost:7687\n- **Username:** neo4j\n- **Password:** 00000000\n- **Database:** neo4j\n\n## Troubleshooting Tips\n\n1. Verify Neo4j is running: `sudo systemctl status neo4j`\n2. Check connection settings in environment variables\n3. Try restarting Neo4j: `sudo systemctl restart neo4j`\n4. Check Neo4j logs: `sudo journalctl -u neo4j`\n"}],"isError":false}}
+
+2025-11-21 16:08:40,576 - INFO - Received signal 15, initiating graceful shutdown
+2025-11-21 16:09:10,576 - ERROR - Error waiting for cleanup future: 
+2025-11-21 16:09:10,576 - INFO - Starting process cleanup...
+2025-11-21 16:09:10,577 - INFO - Closing 1 Neo4j drivers
+2025-11-21 16:09:10,577 - ERROR - Error closing Neo4j driver: Task <Task pending name='Task-319' coro=<cleanup_processes() running at /home/ty/Repositories/NeoCoder-neo4j-ai-workflow/src/mcp_neocoder/process_manager.py:262> cb=[_chain_future.<locals>._call_set_state() at /home/ty/.pyenv/versions/3.11.12/lib/python3.11/asyncio/futures.py:394]> got Future <Future pending> attached to a different loop
+2025-11-21 16:09:10,577 - INFO - Process cleanup completed
+2025-11-21 16:09:10,577 - INFO - Performing final cleanup...
+2025-11-21 16:09:10,577 - ERROR - Error during server cleanup: There is no current event loop in thread 'MainThread'.
+2025-11-21 16:09:10,577 - INFO - No running event loop, creating new one for cleanup.
+2025-11-21 16:09:10,578 - INFO - Starting process cleanup...
+2025-11-21 16:09:10,578 - INFO - Process cleanup completed
+2025-11-21 16:09:10,578 - INFO - Synchronous cleanup completed via new loop.
+2025-11-21 16:09:10,578 - INFO - Final cleanup completed
+2025-11-21 16:09:10,578 - INFO - No running event loop, creating new one for cleanup.
+2025-11-21 16:09:10,578 - INFO - Starting process cleanup...
+2025-11-21 16:09:10,578 - INFO - Process cleanup completed
+2025-11-21 16:09:10,578 - INFO - Synchronous cleanup completed via new loop.
